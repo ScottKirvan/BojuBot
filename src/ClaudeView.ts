@@ -1160,11 +1160,13 @@ export class ClaudeView extends ItemView {
         tokenStatsEl.show();
       },
       onError: (err) => {
+        statusEl.remove();
         this.appendMessage('system', `stderr: ${err.trim()}`);
       },
     });
 
     proc.on('error', (err) => {
+      statusEl.remove();
       assistantEl.setText(`Process error: ${err.message}`);
       unlock();
     });
@@ -1872,6 +1874,7 @@ export class ClaudeView extends ItemView {
         tokenStatsEl.show();
       },
       onError: (err) => {
+        statusEl.remove();
         this.appendMessage('system', `stderr: ${err.trim()}`);
       },
       onDone: (sessionId) => {
@@ -1932,6 +1935,7 @@ export class ClaudeView extends ItemView {
     });
 
     proc.on('error', (err) => {
+      statusEl.remove();
       assistantEl.setText(`Process error: ${err.message}`);
       unlock();
     });
