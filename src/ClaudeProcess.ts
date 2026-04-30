@@ -204,7 +204,7 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
       try {
         const msg = JSON.parse(line) as Record<string, unknown>;
         LOGV('  parsed msg type:', msg.type);
-        handleMessage(msg, cb, (id) => { sessionId = id; }, () => { gotResult = true; });
+        handleMessage(msg, cb, (id) => { sessionId = id; }, (clean) => { gotResult = clean; });
       } catch {
         LOGV('  non-JSON line:', line.substring(0, 100));
       }
@@ -227,7 +227,7 @@ function handleMessage(
   msg: Record<string, unknown>,
   cb: StreamCallbacks,
   setSessionId: (id: string) => void,
-  setGotResult: () => void,
+  setGotResult: (clean: boolean) => void,
 ): void {
   switch (msg.type) {
     case 'system':
@@ -293,7 +293,7 @@ function handleMessage(
       break;
     }
     case 'result':
-      setGotResult();
+      setGotResult(!msg.is_error);
       if (msg.session_id) setSessionId(msg.session_id as string);
       {
         const raw = msg.permission_denials as Array<Record<string, unknown>> | undefined;
