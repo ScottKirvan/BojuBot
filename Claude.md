@@ -56,6 +56,7 @@ Test vault: `D:\2\deleteme` (symlinked to plugin dir).
 - Not fluent in TS — I do implementation.
 - Multi-machine (Windows). Keep notes resumable cold.
 - Project = "ObsidiBot" (not "ObsidiBot plugin", not "obsidian-claude").
+- No "Generated with Claude Code" credits or any AI advertisement in PR bodies, commit messages, or any other project-visible text.
 
 ## Build
 ```bash
