@@ -183,13 +183,14 @@ export interface StreamCallbacks {
   onToolResult?: (toolUseId: string, content: string) => void;
   onPermissionDenied: (denials: PermissionDenial[]) => void;
   onUsage: (usage: TokenUsage) => void;
-  onDone: (sessionId?: string) => void;
+  onDone: (sessionId?: string, clean?: boolean) => void;
   onError: (err: string) => void;
 }
 
 export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void {
   let buffer = '';
   let sessionId: string | undefined;
+  let gotResult = false;
 
   proc.stdout?.on('data', (chunk: Buffer) => {
     const raw = chunk.toString();
@@ -203,7 +204,7 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
       try {
         const msg = JSON.parse(line) as Record<string, unknown>;
         LOGV('  parsed msg type:', msg.type);
-        handleMessage(msg, cb, (id) => { sessionId = id; });
+        handleMessage(msg, cb, (id) => { sessionId = id; }, () => { gotResult = true; });
       } catch {
         LOGV('  non-JSON line:', line.substring(0, 100));
       }
@@ -217,8 +218,8 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
   });
 
   proc.on('close', (code) => {
-    LOG('process closed — exit code:', code, '— sessionId:', sessionId);
-    cb.onDone(sessionId);
+    LOG('process closed — exit code:', code, '— sessionId:', sessionId, '— clean:', gotResult);
+    cb.onDone(sessionId, gotResult);
   });
 }
 
@@ -226,6 +227,7 @@ function handleMessage(
   msg: Record<string, unknown>,
   cb: StreamCallbacks,
   setSessionId: (id: string) => void,
+  setGotResult: () => void,
 ): void {
   switch (msg.type) {
     case 'system':
@@ -291,6 +293,7 @@ function handleMessage(
       break;
     }
     case 'result':
+      setGotResult();
       if (msg.session_id) setSessionId(msg.session_id as string);
       {
         const raw = msg.permission_denials as Array<Record<string, unknown>> | undefined;

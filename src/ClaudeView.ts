@@ -1027,10 +1027,10 @@ export class ClaudeView extends ItemView {
       onPermissionDenied: (denials) => {
         if (!pendingPermissionRequest) this.renderPermissionDenials(denials, responseGroupEl);
       },
-      onDone: (sessionId) => {
+      onDone: (sessionId, clean) => {
         statusEl.remove();
         this.activeProc = null;
-        if (!accumulated && !uiBridgeActionCount && !sessionId) this.appendMessage('system', 'Interrupted.');
+        if (!clean) this.appendMessage('system', 'Interrupted.');
 
         if (sessionId) {
           const vaultRoot = this.getVaultRoot();
@@ -1877,9 +1877,10 @@ export class ClaudeView extends ItemView {
         statusEl.remove();
         this.appendMessage('system', `stderr: ${err.trim()}`);
       },
-      onDone: (sessionId) => {
+      onDone: (sessionId, clean) => {
         statusEl.remove();
         this.activeProc = null;
+        if (!clean) this.appendMessage('system', 'Interrupted.');
 
         if (sessionId && this.currentSessionId) {
           const vaultRoot = this.getVaultRoot();
