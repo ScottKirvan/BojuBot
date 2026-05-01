@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.9.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.8.0...2.9.0) (2026-05-01)
+
+
+### Features
+
+* welcome screen with sprite, greeting, and tip of the day ([e0064f9](https://github.com/ScottKirvan/ObsidiBot/commit/e0064f99ed874cc47fad97fe1f10d944d01aca26))
+
+
+### Bug Fixes
+
+* detect interrupted sessions via is_error on result message ([6566601](https://github.com/ScottKirvan/ObsidiBot/commit/6566601acbb4839b233b4387b29990296e157c7a))
+* remove orphaned Thinking... indicator on process error ([2b8179c](https://github.com/ScottKirvan/ObsidiBot/commit/2b8179cd0776a21a21e581af3264fdb961105a30))
+* show Interrupted message when process is killed mid-turn ([f7cf1a1](https://github.com/ScottKirvan/ObsidiBot/commit/f7cf1a184a74ffa92b8298d343a3d30343f697f3))
+
 ## [2.8.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.7.8...2.8.0) (2026-04-21)
 
 
