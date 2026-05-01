@@ -8,7 +8,8 @@
     "allowSyntheticDefaultImports": true,
     "moduleResolution": "node",
     "lib": ["dom", "es5", "es6", "es7"],
-    "types": ["node"]
+    "types": ["node"],
+    "resolveJsonModule": true
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules"]

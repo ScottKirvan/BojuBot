@@ -1,4 +1,7 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App, parseYaml } from 'obsidian';
+import spriteUrl from '../assets/media/ObsidiBotSprite_800x800.png';
+import logoUrl from '../assets/media/logo.png';
+import welcomeData from './welcome.json';
 
 /** Minimal shape of Obsidian's private settings/commands APIs. */
 interface AppInternal {
@@ -363,6 +366,9 @@ export class ClaudeView extends ItemView {
       }
     }
 
+    // Show welcome screen if no session was loaded
+    if (this.messagesEl.childElementCount === 0) this.renderWelcomeScreen();
+
     // Show context file setup modal if the configured file doesn't exist and user hasn't skipped
     if (
       !this.plugin.settings.skipContextFilePrompt &&
@@ -410,6 +416,7 @@ export class ClaudeView extends ItemView {
     this.plugin.settings.lastActiveSessionId = sessionId;
     void this.plugin.saveSettings();
     this.messagesEl.empty();
+    this.renderWelcomeScreen();
     this.updateExportBtn();
     this.updateSessionStatus();
     log('New session placeholder created:', sessionId);
@@ -840,6 +847,8 @@ export class ClaudeView extends ItemView {
         if (c.type === 'pdf')   return { type: 'pdf' as const,        source: c.source, path: c.text };
         return                         { type: 'attachment' as const,  source: c.source };
       });
+    this.messagesEl.querySelector('.obsidibot-welcome')?.remove();
+
     if (!this.suppressNextUserBubble) {
       if (liveContextBadges.length > 0) {
         this.appendUserMessageWithContexts(prompt, liveContextBadges);
@@ -1170,6 +1179,49 @@ export class ClaudeView extends ItemView {
       assistantEl.setText(`Process error: ${err.message}`);
       unlock();
     });
+  }
+
+  private renderWelcomeScreen() {
+    const { greetings, tips } = welcomeData.welcome;
+
+    // Username from OS, capitalized
+    let name = '';
+    try { name = require('os').userInfo().username; } catch { /* ignore */ }
+    if (name) name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+
+    // Time-of-day bucket
+    const hour = new Date().getHours();
+    const bucket = hour >= 5 && hour < 12 ? greetings.morning
+      : hour >= 12 && hour < 18 ? greetings.afternoon
+      : hour >= 18 && hour < 22 ? greetings.evening
+      : greetings.night;
+
+    // Random greeting from bucket
+    const entry = bucket[Math.floor(Math.random() * bucket.length)];
+    const greetingText = name
+      ? entry.withName.replace('{{name}}', name)
+      : entry.withoutName;
+
+    const tip = tips[Math.floor(Math.random() * tips.length)];
+
+    // --- DOM ---
+    const welcome = this.messagesEl.createDiv({ cls: 'obsidibot-welcome' });
+
+    // Header: logo + name + version — pinned to top of panel
+    const header = welcome.createDiv({ cls: 'obsidibot-welcome-header' });
+    const headerLogo = header.createEl('img', { cls: 'obsidibot-welcome-header-logo', attr: { alt: '', src: logoUrl } });
+    headerLogo.draggable = false;
+    header.createSpan({ cls: 'obsidibot-welcome-header-name', text: 'ObsidiBot' });
+    header.createSpan({ cls: 'obsidibot-welcome-version', text: `v${this.plugin.manifest.version}` });
+
+    // Centered body: sprite + greeting + tip
+    const body = welcome.createDiv({ cls: 'obsidibot-welcome-body' });
+    const sprite = body.createEl('img', { cls: 'obsidibot-welcome-sprite', attr: { alt: 'ObsidiBot', src: spriteUrl } });
+    sprite.draggable = false;
+    sprite.title = 'About ObsidiBot';
+    sprite.addEventListener('click', () => new AboutModal(this.app, this.plugin).open());
+    body.createEl('p', { cls: 'obsidibot-welcome-greeting', text: greetingText });
+    body.createEl('p', { cls: 'obsidibot-welcome-tip', text: tip });
   }
 
   private renderSetupPanel() {
