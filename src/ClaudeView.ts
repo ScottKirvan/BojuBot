@@ -1222,6 +1222,25 @@ export class ClaudeView extends ItemView {
     sprite.addEventListener('click', () => new AboutModal(this.app, this.plugin).open());
     body.createEl('p', { cls: 'obsidibot-welcome-greeting', text: greetingText });
     body.createEl('p', { cls: 'obsidibot-welcome-tip', text: tip });
+
+    // Recent sessions footer
+    const sessions = loadAllSessions(this.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
+      .filter(s => s.id !== this.currentSessionFileId);
+    if (sessions.length > 0) {
+      const recent = welcome.createDiv({ cls: 'obsidibot-welcome-recent' });
+      recent.createEl('p', { cls: 'obsidibot-welcome-recent-label', text: 'Recent sessions' });
+      const list = recent.createDiv({ cls: 'obsidibot-welcome-recent-list' });
+      sessions.slice(0, 3).forEach(session => {
+        const item = list.createDiv({ cls: 'obsidibot-welcome-recent-item' });
+        item.createSpan({ cls: 'obsidibot-welcome-recent-title', text: session.userLabel || session.title });
+        item.createSpan({ cls: 'obsidibot-welcome-recent-date', text: relativeDate(session.updatedAt) });
+        item.addEventListener('click', () => void this.loadSession(session));
+      });
+      if (sessions.length > 3) {
+        const more = recent.createEl('span', { cls: 'obsidibot-welcome-recent-more', text: 'more…' });
+        more.addEventListener('click', () => this.showSessionHistory());
+      }
+    }
   }
 
   private renderSetupPanel() {
@@ -2425,4 +2444,17 @@ class AttachUrlModal extends Modal {
     setTimeout(() => input.focus(), 50);
   }
   onClose() { this.contentEl.empty(); }
+}
+
+function relativeDate(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
