@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.9.0...2.10.0) (2026-05-01)
+
+
+### Features
+
+* add recent sessions list to welcome screen ([4712bc9](https://github.com/ScottKirvan/ObsidiBot/commit/4712bc9f370891309defb9342e8a0ec36051e83c))
+* redesign About modal to match Obsidian's layout ([f90f59b](https://github.com/ScottKirvan/ObsidiBot/commit/f90f59bfe25e365b1e6a1207a1f046be59f2ff69))
+
 ## [2.9.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.8.0...2.9.0) (2026-05-01)
 
 
