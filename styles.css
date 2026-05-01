@@ -205,56 +205,103 @@
 
 /* ── About modal ── */
 .obsidibot-about-modal {
-  text-align: center;
-  padding: 16px 8px 8px;
+  padding: 8px 4px 4px;
 }
 
-.obsidibot-about-logo img {
-  width: 80px;
-  height: 80px;
-  border-radius: 16px;
+.obsidibot-about-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0 20px;
+}
+
+.obsidibot-about-logo {
+  width: 144px;
+  height: 144px;
+  border-radius: 28px;
   object-fit: cover;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
-.obsidibot-about-title {
-  margin: 0 0 4px;
+.obsidibot-about-name {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--text-normal);
+  margin-bottom: 4px;
 }
 
 .obsidibot-about-version {
   color: var(--text-muted);
-  font-size: 0.85em;
-  margin: 0 0 12px;
+  font-size: 0.82em;
 }
 
-.obsidibot-about-desc {
-  color: var(--text-muted);
-  font-size: 0.9em;
-  margin: 0 0 20px;
+.obsidibot-about-list {
+  margin-top: 16px;
+  background: var(--background-secondary);
+  border-radius: var(--radius-m, 8px);
+  overflow: hidden;
 }
 
-.obsidibot-about-buttons {
+.obsidibot-about-item {
   display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.obsidibot-about-item-icon {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 10px;
+  color: var(--text-muted);
 }
 
-.obsidibot-about-link-btn {
-  padding: 6px 16px;
-  border-radius: 4px;
-  border: 1px solid var(--background-modifier-border);
-  text-decoration: none;
-  font-size: 0.9em;
+.obsidibot-about-item-icon svg {
+  width: 44px;
+  height: 44px;
+}
+
+.obsidibot-about-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.obsidibot-about-item-title {
+  font-size: 0.95em;
+  font-weight: 500;
   color: var(--text-normal);
+  margin-bottom: 2px;
 }
 
-.obsidibot-about-link-btn.mod-cta {
+.obsidibot-about-item-desc {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.obsidibot-about-item-btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border-radius: var(--radius-s, 4px);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  text-decoration: none;
+  font-size: 0.85em;
+  color: var(--text-normal);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.obsidibot-about-item-btn.mod-cta {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   border-color: transparent;
 }
 
-.obsidibot-about-link-btn:hover {
+.obsidibot-about-item-btn:hover {
   opacity: 0.85;
 }
 
