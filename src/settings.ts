@@ -105,6 +105,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       .setDesc('Path to the Claude CLI binary. Leave blank to auto-detect.')
       .addText((text) =>
         text
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder('/usr/local/bin/claude')
           .setValue(this.plugin.settings.binaryPath)
           .onChange(async (value) => {
@@ -139,10 +140,12 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('@-mention file types')
-      .setDesc('Comma-separated extensions to include in @-mention search (e.g. md, fountain, txt).')
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
+      .setDesc('Comma-separated extensions to include in @-mention search (e.g. md, pdf, fountain, txt).')
       .addText((text) =>
         text
-          .setPlaceholder('md, fountain, txt')
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
+          .setPlaceholder('md, pdf, fountain, txt')
           .setValue(this.plugin.settings.atMentionExtensions)
           .onChange(async (value) => {
             this.plugin.settings.atMentionExtensions = value;
@@ -248,6 +251,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       .setDesc('Vault-relative folder where "export session to vault" saves notes. Created automatically if it does not exist.')
       .addText((text) =>
         text
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder('ObsidiBot Exports')
           .setValue(this.plugin.settings.exportFolder)
           .onChange(async (value) => {

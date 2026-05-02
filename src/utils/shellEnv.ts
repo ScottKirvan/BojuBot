@@ -5,7 +5,7 @@ export function resolveShellEnv(): Record<string, string> {
   // The full shell env is not needed on Windows — PATH and relevant vars
   // are already present in process.env via Obsidian's launch environment.
   if (process.platform === 'win32') {
-    return { ...process.env } as Record<string, string>;
+    return { ...process.env };
   }
 
   // On Mac/Linux, launch a login shell to pick up PATH from .zshrc / .bash_profile
@@ -25,6 +25,6 @@ export function resolveShellEnv(): Record<string, string> {
     }
     return env;
   } catch {
-    return { ...process.env } as Record<string, string>;
+    return { ...process.env };
   }
 }
