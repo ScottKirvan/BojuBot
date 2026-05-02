@@ -20,7 +20,7 @@ Open **Settings → ObsidiBot** to configure:
 | **Enable debug log**               | On                                                   | Write a debug log file. See [Troubleshooting](./troubleshooting#logging).                                                                                            |
 | **Log file path**                  | `.obsidian/plugins/obsidibot/obsidibot-debug.log`    | Vault-relative path for the log file. Defaults to the plugin folder so it stays out of your vault and git history.                                                   |
 | **Log verbosity**                  | Normal                                               | **Normal** logs session events and errors. **Verbose** adds raw stream data and token breakdowns.                                                                    |
-| **@-mention file types**           | `md, fountain, txt`                                  | Comma-separated file extensions included in the `@` autocomplete dropdown.                                                                                           |
+| **@-mention file types**           | `md, pdf, fountain, txt`                             | Comma-separated file extensions included in the `@` autocomplete dropdown.                                                                                           |
 | **Inject split-pane files**        | On                                                   | When in split-pane view, include all visible file paths as active note context.                                                                                      |
 
 ## Session storage location
@@ -29,11 +29,11 @@ By default, session files are stored in `.obsidian/obsidibot/sessions/` inside y
 
 You can change this in **Settings → ObsidiBot → Session storage path**:
 
-| Value | Behaviour |
-|---|---|
-| *(empty)* | Default — `.obsidian/obsidibot/sessions/`. Gitignored. |
-| `_sessions` (vault-relative) | Sessions stored at `_sessions/` in your vault root. Tracked by git if not excluded. |
-| `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely. |
+| Value                            | Behaviour                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| *(empty)*                        | Default — `.obsidian/obsidibot/sessions/`. Gitignored.                              |
+| `_sessions` (vault-relative)     | Sessions stored at `_sessions/` in your vault root. Tracked by git if not excluded. |
+| `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely.                                         |
 
 ::: warning Sessions are not migrated
 Changing this setting affects **new sessions only**. Existing sessions remain in their original location and will not appear in the session manager until you change the path back. If you want to move existing sessions, copy the `.json` files manually to the new path before restarting ObsidiBot.

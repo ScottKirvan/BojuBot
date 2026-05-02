@@ -1025,7 +1025,7 @@ export class ClaudeView extends ItemView {
         if (!outEl) return;
         outEl.removeClass('obsidibot-tool-output-pending');
         const trimmed = content.trim();
-        if (!trimmed) { outEl.setText('(no output)'); return; }
+        if (!trimmed) { outEl.setText('(No output)'); return; }
         const lines = trimmed.split('\n');
         const MAX_LINES = 5;
         const shown = lines.slice(0, MAX_LINES).join('\n');
@@ -1237,7 +1237,7 @@ export class ClaudeView extends ItemView {
         item.addEventListener('click', () => void this.loadSession(session));
       });
       if (sessions.length > 3) {
-        const more = recent.createEl('span', { cls: 'obsidibot-welcome-recent-more', text: 'more…' });
+        const more = recent.createEl('span', { cls: 'obsidibot-welcome-recent-more', text: 'More…' });
         more.addEventListener('click', () => this.showSessionHistory());
       }
     }
@@ -1251,6 +1251,7 @@ export class ClaudeView extends ItemView {
     const isWin = process.platform === 'win32';
     const card = this.messagesEl.createDiv({ cls: 'obsidibot-setup-card' });
 
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'obsidibot-setup-title' });
     card.createEl('p', {
       text: 'ObsidiBot requires the Claude Code CLI (included with Claude Pro/Max). ' +
@@ -1260,8 +1261,10 @@ export class ClaudeView extends ItemView {
 
     // Step 1 — Install
     const step1 = card.createDiv({ cls: 'obsidibot-setup-step' });
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     step1.createEl('p', { text: 'Step 1 — install Claude Code', cls: 'obsidibot-setup-step-title' });
     if (isWin) {
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       step1.createEl('p', { text: 'Open PowerShell (not WSL, not Command Prompt) and run:', cls: 'obsidibot-setup-note' });
       this.renderCodeRow(step1, 'irm https://claude.ai/install.ps1 | iex');
     } else {
@@ -1293,6 +1296,7 @@ export class ClaudeView extends ItemView {
       cls: 'obsidibot-setup-step-title',
     });
     pathSection.createEl('p', {
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude binary below, then click check again.',
       cls: 'obsidibot-setup-note',
     });
@@ -1310,6 +1314,7 @@ export class ClaudeView extends ItemView {
     const btnRow = card.createDiv({ cls: 'obsidibot-setup-btn-row' });
 
     const docsLink = btnRow.createEl('a', {
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: 'Claude Code install guide ↗',
       href: 'https://code.claude.com/docs/en/overview#native-install-recommended',
       cls: 'obsidibot-setup-docs-link',
@@ -1340,6 +1345,7 @@ export class ClaudeView extends ItemView {
 
   private renderAuthError(el: HTMLElement) {
     el.empty();
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     el.createEl('p', { text: 'Error: Claude Code is not authenticated.', cls: 'obsidibot-setup-step-title' });
     el.createEl('p', {
       text: 'Click Open terminal below. Claude Code will launch and open a browser window to log in. ' +
@@ -1917,7 +1923,7 @@ export class ClaudeView extends ItemView {
         if (!outEl) return;
         outEl.removeClass('obsidibot-tool-output-pending');
         const trimmed = content.trim();
-        if (!trimmed) { outEl.setText('(no output)'); return; }
+        if (!trimmed) { outEl.setText('(No output)'); return; }
         const lines = trimmed.split('\n');
         const MAX_LINES = 5;
         const shown = lines.slice(0, MAX_LINES).join('\n');
