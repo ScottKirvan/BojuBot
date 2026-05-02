@@ -58,6 +58,14 @@ Test vault: `D:\2\deleteme` (symlinked to plugin dir).
 - Project = "ObsidiBot" (not "ObsidiBot plugin", not "obsidian-claude").
 - No "Generated with Claude Code" credits or any AI advertisement in PR bodies, commit messages, or any other project-visible text.
 
+## Code review / bug fix workflow
+Before implementing any fix — especially from a code review:
+1. Read the finding and explain the current behavior back in plain language.
+2. Flag anything where the diagnosis seems incomplete or where context might change the fix. Code reviews are a starting point for discussion, not a prescription.
+3. Propose the fix approach and confirm before writing code.
+4. Security and correctness bugs get individual PRs. Maintenance items can batch.
+5. Larger refactors get a design discussion first — no diving straight into a 2,800-line file split.
+
 ## Build
 ```bash
 npm install && npm run build   # one-shot
