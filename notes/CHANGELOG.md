@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.10.0...2.10.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* correct sentence-case violations in setup card and tool output ([58e6191](https://github.com/ScottKirvan/ObsidiBot/commit/58e6191b138d075fa2ab9bab28d2110cd47a77cb))
+
 ## [2.10.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.9.0...2.10.0) (2026-05-01)
 
 
