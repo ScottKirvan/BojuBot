@@ -18,7 +18,7 @@ import type ObsidiBotPlugin from '../main';
 import { spawnClaude, parseStreamOutput, killProcess, findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { QUERY_PREFIX } from './constants';
+import { QUERY_PREFIX, neutralizeTriggers } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
 import { extractToolDetail } from './utils/toolFormatting';
@@ -900,7 +900,7 @@ export class ClaudeView extends ItemView {
           if (c.type === 'url') return `<obsidibot-context type="url" url="${c.text}"></obsidibot-context>`;
           if (c.type === 'image') return `<obsidibot-context type="image" source="${c.source}" path="${c.text}">Read this file to view the image: ${c.text}</obsidibot-context>`;
           if (c.type === 'pdf') return `<obsidibot-context type="pdf" source="${c.source}" path="${c.text}">Read this file to view the document: ${c.text}</obsidibot-context>`;
-          return `<obsidibot-context type="attachment" source="${c.source}">${c.text}</obsidibot-context>`;
+          return `<obsidibot-context type="attachment" source="${c.source}">${neutralizeTriggers(c.text)}</obsidibot-context>`;
         })
         .join('\n\n');
       finalPrompt = `${contextBlock}\n\n${prompt}`;
