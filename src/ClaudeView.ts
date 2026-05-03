@@ -203,13 +203,6 @@ export class ClaudeView extends ItemView {
 
     const inputToolbar = inputArea.createDiv({ cls: 'obsidibot-input-toolbar' });
 
-    this.permissionIconEl = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn obsidibot-permission-icon' });
-    this.permissionIconEl.addEventListener('click', () => {
-      this.appInternal.setting.open();
-      this.appInternal.setting.openTabById('obsidibot');
-    });
-    this.updatePermissionIcon();
-
     this.attachBtn = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn' });
     setIcon(this.attachBtn, 'paperclip');
     this.attachBtn.title = 'Attach file or URL';
@@ -219,6 +212,13 @@ export class ClaudeView extends ItemView {
     setIcon(slashBtn, 'slash');
     slashBtn.title = 'Commands';
     slashBtn.addEventListener('click', () => this.openSlashMenu('button'));
+
+    this.permissionIconEl = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn obsidibot-permission-icon' });
+    this.permissionIconEl.addEventListener('click', () => {
+      this.appInternal.setting.open();
+      this.appInternal.setting.openTabById('obsidibot');
+    });
+    this.updatePermissionIcon();
 
     inputToolbar.createDiv({ cls: 'obsidibot-input-toolbar-spacer' });
 
