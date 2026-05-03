@@ -1515,14 +1515,21 @@
   color: var(--interactive-accent);
 }
 /* ── Permission mode icon (input toolbar) ── */
-/* Restricted (planned): blue lock */
-.obsidibot-perm-restricted { color: var(--color-blue) !important; }
+/* Hard-coded colors so theme variables can't override them. */
+/* Restricted (planned): blue padlock */
+.obsidibot-perm-restricted .svg-icon { color: #60a5fa !important; stroke: #60a5fa !important; }
 /* Read-only: green eye */
-.obsidibot-perm-readonly { color: var(--color-green) !important; }
+.obsidibot-perm-readonly .svg-icon { color: #4ade80 !important; stroke: #4ade80 !important; }
 /* Standard: yellow shield */
-.obsidibot-perm-standard { color: var(--color-yellow) !important; }
+.obsidibot-perm-standard .svg-icon { color: #facc15 !important; stroke: #facc15 !important; }
 /* Full: red triangle */
-.obsidibot-perm-full { color: var(--color-red) !important; }
+.obsidibot-perm-full .svg-icon { color: #ef4444 !important; stroke: #ef4444 !important; }
+/* Thicker strokes so the icon reads clearly at 14 px */
+.obsidibot-permission-icon .svg-icon path,
+.obsidibot-permission-icon .svg-icon polyline,
+.obsidibot-permission-icon .svg-icon line,
+.obsidibot-permission-icon .svg-icon circle,
+.obsidibot-permission-icon .svg-icon rect { stroke-width: 2.5 !important; }
 
 /* ── Utility ── */
 .obsidibot-invisible { visibility: hidden; }
