@@ -75,7 +75,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   confirmUnlistedCommands: true,
   commandDenylist: [],
   permissionMode: 'standard',
-  logEnabled: true,
+  logEnabled: false,
   logFilePath: '',
   logVerbosity: 'normal',
   atMentionExtensions: 'md, canvas, pdf, fountain, txt',
