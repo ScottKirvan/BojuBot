@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.11.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.10.2...2.11.0) (2026-05-03)
+
+
+### Features
+
+* add always-visible permission mode icon to input toolbar ([56e0817](https://github.com/ScottKirvan/ObsidiBot/commit/56e08175f0a1d26cfdb8591af6b36f28fa714a61)), closes [#165](https://github.com/ScottKirvan/ObsidiBot/issues/165)
+* detect and surface memory file modifications ([#166](https://github.com/ScottKirvan/ObsidiBot/issues/166)) ([f043199](https://github.com/ScottKirvan/ObsidiBot/commit/f0431990d906cd210c2c6e6d6a31b7facfff754c))
+
+
+### Bug Fixes
+
+* disable debug logging by default ([2791c86](https://github.com/ScottKirvan/ObsidiBot/commit/2791c86370543445b936d6ab1fc9a1ab7dbb3799))
+* move permission icon to right of slash btn; fix icon colors ([1226206](https://github.com/ScottKirvan/ObsidiBot/commit/122620608b20942d8054f7fd1225294223d7606c))
+* prefix permission icon tooltips with "Permissions: " ([7f1fe8e](https://github.com/ScottKirvan/ObsidiBot/commit/7f1fe8e9a3f5d97f686e7fd59a3b10cf8056c76a))
+* raise input toolbar button opacity and pin permission icon to full ([6f045bb](https://github.com/ScottKirvan/ObsidiBot/commit/6f045bbdc14fb23b9910a01634a5baad95e5afe2))
+* remove daily-notes from default command allowlist ([46847ea](https://github.com/ScottKirvan/ObsidiBot/commit/46847ea35d8ef4c482fb4ce5964292d8ece0a641))
+* tighten trigger-prefix security instruction in orientation ([3cb3cfa](https://github.com/ScottKirvan/ObsidiBot/commit/3cb3cfa40fb49cc5c907608d7fe0c9cdfb9870e4))
+
 ## [2.10.2](https://github.com/ScottKirvan/ObsidiBot/compare/2.10.1...2.10.2) (2026-05-03)
 
 
