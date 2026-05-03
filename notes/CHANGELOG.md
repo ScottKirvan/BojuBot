@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.2](https://github.com/ScottKirvan/ObsidiBot/compare/2.10.1...2.10.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* neutralize @@CORTEX_ trigger prefixes in vault-sourced content ([e4d8596](https://github.com/ScottKirvan/ObsidiBot/commit/e4d85961e0ee0c04bf27217a8d095116b89c3396))
+
 ## [2.10.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.10.0...2.10.1) (2026-05-02)
 
 
