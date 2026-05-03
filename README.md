@@ -39,7 +39,7 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 | "Create a skill that summarizes my weekly notes into a report"                                                   | Writes the skill file — available instantly as a `/` slash command, Ctrl+P command, and callable by any plugin or script |
 
 > [!NOTE]
-> **Status:** Public beta — Install via [BRAT](https://github.com/TfTHacker/obsidian42-brat) or manually via [Github Releases](https://github.com/ScottKirvan/ObsidiBot/releases). Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y). Currently [submitted](https://github.com/obsidianmd/obsidian-releases/pull/12000) for inclusion as an Obsidian Community Plugin — awaiting review.
+> **Status:** Public beta —  Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y). Currently [submitted](https://github.com/obsidianmd/obsidian-releases/pull/12000) for inclusion as an Obsidian Community Plugin — awaiting review.
 ## Installation
  *\*Requirements:*
 - *Obsidian desktop (Windows, Mac, Linux — no mobile support)*
