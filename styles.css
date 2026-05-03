@@ -1535,5 +1535,20 @@
 .obsidibot-permission-icon .svg-icon circle,
 .obsidibot-permission-icon .svg-icon rect { stroke-width: 2.5 !important; }
 
+/* ── Memory audit modal ── */
+.obsidibot-audit-btn-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* ── Notice link (memory update, etc.) ── */
+.obsidibot-notice-link {
+  color: var(--text-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ── Utility ── */
 .obsidibot-invisible { visibility: hidden; }

@@ -7,6 +7,7 @@ import { findClaudeBinary } from './src/ClaudeProcess';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
+import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
 import { ContextGenerationModal } from './src/ContextGenerationModal';
 
 /** Minimal shape of Obsidian's private settings/commands APIs. */
@@ -48,6 +49,14 @@ export default class ObsidiBotPlugin extends Plugin {
       this.generateCommandsFile();
       this.reloadSkillCommands();
     });
+
+    this.registerEvent(
+      this.app.vault.on('modify', (file) => {
+        if (file.path !== this.settings.contextFilePath) return;
+        if (this.app.workspace.getActiveFile()?.path === file.path) return;
+        this.showMemoryUpdateNotice();
+      })
+    );
 
     this.shellEnv = resolveShellEnv();
     this.claudeBinaryPath = findClaudeBinary(this.settings.binaryPath);
@@ -200,6 +209,12 @@ export default class ObsidiBotPlugin extends Plugin {
           });
         }
       }
+    });
+
+    this.addCommand({
+      id: 'audit-memory-file',
+      name: 'Audit memory file',
+      callback: () => void this.triggerMemoryAudit(),
     });
 
     this.addCommand({
@@ -376,6 +391,30 @@ export default class ObsidiBotPlugin extends Plugin {
   notifyPermissionChanged(): void {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
     if (leaves.length) (leaves[0].view as ClaudeView).onSettingsChanged();
+  }
+
+  private showMemoryUpdateNotice(): void {
+    const notice = new Notice('', 8000);
+    notice.noticeEl.empty();
+    notice.noticeEl.createSpan({ text: 'Memory file was modified by Claude. ' });
+    const link = notice.noticeEl.createEl('a', { cls: 'obsidibot-notice-link', text: 'Review', href: '#' });
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      notice.hide();
+      new MemoryAuditModal(this.app, this).open();
+    });
+  }
+
+  async triggerMemoryAudit(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (existing.length) {
+      await this.app.workspace.revealLeaf(existing[0]);
+      (existing[0].view as ClaudeView).auditMemoryFile();
+    } else {
+      await this.activateView();
+      const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+      if (leaves.length) (leaves[0].view as ClaudeView).auditMemoryFile();
+    }
   }
 
   private resolveCommandsFolder(): string {
