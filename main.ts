@@ -31,6 +31,11 @@ export default class ObsidiBotPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
+    if (this.settings.permissionMode === 'full' && !this.settings.persistFullAccess) {
+      this.settings.permissionMode = 'standard';
+      await this.saveSettings();
+    }
+
     const vaultRoot = this.getVaultRoot();
     initLogger(vaultRoot, {
       enabled: this.settings.logEnabled,
@@ -366,6 +371,11 @@ export default class ObsidiBotPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  notifyPermissionChanged(): void {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (leaves.length) (leaves[0].view as ClaudeView).onSettingsChanged();
   }
 
   private resolveCommandsFolder(): string {

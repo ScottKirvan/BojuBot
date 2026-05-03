@@ -60,6 +60,8 @@ export interface ObsidiBotSettings {
    * Use "Reload skills" from the palette after adding or removing skill files.
    */
   registerSkillsAsCommands: boolean;
+  /** Keep full access mode between restarts instead of resetting to standard. Default off. */
+  persistFullAccess: boolean;
 }
 
 export const DEFAULT_SETTINGS: ObsidiBotSettings = {
@@ -86,6 +88,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   sessionStoragePath: '',
   commandsFolder: '',
   registerSkillsAsCommands: false,
+  persistFullAccess: false,
 };
 
 export class ObsidiBotSettingsTab extends PluginSettingTab {
@@ -332,8 +335,24 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.permissionMode = value as PermissionMode;
             await this.plugin.saveSettings();
+            this.plugin.notifyPermissionChanged();
+            this.display();
           })
       );
+
+    if (this.plugin.settings.permissionMode === 'full') {
+      new Setting(containerEl)
+        .setName('Persist full access between restarts')
+        .setDesc('When off, full access resets to Standard when Obsidian restarts.')
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.persistFullAccess)
+            .onChange(async (value) => {
+              this.plugin.settings.persistFullAccess = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    }
 
     new Setting(containerEl)
       .setName('Show context file setup prompt')

@@ -106,6 +106,7 @@ export class ClaudeView extends ItemView {
   private tokenGaugeEl: SVGElement;
   private attachPopoverEl: HTMLElement;
   private compactConfirmEl: HTMLElement;
+  private permissionIconEl!: HTMLButtonElement;
   private sessionContextTokens = 0;
   static readonly CONTEXT_WINDOW = 200_000;
   private atDropdownIndex = -1;
@@ -201,6 +202,13 @@ export class ClaudeView extends ItemView {
     });
 
     const inputToolbar = inputArea.createDiv({ cls: 'obsidibot-input-toolbar' });
+
+    this.permissionIconEl = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn obsidibot-permission-icon' });
+    this.permissionIconEl.addEventListener('click', () => {
+      this.appInternal.setting.open();
+      this.appInternal.setting.openTabById('obsidibot');
+    });
+    this.updatePermissionIcon();
 
     this.attachBtn = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn' });
     setIcon(this.attachBtn, 'paperclip');
@@ -389,8 +397,35 @@ export class ClaudeView extends ItemView {
 
   async onClose() { /* nothing to clean up yet */ }
 
+  onSettingsChanged(): void {
+    this.updatePermissionIcon();
+  }
+
+  private updatePermissionIcon(): void {
+    if (!this.permissionIconEl) return;
+    const mode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+    this.permissionIconEl.removeClass('obsidibot-perm-readonly', 'obsidibot-perm-standard', 'obsidibot-perm-full');
+    switch (mode) {
+      case 'readonly':
+        setIcon(this.permissionIconEl, 'eye');
+        this.permissionIconEl.title = 'Read-only — no writes or shell commands. Click to change.';
+        this.permissionIconEl.addClass('obsidibot-perm-readonly');
+        break;
+      case 'full':
+        setIcon(this.permissionIconEl, 'triangle-alert');
+        this.permissionIconEl.title = 'Full access — all tools including bash. Click to change.';
+        this.permissionIconEl.addClass('obsidibot-perm-full');
+        break;
+      default:
+        setIcon(this.permissionIconEl, 'shield');
+        this.permissionIconEl.title = 'Standard — files + web, no bash. Click to change.';
+        this.permissionIconEl.addClass('obsidibot-perm-standard');
+    }
+  }
+
   startNewSession() {
     this.sessionPermissionOverride = null;
+    this.updatePermissionIcon();
     this.sessionContextTokens = 0;
     this.tokenGaugeEl.classList.add('obsidibot-hidden');
     this.pendingContexts = [];
@@ -1391,6 +1426,7 @@ export class ClaudeView extends ItemView {
       unlock();
       if (granted) {
         this.sessionPermissionOverride = 'full';
+        this.updatePermissionIcon();
         this.inputEl.value = `[Permission granted] Full access is now enabled. Please retry the blocked ${request.tool} operation and complete the task.`;
       } else {
         this.inputEl.value = `[Permission denied] ${request.tool} access was denied. Please continue without it or suggest an alternative approach.`;
@@ -1418,6 +1454,7 @@ export class ClaudeView extends ItemView {
       });
       upgradeBtn.addEventListener('click', () => {
         this.sessionPermissionOverride = 'full';
+        this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
         log('Session permission override set to full');

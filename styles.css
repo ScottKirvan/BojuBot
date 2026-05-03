@@ -1514,5 +1514,15 @@
   border-color: var(--interactive-accent);
   color: var(--interactive-accent);
 }
+/* ── Permission mode icon (input toolbar) ── */
+/* Restricted (planned): blue lock */
+.obsidibot-perm-restricted { color: var(--color-blue) !important; }
+/* Read-only: green eye */
+.obsidibot-perm-readonly { color: var(--color-green) !important; }
+/* Standard: yellow shield */
+.obsidibot-perm-standard { color: var(--color-yellow) !important; }
+/* Full: red triangle */
+.obsidibot-perm-full { color: var(--color-red) !important; }
+
 /* ── Utility ── */
 .obsidibot-invisible { visibility: hidden; }
