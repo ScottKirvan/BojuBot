@@ -30,3 +30,4 @@ notes/COMMIT_DRAFT.md
 ObsidiBot_Marketing/
 docs/.vitepress/cache/
 cortex-debug.log
+*.dead
