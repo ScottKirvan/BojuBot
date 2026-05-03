@@ -71,7 +71,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   vaultTreeDepth: 3,
   skipContextFilePrompt: false,
   uiBridgeEnabled: true,
-  commandAllowlist: ['switcher:open', 'daily-notes', 'editor:open-search'],
+  commandAllowlist: ['switcher:open', 'editor:open-search'],
   confirmUnlistedCommands: true,
   commandDenylist: [],
   permissionMode: 'standard',
