@@ -1,191 +1,138 @@
+---
+last_updated: 2026-04-30
+status: active
+---
+
 # ObsidiBot [![starline](https://starlines.qoo.monster/assets/ScottKirvan/ObsidiBot)](https://github.com/qoomon/starline)
+
 <div align="center">
+  <img src="assets/media/logo.png" alt="ObsidiBot logo" width="200" height="auto" />
 
-  <img src="assets/media/logo.png" alt="logo" width="200" height="auto" />
-  <h1><a href="https://github.com/ScottKirvan/ObsidiBot">ScottKirvan/ObsidiBot</a></h1>
-  <h3>Claude agentic file management inside Obsidian</h3>
+  <h3>More than a writing assistant — ObsidiBot turns your Obsidian vault into a personal AI platform.</h3>
 
-<!-- Badges -->
-<p>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/graphs/contributors">
-    <img src="https://img.shields.io/github/contributors/ScottKirvan/ObsidiBot" alt="contributors" />
-  </a>
-  <a href="">
-    <img src="https://img.shields.io/github/last-commit/ScottKirvan/ObsidiBot" alt="last update" />
-  </a>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/network/members">
-    <img src="https://img.shields.io/github/forks/ScottKirvan/ObsidiBot" alt="forks" />
-  </a>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/stargazers">
-    <img src="https://img.shields.io/github/stars/ScottKirvan/ObsidiBot" alt="stars" />
-  </a>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/issues/">
-    <img src="https://img.shields.io/github/issues/ScottKirvan/ObsidiBot" alt="open issues" />
-  </a>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/blob/main/LICENSE.md">
-    <img src="https://img.shields.io/github/license/ScottKirvan/ObsidiBot.svg" alt="license" />
-  </a>
-</p>
+  <p>
+    <a href="https://github.com/ScottKirvan/ObsidiBot/graphs/contributors"><img src="https://img.shields.io/github/contributors/ScottKirvan/ObsidiBot" alt="contributors" /></a>
+    <a href=""><img src="https://img.shields.io/github/last-commit/ScottKirvan/ObsidiBot" alt="last update" /></a>
+    <a href="https://github.com/ScottKirvan/ObsidiBot/stargazers"><img src="https://img.shields.io/github/stars/ScottKirvan/ObsidiBot" alt="stars" /></a>
+    <a href="https://github.com/ScottKirvan/ObsidiBot/issues/"><img src="https://img.shields.io/github/issues/ScottKirvan/ObsidiBot" alt="open issues" /></a>
+    <a href="https://github.com/ScottKirvan/ObsidiBot/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/ScottKirvan/ObsidiBot.svg" alt="license" /></a>
+  </p>
 
-<h4>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/issues/new?template=bug_report.md">Report Bug</a>
-  <span> · </span>
-  <a href="https://github.com/ScottKirvan/ObsidiBot/issues/new?template=feature_request.md">Request Feature</a>
-  <span> · </span>
-  <a href="https://www.scottkirvan.com/ObsidiBot/index.html">User Guide</a>
-  <span> · </span>
-  <a href="https://discord.gg/TN6XJSNK5Y">Discord</a>
-  <span> · </span>
-  <a href="https://www.scottkirvan.com/ObsidiBot/CONTRIBUTING.html">Contributing</a>
-</h4>
+  <h4>
+    <a href="https://www.scottkirvan.com/ObsidiBot/">Docs</a> ·
+    <a href="https://discord.gg/TN6XJSNK5Y">Discord</a> ·
+    <a href="https://github.com/ScottKirvan/ObsidiBot/issues/new?template=bug_report.md">Report Bug</a> ·
+    <a href="https://github.com/ScottKirvan/ObsidiBot/issues/new?template=feature_request.md">Request Feature</a>
+  </h4>
 </div>
 
----
 
-> **Status:** Public beta — not yet in the Obsidian community plugin browser. Install via [BRAT](https://github.com/TfTHacker/obsidian42-brat) or from [Releases](https://github.com/ScottKirvan/ObsidiBot/releases). Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y) or [GitHub Issues](https://github.com/ScottKirvan/ObsidiBot/issues).
-
----
-
-## An AI agent working inside your vault — not chatting from the sidelines
-
-ObsidiBot puts a full Claude Code agent in Obsidian's sidebar — powered by the Claude Code CLI included in your Claude Pro/Max subscription. You type; ObsidiBot acts. It reads, writes, reorganizes, and creates notes. When it's done, it opens the result in your editor.
-
-```
-"Find all notes tagged #meeting from last week and create a summary note"
-"Rename everything in 03_Cards that starts with 'Untitled' based on its content"
-"Search for independent printers near New York City that can help me publish my 200 page coffeetable book, then write up a comparative summary for me"
-```
+Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and organization. Safely extend it to match how you think, and what you do.  You're in control and everything happens using regular, conversational language — write, plan, build custom commands, even develop Obsidian plugins — without leaving Obsidian.
 
 
----
+| You ask…                                                                                                         | ObsidiBot does…                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| "Summarize my meeting notes from last week"                                                                      | Creates a summary note and opens it in your editor                                                                       |
+| "Rename all my untitled notes based on their content"                                                            | Finds them, renames them, reports back                                                                                   |
+| "Find writing residencies in the US with open applications this year and draft a summary of costs and deadlines" | Searches the web, compiles results, writes the summary note                                                              |
+| "Turn this page into a Canvas mind map"                                                                          | Generates a `.canvas` file from your note                                                                                |
+| "Create a skill that summarizes my weekly notes into a report"                                                   | Writes the skill file — available instantly as a `/` slash command, Ctrl+P command, and callable by any plugin or script |
 
-## What makes ObsidiBot different
-
-Most Obsidian AI plugins are chatbots — text in, text out, no file access. Other plugins reach a bit further, but none of them match ObsidiBot's depth of Obsidian integration, vault-native memory, and per-note control.
-
-|                                        | ObsidiBot | Copilot Plus    | Claudian | Agent Client |
-| -------------------------------------- | --------- | --------------- | -------- | ------------ |
-| Session persistence                    | **Yes**   | No              | Yes      | No           |
-| Vault-native memory (syncs with vault) | **Yes**   | No              | No       | No           |
-| Obsidian UI control                    | **Yes**   | No              | No       | No           |
-| Execute any Obsidian command           | **Yes**   | No              | No       | No           |
-| Properties/Frontmatter config          | **Yes**   | No              | No       | No           |
-| Configurable safety modes              | **Yes**   | No              | Yes      | No           |
-| Required API key                       | **No**    | Yes ($14.99/mo) | Optional | No           |
-
-**Already using Claude Code in a terminal?** ObsidiBot uses the same binary — no new setup, no new costs. What you gain is the integration layer: automatic context and memory management, Obsidian UI control, and a session history that travels with your vault. The terminal stays available for everything else.
-
----
-## Features
-### A context stack built for how you actually work
-
-Context is the information ObsidiBot uses to understand your request — every note, file, image, or URL you add lives in a stack below the input — stackable, removable, individually pinnable. Pinned items (📌) survive send and stay attached for every subsequent message in the session.
-
-**What you can stack:**
-- **@** — type `@` in a message to attach a note; currently open note is selected by default
-- **Selection snippet** — highlight text in any open note, send it as labeled context
-- **Attachment (📎)** — files, PDFs, images, URLs; text read inline, binaries by path
-
-**What ObsidiBot injects automatically:**
-- Vault folder structure at session start (configurable depth)
-- Persistent, self-maintained context file — your naming conventions, ongoing projects, preferences — syncing with your vault across machines
-- Notes pinned via Obsidian properties / frontmatter
-- Per-note standing instructions via Obsidian properties / frontmatter
-- Active note — ObsidiBot always knows where you are
-
-ObsidiBot's session cache means you pay full price for this context once per session. Every subsequent turn is dramatically cheaper.
-
-### Inside Obsidian, not alongside it
-
-ObsidiBot doesn't just edit files and leave you to find them. After completing a task it can open the result in your editor, split it beside your current file, scroll to a specific heading, or show a toast notification confirming what it did.
-
-This is what separates ObsidiBot from terminal-based Claude wrappers — ObsidiBot is operating *inside* Obsidian. It has full read/write access to everything in your vault: notes, frontmatter, tags, templates, plugin config, Obsidian settings, and shell commands that go beyond simple file editing.
-
-### Run any Obsidian command — without leaving chat
-
-Claude can execute Obsidian commands directly from the chat panel. Open today's daily note, trigger a Templater template, run the file switcher, refresh a Dataview, invoke any command from any installed plugin — just ask.
-
-```
-"Open today's daily note"
-"Refresh the Dataview on this page"
-"Create a new note from my Weekly Review template"
-```
-
-Three commands are pre-approved by default. You control the rest through a searchable allowlist in Settings. Unapproved commands show a confirmation modal — approve with "Don't ask again" to always allow, deny to permanently block. Claude reads a generated command manifest at startup, so it always uses exact IDs — it never guesses.
-
-No other Obsidian AI plugin does this.
-
-### Configurable safety modes
-
-Three levels — **readonly**, **standard** (default), and **full access** — so ObsidiBot's reach matches what you're comfortable with. If a denied operation blocks a task, an in-chat card shows exactly what was blocked and offers one-click upgrade + auto-retry.
-
-### Context gauge
-
-You've been there: Claude starts hedging, repeating itself, losing the thread. That's context exhaustion. ObsidiBot shows you a live gauge of remaining session memory right below the input — and lets you compact with one click before things quietly fall apart.
-
-### Per-note frontmatter controls
-
-Use Obsidian's Properties panel to configure ObsidiBot's behavior per note — no special UI, just YAML:
-
-- `obsidibot-context: always` — pin this note's full content to every new session. Ideal for project briefs, style guides, vault conventions.
-- `obsidibot-instructions: "..."` — inject standing rules at session start. ObsidiBot follows them without you repeating yourself every session.
-
-**Partial file protection:** `obsidibot-instructions: "Read this file for reference only. Do not edit it."` works reliably in practice — ObsidiBot respects it as part of its context. Convention, not hard enforcement; keep a backup or use git for truly critical files.
-
-### Session history and tool call visibility
-
-Named sessions, resume any conversation, rename and delete — browsable at no token cost. Drag sessions into your preferred order; the currently active session is always marked. As ObsidiBot works, labeled events appear inline — *Reading: notes/archive*, *Writing: Q2-goals.md* — collapsing to a tidy summary when the response is done.
-
----
-
-## Requirements
-
-- Obsidian desktop (Windows, Mac, or Linux — **desktop only**, no mobile)
-- [Claude Code CLI](https://code.claude.com/docs/en/overview#native-install-recommended) installed and authenticated — included in Claude Pro/Max subscriptions
-  - **Windows:** must be installed natively in **PowerShell** (not WSL). Verify: `claude --version` in PowerShell
-  - **Mac/Linux:** `curl -fsSL https://claude.ai/install.sh | bash`
-
+> [!NOTE]
+> **Status:** Public beta — Install via [BRAT](https://github.com/TfTHacker/obsidian42-brat) or manually via [Github Releases](https://github.com/ScottKirvan/ObsidiBot/releases). Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y). Currently [submitted](https://github.com/obsidianmd/obsidian-releases/pull/12000) for inclusion as an Obsidian Community Plugin — awaiting review.
 ## Installation
-
-ObsidiBot is not yet in the Obsidian community plugin browser.
-
-### Via BRAT (recommended)
-
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) installs and auto-updates beta plugins from GitHub.
-
+ *\*Requirements:*
+- *Obsidian desktop (Windows, Mac, Linux — no mobile support)*
+- *[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) installed and authenticated — included in Claude Pro/Max subscriptions. (Windows,: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)*
+### Install Via BRAT (recommended)
 1. Install **BRAT** from the Obsidian community plugin browser
-2. In BRAT settings → **Add Beta Plugin** → enter: `ScottKirvan/ObsidiBot`
+2. In BRAT settings → **Add Beta Plugin** → `ScottKirvan/ObsidiBot`
 3. Done — BRAT keeps ObsidiBot updated automatically
-
-### Manually
-
+### Install Manually
 1. Download `obsidibot-<version>.zip` from [Releases](https://github.com/ScottKirvan/ObsidiBot/releases)
-2. Extract to get a `obsidibot/` folder with `main.js`, `manifest.json`, `styles.css`
-3. Move `obsidibot/` into `<your-vault>/.obsidian/plugins/`
-4. **Settings → Community Plugins** → enable **ObsidiBot**
----
+2. Extract to `<your-vault>/.obsidian/plugins/obsidibot/`
+3. **Settings → Community Plugins** → enable **ObsidiBot**
 
+---
 ## Quick Start
 
-1. Open the ObsidiBot panel from the ribbon (wave icon) or Command Palette: `ObsidiBot: Open agent panel`
-2. Type a message and press **Enter** (or click Send). Use Shift+Enter for a newline.
-3. ObsidiBot has full access to your vault — ask it to summarize, organize, find, or create notes
+1. Open the ObsidiBot panel from the ribbon (brain/circuit icon) or Command Palette: `ObsidiBot: Open agent panel`
+2. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
+3. See the [User Guide](https://www.scottkirvan.com/ObsidiBot/) for details on Skills, session management, and settings
 
-See the [User Guide](https://www.scottkirvan.com/ObsidiBot/) for context files, session management, and settings.
+---
+## What makes ObsidiBot different?
+<details>
+<summary><b>🔧 Create custom commands — expand Obsidian's capabilities</b></summary>
 
+<!--[GIF: Skills form modal opening, user filling fields, Claude executing]-->
 
-## Support the Project
+<br>
+<b>Skills</b> are the "bot" in ObsidiBot. Write a natural language prompt, save it as a markdown file in your commands folder, and it becomes a first-class command — available in the '/' slash menu, in the Obsidian command palette with hotkey support, <em>and</em> exposed as an API endpoint, callable by any plugin or script within Obsidian.
+<br><br>
+Add YAML frontmatter and Skills grow into parameterized forms that can prompt for input: dropdowns, text inputs, note pickers with fuzzy search. Your most-compicated recurring workflows become generalized, reusable, one-click operations.
+<br><br>
+→ <a href="https://www.scottkirvan.com/ObsidiBot/guide/skills.html">Learn about Skills</a>
+<br><br>
+</details>
+<details>
+<summary><b>✏️ Deep Obsidian integration</b></summary>
 
-ObsidiBot is free, open source, and maintained in spare time. If it saves you hours of manual note organization, consider sponsoring:
+<!--[GIF: ObsidiBot opening a file, navigating to a heading, showing toast notification]-->
+
+<br>
+ObsidiBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> Obsidian:
+<br><br>
+<ul>
+<li><b>Obsidian UI control</b> — opens files, splits panes, navigates headings, shows notifications</li>
+<li><b>Run any command</b> — execute anything from the command palette; and you control which commands are allowed and which aren't</li>
+<li><b>Live vault graph</b> — Claude can query backlinks, outlinks, tags, and file lists mid-reasoning</li>
+<li><b>Canvas</b> — reads and generates <code>.canvas</code> files natively</li>
+</ul>
+<br>
+→ <a href="https://www.scottkirvan.com/ObsidiBot/features">Full feature list</a>
+<br><br>
+</details>
+<details>
+<summary><b>🔒 Your vault, your rules</b></summary>
+
+<br>
+<ul>
+<li><b>Configurable safety modes</b> — readonly, standard, full access; blocked operations show an in-chat card with one-click upgrade</li>
+<li><b>Per-note frontmatter controls</b> — pin notes to every session, inject per-note instructions, all via Obsidian Properties</li>
+<li><b>Vault-native memory</b> — <code>_claude-context.md</code> persists context across sessions and syncs across machines</li>
+<li><b>Context gauge</b> — live session memory indicator below the input; one-click compaction</li>
+</ul>
+<br><br>
+</details>
+<details>
+<summary><b>🌐 Reach beyond your vault</b></summary>
+
+<br>
+ObsidiBot doesn't stop at the edges of your vault. Given proper permissions (which you control), it can search the web, work with files anywhere on your system, and interact with external services — and everything it finds comes back as a note, woven into your vault where it belongs.
+<br><br>
+<ul>
+<li><b>Web search</b> — Claude can search the web mid-conversation and bring results back as chat responses or notes</li>
+<li><b>Filesystem access</b> — ObsidiBot, under your direction, can read, write, and organize files anywhere on your system, not just inside the vault</li>
+<li><b>External services</b> — Home automation, calendar/weather, GitHub, etc.  For example, ObsidiBot can manage GitHub issues, pull in data, run CLI tools — all from a single conversational interface</li>
+<li><b>Your vault as hub</b> — everything that comes in lands where you decide, searchable and linked</li>
+</ul>
+<br><br>
+</details>
+
+---
+
+## Support the project
+
+ObsidiBot is free, open source, and built in spare time. If it's useful:
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/ScottKirvan?style=social)](https://github.com/sponsors/ScottKirvan)
 
 ---
 
-
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for project layout, development setup, commit conventions, and PR process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for project layout, development setup, and PR process.
 
 ## License
 
@@ -193,5 +140,4 @@ MIT — see [LICENSE.md](LICENSE.md)
 
 ---
 
-Project Link: [ObsidiBot](https://github.com/ScottKirvan/ObsidiBot)  
-[CHANGELOG](notes/CHANGELOG.md) · [TODO](notes/TODO.md) · [User Guide](https://www.scottkirvan.com/ObsidiBot/)
+[CHANGELOG](notes/CHANGELOG.md) · [User Guide](https://www.scottkirvan.com/ObsidiBot/) · [Roadmap](https://github.com/users/ScottKirvan/projects/3)
