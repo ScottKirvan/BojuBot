@@ -47,7 +47,6 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 ### Install Via BRAT (recommended)
 1. Install **BRAT** from the Obsidian community plugin browser
 2. In BRAT settings → **Add Beta Plugin** → `ScottKirvan/ObsidiBot`
-3. Done — BRAT keeps ObsidiBot updated automatically
 ### Install Manually
 1. Download `obsidibot-<version>.zip` from [Releases](https://github.com/ScottKirvan/ObsidiBot/releases)
 2. Extract to `<your-vault>/.obsidian/plugins/obsidibot/`
