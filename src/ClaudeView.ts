@@ -408,17 +408,17 @@ export class ClaudeView extends ItemView {
     switch (mode) {
       case 'readonly':
         setIcon(this.permissionIconEl, 'eye');
-        this.permissionIconEl.title = 'Read-only — no writes or shell commands. Click to change.';
+        this.permissionIconEl.title = 'Permissions: Read-only — no writes or shell commands. Click to change.';
         this.permissionIconEl.addClass('obsidibot-perm-readonly');
         break;
       case 'full':
         setIcon(this.permissionIconEl, 'triangle-alert');
-        this.permissionIconEl.title = 'Full access — all tools including bash. Click to change.';
+        this.permissionIconEl.title = 'Permissions: Full access — all tools including bash. Click to change.';
         this.permissionIconEl.addClass('obsidibot-perm-full');
         break;
       default:
         setIcon(this.permissionIconEl, 'shield');
-        this.permissionIconEl.title = 'Standard — files + web, no bash. Click to change.';
+        this.permissionIconEl.title = 'Permissions: Standard — files + web, no bash. Click to change.';
         this.permissionIconEl.addClass('obsidibot-perm-standard');
     }
   }
