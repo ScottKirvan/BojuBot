@@ -7,34 +7,6 @@
 
 * discord announce test - no change. ([1bfd13e](https://github.com/ScottKirvan/ObsidiBot/commit/1bfd13e45dbf1e17612f13d78b12526102d0f5b3))
 
-## [2.11.4](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.3...2.11.4) (2026-05-04)
-
-
-### Bug Fixes
-
-* discord announce format - no plugin changes ([f5eb60d](https://github.com/ScottKirvan/ObsidiBot/commit/f5eb60d45ecd11f02285edfaabe985ab57c78c37))
-
-## [2.11.3](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.2...2.11.3) (2026-05-04)
-
-
-### Bug Fixes
-
-* try again - discord anounce test - no changes ([5de6f8f](https://github.com/ScottKirvan/ObsidiBot/commit/5de6f8fa7b3fde99964edc6bdfdc9f9a19b05dce))
-
-## [2.11.2](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.1...2.11.2) (2026-05-04)
-
-
-### Bug Fixes
-
-* discord announcy dependency ([1a599e2](https://github.com/ScottKirvan/ObsidiBot/commit/1a599e201363fdaf9440f09111982535e8e8f8de))
-
-## [2.11.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.0...2.11.1) (2026-05-04)
-
-
-### Bug Fixes
-
-* test discord announce ([a908d0f](https://github.com/ScottKirvan/ObsidiBot/commit/a908d0f256fd1f5be5d041e355721965ed34511c))
-
 ## [2.11.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.10.2...2.11.0) (2026-05-03)
 
 
