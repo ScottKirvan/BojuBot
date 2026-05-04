@@ -110,23 +110,30 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch full notes
+          # 1. Fetch full notes
           FULL_NOTES=$(gh release view "$TAG" --json body -q '.body')
 
-          # Extract text between the custom header and footer
+          # 2. Extract changelog (between the markers)
+          # We use a simpler grep/sed combo to ensure we capture the middle
           CHANGELOG=$(echo "$FULL_NOTES" | sed -n '/### 🆕 Changes in this Release/,/---/p' | sed '1d;$d')
 
-          # Fallback if sed fails to find the markers
-          [ -z "$CHANGELOG" ] && CHANGELOG="View changelog on GitHub."
+          # 3. Fallback
+          if [ -z "$CHANGELOG" ]; then CHANGELOG="Check the GitHub release for details."; fi
 
-          curl -H "Content-Type: application/json" \
-          -X POST \
-          -d "{
-            \"content\": \"🚀 **ObsidiBot $TAG Published**\n\n$CHANGELOG\",
-            \"embeds\": [{
-              \"title\": \"Full Release Details\",
-              \"url\": \"https://github.com/${{ github.repository }}/releases/tag/$TAG\",
-              \"color\": 5814783
-            }]
-          }" \
-          $DISCORD_WEBHOOK 
+          # 4. Construct JSON safely using jq
+          PAYLOAD=$(jq -n \
+            --arg content "🚀 **ObsidiBot $TAG Published**" \
+            --arg desc "$CHANGELOG" \
+            --arg url "https://github.com/${{ github.repository }}/releases/tag/$TAG" \
+            '{
+              content: $content,
+              embeds: [{
+                title: "Changelog",
+                description: $desc,
+                url: $url,
+                color: 5814783
+              }]
+            }')
+
+          # 5. Send to Discord
+          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$DISCORD_WEBHOOK"
