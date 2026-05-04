@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.3](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.2...2.11.3) (2026-05-04)
+
+
+### Bug Fixes
+
+* try again - discord anounce test - no changes ([5de6f8f](https://github.com/ScottKirvan/ObsidiBot/commit/5de6f8fa7b3fde99964edc6bdfdc9f9a19b05dce))
+
 ## [2.11.2](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.1...2.11.2) (2026-05-04)
 
 
