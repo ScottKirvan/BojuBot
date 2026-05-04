@@ -32,8 +32,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -96,3 +96,35 @@ jobs:
             manifest.json \
             styles.css \
             dist/obsidibot-${{ needs.release-please.outputs.tag_name }}.zip
+
+  announce-discord:
+    needs: [ release-please, build-and-upload ]
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord Announcement
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch full notes
+          FULL_NOTES=$(gh release view "$TAG" --json body -q '.body')
+
+          # Extract text between the custom header and footer
+          CHANGELOG=$(echo "$FULL_NOTES" | sed -n '/### 🆕 Changes in this Release/,/---/p' | sed '1d;$d')
+
+          # Fallback if sed fails to find the markers
+          [ -z "$CHANGELOG" ] && CHANGELOG="View changelog on GitHub."
+
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d "{
+            \"content\": \"🚀 **ObsidiBot $TAG Published**\n\n$CHANGELOG\",
+            \"embeds\": [{
+              \"title\": \"Full Release Details\",
+              \"url\": \"https://github.com/${{ github.repository }}/releases/tag/$TAG\",
+              \"color\": 5814783
+            }]
+          }" \
+          $DISCORD_WEBHOOK 
