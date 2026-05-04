@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.4](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.3...2.11.4) (2026-05-04)
+
+
+### Bug Fixes
+
+* discord announce format - no plugin changes ([f5eb60d](https://github.com/ScottKirvan/ObsidiBot/commit/f5eb60d45ecd11f02285edfaabe985ab57c78c37))
+
 ## [2.11.3](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.2...2.11.3) (2026-05-04)
 
 
