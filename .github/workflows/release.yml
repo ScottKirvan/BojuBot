@@ -102,6 +102,8 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4 # Added this to provide Git context
+
       - name: Send Discord Announcement
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
