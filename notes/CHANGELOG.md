@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.2](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.1...2.11.2) (2026-05-04)
+
+
+### Bug Fixes
+
+* discord announcy dependency ([1a599e2](https://github.com/ScottKirvan/ObsidiBot/commit/1a599e201363fdaf9440f09111982535e8e8f8de))
+
 ## [2.11.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.0...2.11.1) (2026-05-04)
 
 
