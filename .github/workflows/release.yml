@@ -15,6 +15,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      body: ${{ steps.release.outputs.body }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -96,6 +97,7 @@ jobs:
             manifest.json \
             styles.css \
             dist/obsidibot-${{ needs.release-please.outputs.tag_name }}.zip
+
   announce-discord:
     needs: [ release-please, build-and-upload ]
     if: ${{ needs.release-please.outputs.release_created }}
@@ -104,19 +106,23 @@ jobs:
       - name: Send Discord Webhook
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          # Use the raw body output from release-please
+          # Access the now-exported body output
           RAW_BODY: ${{ needs.release-please.outputs.body }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
           REPO: ${{ github.repository }}
         run: |
-          # 1. Define the correct Release URL
           RELEASE_URL="https://github.com/$REPO/releases/tag/$TAG"
 
-          # 2. Fix the Version Link
-          # This replaces the comparison URL inside the [ ] (v1.2.3) with the release URL
-          CLEAN_CHANGELOG=$(echo "$RAW_BODY" | sed -E "s|\[([0-9.]+)\]\(https://[^\)]+\)|[\1]($RELEASE_URL)|g")
+          # Use a more flexible regex to swap the comparison link for the release link
+          # This targets the [version](url) pattern at the start of the notes
+          CLEAN_CHANGELOG=$(echo "$RAW_BODY" | sed -E "s|\[.*\]\(https://github.com/[^)]+\)|[$TAG]($RELEASE_URL)|g")
 
-          # 3. Construct JSON safely
+          # If CLEAN_CHANGELOG ended up empty for any reason, use RAW_BODY
+          if [ -z "$CLEAN_CHANGELOG" ]; then
+            CLEAN_CHANGELOG="$RAW_BODY"
+          fi
+
+          # Construct JSON
           PAYLOAD=$(jq -n \
             --arg content "🚀 **ObsidiBot $TAG Published**" \
             --arg desc "$CLEAN_CHANGELOG" \
@@ -125,11 +131,10 @@ jobs:
               content: $content,
               embeds: [{
                 title: "Changelog",
-                description: $desc,
+                description: ($desc | .[0:4000]), # Discord limit safety
                 url: $url,
                 color: 5814783
               }]
             }')
 
-          # 4. Send
           curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$DISCORD_WEBHOOK"
