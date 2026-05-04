@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.5](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.4...2.11.5) (2026-05-04)
+
+
+### Bug Fixes
+
+* discord announce test - no change. ([1bfd13e](https://github.com/ScottKirvan/ObsidiBot/commit/1bfd13e45dbf1e17612f13d78b12526102d0f5b3))
+
 ## [2.11.4](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.3...2.11.4) (2026-05-04)
 
 
