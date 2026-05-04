@@ -96,35 +96,31 @@ jobs:
             manifest.json \
             styles.css \
             dist/obsidibot-${{ needs.release-please.outputs.tag_name }}.zip
-
   announce-discord:
     needs: [ release-please, build-and-upload ]
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # Added this to provide Git context
-
-      - name: Send Discord Announcement
+      - name: Send Discord Webhook
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          # Use the raw body output from release-please
+          RAW_BODY: ${{ needs.release-please.outputs.body }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          # 1. Fetch full notes
-          FULL_NOTES=$(gh release view "$TAG" --json body -q '.body')
+          # 1. Define the correct Release URL
+          RELEASE_URL="https://github.com/$REPO/releases/tag/$TAG"
 
-          # 2. Extract changelog (between the markers)
-          # We use a simpler grep/sed combo to ensure we capture the middle
-          CHANGELOG=$(echo "$FULL_NOTES" | sed -n '/### 🆕 Changes in this Release/,/---/p' | sed '1d;$d')
+          # 2. Fix the Version Link
+          # This replaces the comparison URL inside the [ ] (v1.2.3) with the release URL
+          CLEAN_CHANGELOG=$(echo "$RAW_BODY" | sed -E "s|\[([0-9.]+)\]\(https://[^\)]+\)|[\1]($RELEASE_URL)|g")
 
-          # 3. Fallback
-          if [ -z "$CHANGELOG" ]; then CHANGELOG="Check the GitHub release for details."; fi
-
-          # 4. Construct JSON safely using jq
+          # 3. Construct JSON safely
           PAYLOAD=$(jq -n \
             --arg content "🚀 **ObsidiBot $TAG Published**" \
-            --arg desc "$CHANGELOG" \
-            --arg url "https://github.com/${{ github.repository }}/releases/tag/$TAG" \
+            --arg desc "$CLEAN_CHANGELOG" \
+            --arg url "$RELEASE_URL" \
             '{
               content: $content,
               embeds: [{
@@ -135,5 +131,5 @@ jobs:
               }]
             }')
 
-          # 5. Send to Discord
+          # 4. Send
           curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$DISCORD_WEBHOOK"
