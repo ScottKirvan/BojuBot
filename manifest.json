@@ -1,7 +1,7 @@
 {
   "id": "obsidibot",
   "name": "ObsidiBot",
-  "version": "2.12.1",
+  "version": "2.13.0",
   "minAppVersion": "1.4.0",
   "description": "Claude Code chat panel, skills, and vault-aware AI — fully integrated and native to your vault.",
   "author": "Scott Kirvan",
