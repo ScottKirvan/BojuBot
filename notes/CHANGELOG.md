@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.13.0...2.14.0) (2026-05-07)
+
+
+### Features
+
+* notify Claude of permission mode change via pending system message ([3a15066](https://github.com/ScottKirvan/ObsidiBot/commit/3a150662e52a6f5847a51aa68b05c5bfce719047))
+
 ## [2.13.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.12.1...2.13.0) (2026-05-07)
 
 
