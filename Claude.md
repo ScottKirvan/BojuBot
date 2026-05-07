@@ -80,6 +80,10 @@ npm run dev                    # watch mode
 ## Commits
 `feat:` / `fix:` / `docs:` / `chore:` / `refactor:` / `test:`. Breaking: `feat!:` or `BREAKING CHANGE:` footer. release-please handles CHANGELOG + version bumps.
 
+**Lint and TypeScript violations are `fix:` not `chore:`** — they block Obsidian community plugin acceptance and must appear in a release.
+
+After submitting a PR, always switch back to `main`: `git checkout main`.
+
 ## Release process (post-merge checklist)
 release-please only reads commit **subject lines** — commit bodies are ignored. After each release PR merges:
 
