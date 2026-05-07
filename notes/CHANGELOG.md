@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.13.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.12.1...2.13.0) (2026-05-07)
+
+
+### Features
+
+* add restricted (Chat only) permission mode ([b947406](https://github.com/ScottKirvan/ObsidiBot/commit/b94740684502f58ff17f821ecd9a55bd48b8dbb9))
+* replace queryConversationLabels with set-label action ([7928328](https://github.com/ScottKirvan/ObsidiBot/commit/79283286196df743be48b5ba9aa0cec2bf4f8807))
+
+
+### Bug Fixes
+
+* clear session permission override when settings change ([2365053](https://github.com/ScottKirvan/ObsidiBot/commit/236505360baa916268168825e84250863c7bf016))
+* settings dropdown shows effective permission mode including session override ([9b44c7f](https://github.com/ScottKirvan/ObsidiBot/commit/9b44c7f6955f07c101b610fc2045215fa558b564))
+
 ## [2.12.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.12.0...2.12.1) (2026-05-07)
 
 
