@@ -45,7 +45,7 @@ function nodeLabel(node: CanvasNode): string {
   }
 }
 
-export function canvasToText(filename: string, json: string): string {
+export function canvasToText(filename: string, json: string, maxChars = 0): string {
   let data: CanvasData;
   try {
     data = JSON.parse(json) as CanvasData;
@@ -117,5 +117,9 @@ export function canvasToText(filename: string, json: string): string {
 
   lines.push('', `(${nodes.length} node${nodes.length !== 1 ? 's' : ''}, ${edges.length} connection${edges.length !== 1 ? 's' : ''})`);
 
-  return lines.join('\n');
+  const result = lines.join('\n');
+  if (maxChars > 0 && result.length > maxChars) {
+    return result.substring(0, maxChars) + `\n\n[Canvas truncated — ${nodes.length} nodes exceeded the ${maxChars}-character limit. Adjust "Max canvas size" in ObsidiBot settings to see more.]`;
+  }
+  return result;
 }

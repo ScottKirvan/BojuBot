@@ -62,6 +62,8 @@ export interface ObsidiBotSettings {
   registerSkillsAsCommands: boolean;
   /** Keep full access mode between restarts instead of resetting to standard. Default off. */
   persistFullAccess: boolean;
+  /** Max characters of canvas text injected as context. 0 = no limit. */
+  canvasMaxChars: number;
 }
 
 export const DEFAULT_SETTINGS: ObsidiBotSettings = {
@@ -89,6 +91,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   commandsFolder: '',
   registerSkillsAsCommands: false,
   persistFullAccess: false,
+  canvasMaxChars: 50000,
 };
 
 export class ObsidiBotSettingsTab extends PluginSettingTab {
@@ -250,6 +253,20 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Max canvas size (characters)')
+      .setDesc('Canvas files converted to text and injected as context will be truncated at this character limit. Set to 0 for no limit.')
+      .addText((text) =>
+        text
+          .setPlaceholder('50000')
+          .setValue(String(this.plugin.settings.canvasMaxChars))
+          .onChange(async (value) => {
+            const n = parseInt(value, 10);
+            this.plugin.settings.canvasMaxChars = isNaN(n) || n < 0 ? 0 : n;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName('Export folder')
       .setDesc('Vault-relative folder where "export session to vault" saves notes. Created automatically if it does not exist.')
       .addText((text) =>
@@ -343,7 +360,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
     if (this.plugin.settings.permissionMode === 'full') {
       new Setting(containerEl)
         .setName('Persist full access between restarts')
-        .setDesc('When off, full access resets to Standard when Obsidian restarts.')
+        .setDesc('When off, full access resets to standard when Obsidian restarts.')
         .addToggle((toggle) =>
           toggle
             .setValue(this.plugin.settings.persistFullAccess)

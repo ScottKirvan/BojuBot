@@ -125,9 +125,6 @@ export class ClaudeView extends ItemView {
     this.plugin = plugin;
   }
 
-  private getVaultRoot(): string {
-    return (this.app.vault.adapter as unknown as { basePath: string }).basePath;
-  }
 
   private get appInternal(): AppInternal {
     return this.app as unknown as AppInternal;
@@ -368,7 +365,7 @@ export class ClaudeView extends ItemView {
     }
 
     if (this.plugin.settings.resumeLastSession) {
-      const vaultRoot = this.getVaultRoot();
+      const vaultRoot = this.plugin.getVaultRoot();
       const sessions = loadAllSessions(vaultRoot, this.getSessionsDir(), this.app.vault.configDir);
       if (sessions.length > 0) {
         const lastId = this.plugin.settings.lastActiveSessionId;
@@ -390,7 +387,7 @@ export class ClaudeView extends ItemView {
       !this.plugin.settings.skipContextFilePrompt &&
       !this.app.vault.getFileByPath(this.plugin.settings.contextFilePath)
     ) {
-      const vaultRoot = this.getVaultRoot();
+      const vaultRoot = this.plugin.getVaultRoot();
       new ContextGenerationModal(
         this.app,
         this.plugin,
@@ -453,7 +450,7 @@ export class ClaudeView extends ItemView {
     this.tokenGaugeEl.classList.add('obsidibot-hidden');
     this.pendingContexts = [];
     this.renderContextZone();
-    const vaultRoot = this.getVaultRoot();
+    const vaultRoot = this.plugin.getVaultRoot();
     const now = new Date().toISOString();
     const sessionId = now.replace(/[:.]/g, '-');
 
@@ -481,7 +478,7 @@ export class ClaudeView extends ItemView {
   }
 
   showSessionHistory() {
-    const vaultRoot = this.getVaultRoot();
+    const vaultRoot = this.plugin.getVaultRoot();
     const sessionsDir = this.getSessionsDir();
     const sessions = loadAllSessions(vaultRoot, sessionsDir, this.app.vault.configDir);
     new SessionListModal(this.app, vaultRoot, sessions, (session) => {
@@ -757,7 +754,7 @@ export class ClaudeView extends ItemView {
         const proc = spawnClaude({
           binaryPath: this.plugin.claudeBinaryPath,
           prompt,
-          vaultRoot: this.getVaultRoot(),
+          vaultRoot: this.plugin.getVaultRoot(),
           env: this.plugin.shellEnv,
           permissionMode: 'readonly',
         });
@@ -938,13 +935,13 @@ export class ClaudeView extends ItemView {
       const isStacked = !isSplit && leaves.length > 1;
 
       if (isSplit && this.plugin.settings.injectSplitPaneFiles) {
-        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter(Boolean);
+        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter((p): p is string => p !== undefined);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.map(p => escapeAttr(p as string)).join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.map(p => escapeAttr(p)).join('|')}"></obsidibot-context>\n\n`;
       } else if (isStacked && this.plugin.settings.injectStackedTabFiles) {
-        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter(Boolean);
+        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter((p): p is string => p !== undefined);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p as string)).join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p)).join('|')}"></obsidibot-context>\n\n`;
       } else {
         const activeFile = this.app.workspace.getActiveFile();
         activeFileNote = activeFile ? `<obsidibot-context type="active-note" path="${escapeAttr(activeFile.path)}">Read this file if the user's task relates to its content.</obsidibot-context>\n\n` : '';
@@ -999,7 +996,7 @@ export class ClaudeView extends ItemView {
       proc = spawnClaude({
         binaryPath: this.plugin.claudeBinaryPath,
         prompt: finalPrompt,
-        vaultRoot: this.getVaultRoot(),
+        vaultRoot: this.plugin.getVaultRoot(),
         env: this.plugin.shellEnv,
         resumeSessionId: this.currentSessionId,
         permissionMode: this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
@@ -1100,7 +1097,7 @@ export class ClaudeView extends ItemView {
         if (!clean) this.appendMessage('system', 'Interrupted.');
 
         if (sessionId) {
-          const vaultRoot = this.getVaultRoot();
+          const vaultRoot = this.plugin.getVaultRoot();
           const sessionsDir = this.getSessionsDir();
           const now = new Date().toISOString();
 
@@ -1282,7 +1279,7 @@ export class ClaudeView extends ItemView {
     body.createEl('p', { cls: 'obsidibot-welcome-tip', text: tip });
 
     // Recent sessions footer
-    const sessions = loadAllSessions(this.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
+    const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
       .filter(s => s.id !== this.currentSessionFileId);
     if (sessions.length > 0) {
       const recent = welcome.createDiv({ cls: 'obsidibot-welcome-recent' });
@@ -1590,7 +1587,7 @@ export class ClaudeView extends ItemView {
     }
 
     const raw = await this.app.vault.read(file);
-    const content = file.extension === 'canvas' ? canvasToText(file.name, raw) : raw;
+    const content = file.extension === 'canvas' ? canvasToText(file.name, raw, this.plugin.settings.canvasMaxChars) : raw;
     this.injectSelectionContext(content, file.basename);
   }
 
@@ -1675,7 +1672,7 @@ export class ClaudeView extends ItemView {
     const proc = spawnClaude({
       binaryPath: this.plugin.claudeBinaryPath,
       prompt: '/compact',
-      vaultRoot: this.getVaultRoot(),
+      vaultRoot: this.plugin.getVaultRoot(),
       env: this.plugin.shellEnv,
       resumeSessionId: sessionId,
       permissionMode: this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
@@ -1730,7 +1727,7 @@ export class ClaudeView extends ItemView {
         this.pendingContexts.push({ text: filePath, source: f.name, pinned: false, type });
       } else {
         let text = TEXT_EXTS.has(ext) ? await f.text() : f.name;
-        if (ext === 'canvas') text = canvasToText(f.name, text);
+        if (ext === 'canvas') text = canvasToText(f.name, text, this.plugin.settings.canvasMaxChars);
         this.pendingContexts.push({ text, source: f.name, pinned: false });
       }
       this.renderContextZone();
@@ -1812,7 +1809,7 @@ export class ClaudeView extends ItemView {
         this.pendingContexts.push({ text: filePath, source: f.name, pinned: false, type });
       } else if (TEXT_EXTS.has(ext)) {
         let text = await f.text();
-        if (ext === 'canvas') text = canvasToText(f.name, text);
+        if (ext === 'canvas') text = canvasToText(f.name, text, this.plugin.settings.canvasMaxChars);
         this.pendingContexts.push({ text, source: f.name, pinned: false });
       } else {
         // Unknown binary — pass filename; Claude can attempt to read it
@@ -1824,7 +1821,7 @@ export class ClaudeView extends ItemView {
   }
 
   private saveBinaryToTmp(filename: string, data: ArrayBuffer): string {
-    const vaultRoot = this.getVaultRoot();
+    const vaultRoot = this.plugin.getVaultRoot();
     const tmpDir = join(vaultRoot, this.app.vault.configDir, 'plugins', 'obsidibot', 'tmp');
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
     const filePath = join(tmpDir, filename);
@@ -1909,7 +1906,7 @@ export class ClaudeView extends ItemView {
       proc = spawnClaude({
         binaryPath: this.plugin.claudeBinaryPath,
         prompt: injectPrompt,
-        vaultRoot: this.getVaultRoot(),
+        vaultRoot: this.plugin.getVaultRoot(),
         env: this.plugin.shellEnv,
         resumeSessionId: this.currentSessionId,
         permissionMode: this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
@@ -2020,7 +2017,7 @@ export class ClaudeView extends ItemView {
         if (!clean) this.appendMessage('system', 'Interrupted.');
 
         if (sessionId && this.currentSessionId) {
-          const vaultRoot = this.getVaultRoot();
+          const vaultRoot = this.plugin.getVaultRoot();
           const now = new Date().toISOString();
           const fileId = this.currentSessionFileId ?? this.currentSessionId;
           saveSession(vaultRoot, {
@@ -2122,7 +2119,7 @@ export class ClaudeView extends ItemView {
 
   /** Resolved sessions directory, honoring the user's sessionStoragePath setting. */
   private getSessionsDir(): string {
-    const vaultRoot = this.getVaultRoot();
+    const vaultRoot = this.plugin.getVaultRoot();
     return resolveSessionsDir(vaultRoot, this.plugin.settings.sessionStoragePath, this.app.vault.configDir);
   }
 
@@ -2285,7 +2282,7 @@ export class ClaudeView extends ItemView {
   }
 
   private resolveCommandsFolder(): string {
-    const vaultRoot = this.getVaultRoot();
+    const vaultRoot = this.plugin.getVaultRoot();
     const custom = this.plugin.settings.commandsFolder;
     if (custom?.trim()) {
       const p = custom.trim();
@@ -2447,7 +2444,7 @@ export class ClaudeView extends ItemView {
         description: 'Save this session to your vault',
         action: () => {
           if (!this.currentSessionFileId) { new Notice('No active session to export.'); return; }
-          const sessions = loadAllSessions(this.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir);
+          const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir);
           const session = sessions.find(s => s.id === this.currentSessionFileId);
           if (session) void this.exportSessionToVault(session);
           else new Notice('Session not found.');
