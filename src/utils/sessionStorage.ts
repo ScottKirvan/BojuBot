@@ -87,18 +87,15 @@ export function loadAllSessions(vaultRoot: string, sessionsDir: string, configDi
 
 /**
  * Save a new session at the top of the ordered list.
- * If any existing sessions have a sortOrder, the new session gets sortOrder=0
- * and all others are shifted down by 1. Otherwise just saves normally.
+ * If any existing sessions have a sortOrder, the new session gets sortOrder = min - 1
+ * so it sorts first without rewriting any other session files.
  */
 export function saveSessionAtTop(vaultRoot: string, session: StoredSession, sessionsDir: string, configDir: string): void {
   const existing = loadAllSessions(vaultRoot, sessionsDir, configDir);
-  const anyOrdered = existing.some(s => s.sortOrder !== undefined);
-  if (anyOrdered) {
-    existing.forEach(s => {
-      s.sortOrder = (s.sortOrder ?? 0) + 1;
-      writeFileSync(join(sessionsDir, `${s.id}.json`), JSON.stringify(s, null, 2));
-    });
-    session.sortOrder = 0;
+  const ordered = existing.filter(s => s.sortOrder !== undefined);
+  if (ordered.length > 0) {
+    const minOrder = Math.min(...ordered.map(s => s.sortOrder as number));
+    session.sortOrder = minOrder - 1;
   }
   saveSession(vaultRoot, session, sessionsDir);
 }
