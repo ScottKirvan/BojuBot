@@ -119,6 +119,8 @@ export class ClaudeView extends ItemView {
   private sessionContextTokens = 0;
   static readonly CONTEXT_WINDOW = 200_000;
   private atDropdownIndex = -1;
+  private currentUserLabel = 'User';
+  private currentAssistantLabel = 'ObsidiBot';
 
   constructor(leaf: WorkspaceLeaf, plugin: ObsidiBotPlugin) {
     super(leaf);
@@ -452,6 +454,8 @@ export class ClaudeView extends ItemView {
     this.sessionPermissionOverride = null;
     this.updatePermissionIcon();
     this.sessionContextTokens = 0;
+    this.currentUserLabel = 'User';
+    this.currentAssistantLabel = 'ObsidiBot';
     this.tokenGaugeEl.classList.add('obsidibot-hidden');
     this.pendingContexts = [];
     this.renderContextZone();
@@ -563,10 +567,7 @@ export class ClaudeView extends ItemView {
     const folder = this.plugin.settings.exportFolder.trim();
     const defaultPath = folder ? `${folder}/${safeName} ${date}.md` : `${safeName} ${date}.md`;
     new ExportToVaultModal(this.app, defaultPath, async (notePath, openAfter) => {
-      const notice = new Notice('Preparing transcript…', 0);
-      const { userLabel, assistantLabel } = await this.queryConversationLabels();
-      notice.hide();
-      const content = this.buildExportMarkdown(title, sessionId, userLabel, assistantLabel);
+      const content = this.buildExportMarkdown(title, sessionId, this.currentUserLabel, this.currentAssistantLabel);
       await this.writeExportNote(notePath, content);
       if (openAfter) await this.openExportedNote(notePath);
     }).open();
@@ -678,6 +679,20 @@ export class ClaudeView extends ItemView {
           await this.plugin.saveSettings();
         }
       },
+      onSetLabel: (userLabel: string, assistantLabel: string) => {
+        this.currentUserLabel = userLabel;
+        this.currentAssistantLabel = assistantLabel;
+        if (!this.currentSessionFileId) return;
+        const vaultRoot = this.plugin.getVaultRoot();
+        const sessionsDir = this.getSessionsDir();
+        const sessions = loadAllSessions(vaultRoot, sessionsDir, this.app.vault.configDir);
+        const session = sessions.find(s => s.id === this.currentSessionFileId);
+        if (session) {
+          session.userLabel = userLabel;
+          session.assistantLabel = assistantLabel;
+          saveSession(vaultRoot, session, sessionsDir);
+        }
+      },
     };
   }
 
@@ -721,80 +736,14 @@ export class ClaudeView extends ItemView {
     this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
   }
 
-  /** Ask Claude to identify the human and AI names from the visible conversation. */
-  private queryConversationLabels(): Promise<{ userLabel: string; assistantLabel: string }> {
-    const defaults = { userLabel: 'User', assistantLabel: 'ObsidiBot' };
-    if (!this.plugin.claudeBinaryPath) return Promise.resolve(defaults);
-
-    const msgEls = Array.from(
-      this.messagesEl.querySelectorAll<HTMLElement>('.obsidibot-message.obsidibot-user, .obsidibot-message.obsidibot-assistant')
-    );
-    if (msgEls.length === 0) return Promise.resolve(defaults);
-
-    // Walk all messages, truncating each, until we hit a total character budget.
-    // This ensures a name change anywhere in the conversation is included.
-    const BUDGET = 4000;
-    const lines: string[] = [];
-    let used = 0;
-    for (const el of msgEls) {
-      const role = el.classList.contains('obsidibot-user') ? 'Human' : 'AI';
-      const content = (el.dataset.markdown ?? el.textContent ?? '').trim().substring(0, 400);
-      const line = `${role}: ${content}`;
-      if (used + line.length > BUDGET) break;
-      lines.push(line);
-      used += line.length;
-    }
-    const sample = lines.join('\n\n');
-
-    const prompt =
-      `What are the real names (if any) used for the human and the AI in this conversation?\n` +
-      `Respond with exactly two lines — substitute the actual names from the conversation:\n` +
-      `user: Sally\n` +
-      `assistant: Banana\n` +
-      `If the human has no name use "User"; if the AI has no name use "ObsidiBot". No other text.\n\n` +
-      sample;
-
-    return new Promise((resolve) => {
-      try {
-        const proc = spawnClaude({
-          binaryPath: this.plugin.claudeBinaryPath,
-          prompt,
-          vaultRoot: this.plugin.getVaultRoot(),
-          env: this.plugin.shellEnv,
-          permissionMode: 'readonly',
-        });
-
-        let responseText = '';
-        parseStreamOutput(proc, {
-          onText: (delta) => { responseText += delta; },
-          onAction: () => { },
-          onToolCall: () => { },
-          onPermissionDenied: () => { },
-          onUsage: () => { },
-          onError: () => { },
-          onDone: () => {
-            const userMatch = /^user:\s*(.+)$/mi.exec(responseText);
-            const assistantMatch = /^assistant:\s*(.+)$/mi.exec(responseText);
-            resolve({
-              userLabel: userMatch?.[1]?.trim() ?? 'User',
-              assistantLabel: assistantMatch?.[1]?.trim() ?? 'ObsidiBot',
-            });
-          },
-        });
-
-        proc.on('error', () => resolve(defaults));
-      } catch {
-        resolve(defaults);
-      }
-    });
-  }
-
   private async loadSession(session: StoredSession) {
     this.placeholderSessionId = undefined;
     this.currentSessionId = session.claudeSessionId || undefined;
     this.currentSessionFileId = session.id;
     this.currentSessionTitle = session.title;
     this.currentSessionCreatedAt = session.createdAt;
+    this.currentUserLabel = session.userLabel ?? 'User';
+    this.currentAssistantLabel = session.assistantLabel ?? 'ObsidiBot';
     this.messagesEl.empty();
     this.updateExportBtn();
     this.updateSessionStatus();
