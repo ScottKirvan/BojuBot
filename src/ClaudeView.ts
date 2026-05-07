@@ -75,6 +75,15 @@ const TOOL_ICONS: Record<string, string> = {
 
 
 
+/** Escape characters that would break pseudo-XML attribute parsing in obsidibot-context tags. */
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export class ClaudeView extends ItemView {
   plugin: ObsidiBotPlugin;
   private inputEl: HTMLTextAreaElement;
@@ -932,14 +941,14 @@ export class ClaudeView extends ItemView {
       if (isSplit && this.plugin.settings.injectSplitPaneFiles) {
         const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter(Boolean);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.map(p => escapeAttr(p as string)).join('|')}"></obsidibot-context>\n\n`;
       } else if (isStacked && this.plugin.settings.injectStackedTabFiles) {
         const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter(Boolean);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p as string)).join('|')}"></obsidibot-context>\n\n`;
       } else {
         const activeFile = this.app.workspace.getActiveFile();
-        activeFileNote = activeFile ? `<obsidibot-context type="active-note" path="${activeFile.path}">Read this file if the user's task relates to its content.</obsidibot-context>\n\n` : '';
+        activeFileNote = activeFile ? `<obsidibot-context type="active-note" path="${escapeAttr(activeFile.path)}">Read this file if the user's task relates to its content.</obsidibot-context>\n\n` : '';
       }
     }
 
@@ -947,9 +956,9 @@ export class ClaudeView extends ItemView {
     if (this.pendingContexts.length > 0) {
       const contextBlock = this.pendingContexts
         .map(c => {
-          if (c.type === 'url') return `<obsidibot-context type="url" url="${c.text}"></obsidibot-context>`;
-          if (c.type === 'image') return `<obsidibot-context type="image" source="${c.source}" path="${c.text}">Read this file to view the image: ${c.text}</obsidibot-context>`;
-          if (c.type === 'pdf') return `<obsidibot-context type="pdf" source="${c.source}" path="${c.text}">Read this file to view the document: ${c.text}</obsidibot-context>`;
+          if (c.type === 'url') return `<obsidibot-context type="url" url="${escapeAttr(c.text)}"></obsidibot-context>`;
+          if (c.type === 'image') return `<obsidibot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</obsidibot-context>`;
+          if (c.type === 'pdf') return `<obsidibot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</obsidibot-context>`;
           return `<obsidibot-context type="attachment" source="${c.source}">${neutralizeTriggers(c.text)}</obsidibot-context>`;
         })
         .join('\n\n');

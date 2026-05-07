@@ -140,6 +140,17 @@ export interface ChatMessage {
   contexts?: InjectedContext[];
 }
 
+/** Reverse of ClaudeView's escapeAttr — decode HTML entities in context tag attribute values. */
+function decodeAttr(value: string): string {
+  return value.replace(/&(?:amp|quot|lt|gt);/g, (entity) => {
+    if (entity === '&amp;')  return '&';
+    if (entity === '&quot;') return '"';
+    if (entity === '&lt;')   return '<';
+    if (entity === '&gt;')   return '>';
+    return entity;
+  });
+}
+
 /**
  * Strip all <obsidibot-context> tags from content and return the clean text
  * plus a structured list of the injected contexts for badge rendering on replay.
@@ -155,7 +166,7 @@ function extractObsidiBotContexts(content: string): { clean: string; contexts: I
     let m: RegExpExecArray | null;
     ATTR_RE.lastIndex = 0;
     while ((m = ATTR_RE.exec(attrStr)) !== null) {
-      ctx[m[1]] = m[2];
+      ctx[m[1]] = decodeAttr(m[2]);
     }
     if (body.trim()) ctx['content'] = body.trim();
     if (ctx['type']) contexts.push(ctx as unknown as InjectedContext);
