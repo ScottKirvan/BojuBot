@@ -1590,7 +1590,7 @@ export class ClaudeView extends ItemView {
     }
 
     const raw = await this.app.vault.read(file);
-    const content = file.extension === 'canvas' ? canvasToText(file.name, raw) : raw;
+    const content = file.extension === 'canvas' ? canvasToText(file.name, raw, this.plugin.settings.canvasMaxChars) : raw;
     this.injectSelectionContext(content, file.basename);
   }
 
@@ -1730,7 +1730,7 @@ export class ClaudeView extends ItemView {
         this.pendingContexts.push({ text: filePath, source: f.name, pinned: false, type });
       } else {
         let text = TEXT_EXTS.has(ext) ? await f.text() : f.name;
-        if (ext === 'canvas') text = canvasToText(f.name, text);
+        if (ext === 'canvas') text = canvasToText(f.name, text, this.plugin.settings.canvasMaxChars);
         this.pendingContexts.push({ text, source: f.name, pinned: false });
       }
       this.renderContextZone();
@@ -1812,7 +1812,7 @@ export class ClaudeView extends ItemView {
         this.pendingContexts.push({ text: filePath, source: f.name, pinned: false, type });
       } else if (TEXT_EXTS.has(ext)) {
         let text = await f.text();
-        if (ext === 'canvas') text = canvasToText(f.name, text);
+        if (ext === 'canvas') text = canvasToText(f.name, text, this.plugin.settings.canvasMaxChars);
         this.pendingContexts.push({ text, source: f.name, pinned: false });
       } else {
         // Unknown binary — pass filename; Claude can attempt to read it
