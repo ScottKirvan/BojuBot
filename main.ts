@@ -487,6 +487,7 @@ export default class ObsidiBotPlugin extends Plugin {
       for (const cmd of commands) {
         const prefix = cmd.id.includes(':') ? cmd.id.split(':')[0] : 'core';
         if (!groups.has(prefix)) groups.set(prefix, []);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         groups.get(prefix)!.push(cmd);
       }
 

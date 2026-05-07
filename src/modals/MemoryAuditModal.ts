@@ -18,10 +18,10 @@ export class MemoryAuditModal extends Modal {
     const btnRow = this.contentEl.createDiv({ cls: 'obsidibot-audit-btn-row' });
 
     btnRow.createEl('button', { text: 'Open file' })
-      .addEventListener('click', async () => {
+      .addEventListener('click', () => {
         this.close();
         const file = this._app.vault.getFileByPath(this.plugin.settings.contextFilePath);
-        if (file) await this._app.workspace.getLeaf(false).openFile(file);
+        if (file) void this._app.workspace.getLeaf(false).openFile(file);
       });
 
     btnRow.createEl('button', { cls: 'mod-cta', text: 'Audit with Claude' })

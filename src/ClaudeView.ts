@@ -938,13 +938,13 @@ export class ClaudeView extends ItemView {
       const isStacked = !isSplit && leaves.length > 1;
 
       if (isSplit && this.plugin.settings.injectSplitPaneFiles) {
-        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter(Boolean);
+        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter((p): p is string => p !== undefined);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.map(p => escapeAttr(p as string)).join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.map(p => escapeAttr(p)).join('|')}"></obsidibot-context>\n\n`;
       } else if (isStacked && this.plugin.settings.injectStackedTabFiles) {
-        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter(Boolean);
+        const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter((p): p is string => p !== undefined);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p as string)).join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p)).join('|')}"></obsidibot-context>\n\n`;
       } else {
         const activeFile = this.app.workspace.getActiveFile();
         activeFileNote = activeFile ? `<obsidibot-context type="active-note" path="${escapeAttr(activeFile.path)}">Read this file if the user's task relates to its content.</obsidibot-context>\n\n` : '';

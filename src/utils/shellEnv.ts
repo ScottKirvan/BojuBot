@@ -14,7 +14,7 @@ export function resolveShellEnv(): Promise<Record<string, string>> {
     const shell = process.env.SHELL || '/bin/bash';
     exec(`${shell} -l -c env`, { encoding: 'utf8', timeout: 5000 }, (err, stdout) => {
       if (err) {
-        resolve({ ...process.env } as Record<string, string>);
+        resolve({ ...process.env });
         return;
       }
       const env: Record<string, string> = {};

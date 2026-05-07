@@ -94,7 +94,7 @@ export function saveSessionAtTop(vaultRoot: string, session: StoredSession, sess
   const existing = loadAllSessions(vaultRoot, sessionsDir, configDir);
   const ordered = existing.filter(s => s.sortOrder !== undefined);
   if (ordered.length > 0) {
-    const minOrder = Math.min(...ordered.map(s => s.sortOrder as number));
+    const minOrder = Math.min(...ordered.map(s => s.sortOrder));
     session.sortOrder = minOrder - 1;
   }
   saveSession(vaultRoot, session, sessionsDir);

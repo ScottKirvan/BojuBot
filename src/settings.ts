@@ -343,7 +343,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
     if (this.plugin.settings.permissionMode === 'full') {
       new Setting(containerEl)
         .setName('Persist full access between restarts')
-        .setDesc('When off, full access resets to Standard when Obsidian restarts.')
+        .setDesc('When off, full access resets to standard when Obsidian restarts.')
         .addToggle((toggle) =>
           toggle
             .setValue(this.plugin.settings.persistFullAccess)
