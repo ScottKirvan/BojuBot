@@ -156,13 +156,10 @@ function extractObsidiBotContexts(content: string): { clean: string; contexts: I
   const contexts: InjectedContext[] = [];
   // Matches both self-closing-style and body-carrying tags
   const TAG_RE = /<obsidibot-context\s([^>]*)>([\s\S]*?)<\/obsidibot-context>/g;
-  const ATTR_RE = /(\w[\w-]*)="([^"]*)"/g;
 
   const clean = content.replace(TAG_RE, (_match, attrStr: string, body: string) => {
     const ctx: Record<string, string> = {};
-    let m: RegExpExecArray | null;
-    ATTR_RE.lastIndex = 0;
-    while ((m = ATTR_RE.exec(attrStr)) !== null) {
+    for (const m of attrStr.matchAll(/(\w[\w-]*)="([^"]*)"/g)) {
       ctx[m[1]] = decodeAttr(m[2]);
     }
     if (body.trim()) ctx['content'] = body.trim();

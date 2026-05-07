@@ -25,7 +25,7 @@ export default class ObsidiBotPlugin extends Plugin {
   claudeBinaryPath: string | null = null;
   private skillCommandIds = new Set<string>();
 
-  private getVaultRoot(): string {
+  getVaultRoot(): string {
     return (this.app.vault.adapter as unknown as { basePath: string }).basePath;
   }
 
