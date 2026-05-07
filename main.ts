@@ -3,7 +3,7 @@ import { writeFileSync, existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { ObsidiBotSettings, DEFAULT_SETTINGS, ObsidiBotSettingsTab } from './src/settings';
-import { findClaudeBinary } from './src/ClaudeProcess';
+import { findClaudeBinary, PermissionMode } from './src/ClaudeProcess';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
@@ -391,6 +391,12 @@ export default class ObsidiBotPlugin extends Plugin {
   notifyPermissionChanged(): void {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
     if (leaves.length) (leaves[0].view as ClaudeView).onSettingsChanged();
+  }
+
+  getEffectivePermissionMode(): PermissionMode {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (leaves.length) return (leaves[0].view as ClaudeView).getEffectivePermissionMode();
+    return this.settings.permissionMode;
   }
 
   private showMemoryUpdateNotice(): void {
