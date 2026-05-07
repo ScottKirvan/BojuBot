@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.12.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.12.0...2.12.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* correct lint violations from recent changes ([23d1682](https://github.com/ScottKirvan/ObsidiBot/commit/23d1682ce823de9620a90ccb842e7a538fa38fbf))
+* correct lint violations from recent changes ([dc24a87](https://github.com/ScottKirvan/ObsidiBot/commit/dc24a87e9730d4c7eccca9cbe695c56a3af2245d))
+
 ## [2.12.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.5...2.12.0) (2026-05-07)
 
 
