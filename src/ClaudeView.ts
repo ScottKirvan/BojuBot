@@ -19,7 +19,7 @@ import { spawnClaude, parseStreamOutput, killProcess, findClaudeBinary, Permissi
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
 import { QUERY_PREFIX, neutralizeTriggers } from './constants';
-import { ContextManager } from './ContextManager';
+import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
 import { extractToolDetail } from './utils/toolFormatting';
 import {
@@ -411,6 +411,13 @@ export class ClaudeView extends ItemView {
   onSettingsChanged(): void {
     this.sessionPermissionOverride = null;
     this.updatePermissionIcon();
+    if (this.currentSessionId) {
+      const perm = PERMISSION_DESCRIPTIONS[this.plugin.settings.permissionMode];
+      this.pendingSystemMessage =
+        `[System: Permission mode changed to ${perm.summary}. ` +
+        `You can now: ${perm.can}. ` +
+        `You cannot: ${perm.cannot}.]`;
+    }
   }
 
   auditMemoryFile(): void {

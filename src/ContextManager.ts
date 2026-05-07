@@ -9,7 +9,7 @@ import { neutralizeTriggers } from './constants';
 import { scanPinnedFiles, scanFileInstructions } from './FrontmatterGuard';
 import type { PermissionMode } from './ClaudeProcess';
 
-const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; can: string; cannot: string }> = {
+export const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; can: string; cannot: string }> = {
   restricted: {
     summary: 'Chat only',
     can: 'respond to messages, fetch web URLs (WebFetch), search the web (WebSearch), and work with any context the user explicitly attaches',
