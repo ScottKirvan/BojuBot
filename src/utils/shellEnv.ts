@@ -16,7 +16,7 @@ export function resolveShellEnv(): Promise<Record<string, string>> {
     // (exported PEM keys, multi-line PS1, etc.). Supported on Linux and macOS 10.15+.
     exec(`${shell} -l -c 'env -0'`, { encoding: 'utf8', timeout: 5000 }, (err, stdout) => {
       if (err) {
-        resolve({ ...process.env } as Record<string, string>);
+        resolve({ ...process.env });
         return;
       }
       const env: Record<string, string> = {};
