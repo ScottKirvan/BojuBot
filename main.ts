@@ -58,7 +58,7 @@ export default class ObsidiBotPlugin extends Plugin {
       })
     );
 
-    this.shellEnv = resolveShellEnv();
+    void resolveShellEnv().then(env => { this.shellEnv = env; });
     this.claudeBinaryPath = findClaudeBinary(this.settings.binaryPath);
 
     if (!this.claudeBinaryPath) {
