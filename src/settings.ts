@@ -345,6 +345,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       .setDesc('Controls which vault operations Claude is allowed to perform.')
       .addDropdown((drop) =>
         drop
+          .addOption('restricted', 'Chat only — web access, no file system')
           .addOption('standard', 'Standard — files + web, no bash (recommended)')
           .addOption('readonly', 'Read only — no writes or shell commands')
           .addOption('full', 'Full access — everything including bash')

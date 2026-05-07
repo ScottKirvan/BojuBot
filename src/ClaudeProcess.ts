@@ -5,7 +5,7 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import { spawn, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from './utils/logger';
-export type PermissionMode = 'standard' | 'readonly' | 'full';
+export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';
 
 export interface PermissionDenial {
   tool: string;
@@ -15,6 +15,11 @@ export interface PermissionDenial {
 /** Maps ObsidiBot permissionMode to Claude CLI args. */
 export function permissionArgs(mode: PermissionMode): string[] {
   switch (mode) {
+    case 'restricted':
+      return [
+        '--permission-mode', 'default',
+        '--allowedTools', 'WebFetch,WebSearch',
+      ];
     case 'readonly':
       return [
         '--permission-mode', 'default',
