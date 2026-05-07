@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.12.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.5...2.12.0) (2026-05-07)
+
+
+### Features
+
+* add configurable canvas size guard ([043bbcf](https://github.com/ScottKirvan/ObsidiBot/commit/043bbcf0dfe94868015f8d7c5802b10a987ca812))
+
+
+### Bug Fixes
+
+* escape special chars in obsidibot-context tag attributes ([29fe23f](https://github.com/ScottKirvan/ObsidiBot/commit/29fe23ff36aa25c1e574746d87d0b735c42d60ca))
+* make resolveShellEnv async to avoid blocking Obsidian at load ([2ab3e6c](https://github.com/ScottKirvan/ObsidiBot/commit/2ab3e6c3c6d19a58b5dabeb27893dd8bed649805))
+* use env -0 to preserve multi-line environment variable values ([b310a5a](https://github.com/ScottKirvan/ObsidiBot/commit/b310a5a3f5a9f2a2f8fe13a57f7b4aab3850dc2b))
+* use sparse sort order in saveSessionAtTop to avoid O(n) file writes ([188864e](https://github.com/ScottKirvan/ObsidiBot/commit/188864e19f3960f51059fb92322392f3b35a9320))
+
 ## [2.11.5](https://github.com/ScottKirvan/ObsidiBot/compare/2.11.4...2.11.5) (2026-05-04)
 
 
