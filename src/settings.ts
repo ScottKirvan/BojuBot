@@ -348,7 +348,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
           .addOption('standard', 'Standard — files + web, no bash (recommended)')
           .addOption('readonly', 'Read only — no writes or shell commands')
           .addOption('full', 'Full access — everything including bash')
-          .setValue(this.plugin.settings.permissionMode)
+          .setValue(this.plugin.getEffectivePermissionMode())
           .onChange(async (value) => {
             this.plugin.settings.permissionMode = value as PermissionMode;
             await this.plugin.saveSettings();
@@ -357,7 +357,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
           })
       );
 
-    if (this.plugin.settings.permissionMode === 'full') {
+    if (this.plugin.getEffectivePermissionMode() === 'full') {
       new Setting(containerEl)
         .setName('Persist full access between restarts')
         .setDesc('When off, full access resets to standard when Obsidian restarts.')

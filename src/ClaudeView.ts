@@ -402,6 +402,10 @@ export class ClaudeView extends ItemView {
 
   async onClose() { /* nothing to clean up yet */ }
 
+  getEffectivePermissionMode(): PermissionMode {
+    return this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+  }
+
   onSettingsChanged(): void {
     this.sessionPermissionOverride = null;
     this.updatePermissionIcon();
