@@ -171,7 +171,6 @@ export class ClaudeView extends ItemView {
     });
 
     const settingsBtn = toolbarRight.createEl('button', { cls: 'obsidibot-icon-btn' });
-    //setIcon(settingsBtn, 'settings');
     setIcon(settingsBtn, 'brain-cog');
     settingsBtn.title = 'Open ObsidiBot settings';
     settingsBtn.addEventListener('click', () => {
