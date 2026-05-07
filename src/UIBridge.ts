@@ -23,6 +23,7 @@ export interface UIBridgeOptions {
   confirmUnlistedCommands?: boolean;
   onAddToAllowlist?: (commandId: string) => Promise<void>;
   onAddToDenylist?: (commandId: string) => Promise<void>;
+  onSetLabel?: (userLabel: string, assistantLabel: string) => void;
 }
 
 class ConfirmCommandModal extends Modal {
@@ -269,6 +270,13 @@ export async function executeAction(app: App, action: ObsidiBotAction, options: 
         warn('UIBridge: run-command blocked — not in allowlist:', commandId);
         new Notice(`ObsidiBot: Claude wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → ObsidiBot to enable it.`, 8000);
       }
+      break;
+    }
+
+    case 'set-label': {
+      const userLabel = ((action.user as string) ?? '').trim() || 'User';
+      const assistantLabel = ((action.assistant as string) ?? '').trim() || 'ObsidiBot';
+      options.onSetLabel?.(userLabel, assistantLabel);
       break;
     }
 
