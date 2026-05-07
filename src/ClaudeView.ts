@@ -431,8 +431,13 @@ export class ClaudeView extends ItemView {
   private updatePermissionIcon(): void {
     if (!this.permissionIconEl) return;
     const mode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
-    this.permissionIconEl.removeClass('obsidibot-perm-readonly', 'obsidibot-perm-standard', 'obsidibot-perm-full');
+    this.permissionIconEl.removeClass('obsidibot-perm-restricted', 'obsidibot-perm-readonly', 'obsidibot-perm-standard', 'obsidibot-perm-full');
     switch (mode) {
+      case 'restricted':
+        setIcon(this.permissionIconEl, 'lock');
+        this.permissionIconEl.title = 'Permissions: Chat only — web access, no file system. Click to change.';
+        this.permissionIconEl.addClass('obsidibot-perm-restricted');
+        break;
       case 'readonly':
         setIcon(this.permissionIconEl, 'eye');
         this.permissionIconEl.title = 'Permissions: Read-only — no writes or shell commands. Click to change.';
@@ -724,12 +729,14 @@ export class ClaudeView extends ItemView {
       return;
     }
 
+    const effectiveMode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
     const ctx = new ContextManager(
       this.app,
       this.plugin.settings.contextFilePath,
       this.plugin.settings.autonomousMemory,
-      this.plugin.settings.vaultTreeDepth,
+      effectiveMode === 'restricted' ? 0 : this.plugin.settings.vaultTreeDepth,
       this.plugin.settings.commandAllowlist,
+      effectiveMode,
     );
     const context = await ctx.buildSessionContext();
     this.pendingSystemMessage = `[System: Session context refreshed at user request.]\n\n${context}`;
@@ -918,12 +925,14 @@ export class ClaudeView extends ItemView {
     }
 
     if (isNewSession) {
+      const sessionMode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
       const ctx = new ContextManager(
         this.app,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
-        this.plugin.settings.vaultTreeDepth,
+        sessionMode === 'restricted' ? 0 : this.plugin.settings.vaultTreeDepth,
         this.plugin.settings.commandAllowlist,
+        sessionMode,
       );
       const context = await ctx.buildSessionContext();
       const promptTokens = estimateTokens(finalPrompt);
@@ -1421,19 +1430,24 @@ export class ClaudeView extends ItemView {
 
     const currentMode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
     if (currentMode !== 'full') {
+      const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+      const upgradeLabel = currentMode === 'restricted' ? 'Allow standard access for this session' : 'Allow full access for this session';
+      const upgradeMsg = currentMode === 'restricted'
+        ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`
+        : (toolList: string) => `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
       const btnRow = card.createDiv({ cls: 'obsidibot-permission-btn-row' });
       const upgradeBtn = btnRow.createEl('button', {
         cls: 'mod-cta',
-        text: 'Allow full access for this session',
+        text: upgradeLabel,
       });
       upgradeBtn.addEventListener('click', () => {
-        this.sessionPermissionOverride = 'full';
+        this.sessionPermissionOverride = upgradeTarget;
         this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
-        log('Session permission override set to full');
+        log(`Session permission override set to ${upgradeTarget}`);
         const toolList = [...new Set(denials.map(d => d.tool))].join(', ');
-        this.inputEl.value = `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
+        this.inputEl.value = upgradeMsg(toolList);
         void this.handleSend();
       });
       btnRow.createEl('a', {
