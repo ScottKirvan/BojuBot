@@ -403,6 +403,7 @@ export class ClaudeView extends ItemView {
   async onClose() { /* nothing to clean up yet */ }
 
   onSettingsChanged(): void {
+    this.sessionPermissionOverride = null;
     this.updatePermissionIcon();
   }
 
