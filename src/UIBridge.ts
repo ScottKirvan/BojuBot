@@ -191,7 +191,7 @@ export async function executeAction(app: App, action: ObsidiBotAction, options: 
       if (file) {
         const leaf = app.workspace.getLeaf(false);
         await leaf.openFile(file);
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           const view = leaf.view as unknown as { editor?: { getValue(): string; setCursor(pos: { line: number; ch: number }): void } };
           const editor = view?.editor;
           if (editor && action.heading) {
@@ -202,7 +202,7 @@ export async function executeAction(app: App, action: ObsidiBotAction, options: 
             );
             if (idx !== -1) editor.setCursor({ line: idx, ch: 0 });
           }
-        }, 100);
+        });
       } else {
         warn('UIBridge: navigate-heading — file not found:', action.path);
       }
