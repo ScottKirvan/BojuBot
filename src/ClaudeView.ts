@@ -937,111 +937,11 @@ export class ClaudeView extends ItemView {
 
     finalPrompt = activeFileNote + finalPrompt;
 
-    let proc: ReturnType<typeof spawnClaude>;
-    try {
-      proc = spawnClaude({
-        binaryPath: this.plugin.claudeBinaryPath,
-        prompt: finalPrompt,
-        vaultRoot: this.plugin.getVaultRoot(),
-        env: this.plugin.shellEnv,
-        resumeSessionId: this.currentSessionId,
-        permissionMode: this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
-      });
-      this.activeProc = proc;
-    } catch (e) {
-      assistantEl.setText(`Failed to start claude: ${e}`);
-      unlock();
-      return;
-    }
-
-    let toolCallCount = 0;
-    let accumulated = '';
-    let uiBridgeActionCount = 0;
-    let turnInputTokens = 0;
-    let turnCacheTokens = 0;
-    let turnOutputTokens = 0;
-    const pendingQueries: VaultQuery[] = [];
-    const toolRowMap = new Map<string, HTMLElement>();
-    let pendingPermissionRequest: { tool: string; reason: string } | null = null;
-
-    parseStreamOutput(proc, {
-      onText: (delta) => {
-        statusEl.remove();
-        accumulated += delta;
-        // Catch any action lines that arrive via text (belt-and-suspenders)
-        if (this.plugin.settings.uiBridgeEnabled) {
-          const { clean, actions } = extractActions(accumulated);
-          accumulated = clean;
-          uiBridgeActionCount += actions.length;
-          for (const a of actions) void executeAction(this.app, a, this.bridgeOptions());
-        }
-        streamingTextEl.textContent = accumulated;
-        this.scrollToBottom();
-      },
-      onAction: (line) => {
-        if (this.plugin.settings.uiBridgeEnabled) {
-          try {
-            const { actions } = extractActions(line + '\n');
-            for (const a of actions) {
-              if (a.action === 'request-permission') {
-                pendingPermissionRequest = {
-                  tool: (a.tool as string) ?? 'unknown tool',
-                  reason: (a.reason as string) ?? '',
-                };
-              } else {
-                uiBridgeActionCount++;
-                void executeAction(this.app, a, this.bridgeOptions());
-              }
-            }
-          } catch { /* malformed — already logged in extractActions */ }
-        }
-      },
-      onQuery: (line) => {
-        try {
-          const q = JSON.parse(line.slice(QUERY_PREFIX.length)) as VaultQuery;
-          pendingQueries.push(q);
-          log('onQuery — queued:', q.query, q.mode, q.path ?? '');
-        } catch { log('onQuery — malformed line:', line.substring(0, 100)); }
-      },
-      onToolCall: (tool, input, toolUseId) => {
-        const key = tool.toLowerCase();
-        if (!statusEl.isConnected) assistantEl.appendChild(statusEl);
-        statusEl.setText(TOOL_STATUS[key] ?? 'Working…');
-        log('onToolCall —', tool, JSON.stringify(input).substring(0, 120));
-        toolCallCount++;
-        toolEventsEl.show();
-        const row = toolEventsEl.createDiv({ cls: 'obsidibot-tool-event' });
-        const header = row.createDiv({ cls: 'obsidibot-tool-event-header' });
-        const iconEl = header.createSpan({ cls: 'obsidibot-tool-event-icon' });
-        setIcon(iconEl, TOOL_ICONS[key] ?? 'zap');
-        const detail = extractToolDetail(key, input);
-        header.createSpan({ cls: 'obsidibot-tool-event-label', text: detail ? `${tool}: ${detail}` : tool });
-        const outEl = row.createDiv({ cls: 'obsidibot-tool-event-output obsidibot-tool-output-pending' });
-        outEl.setText('…');
-        toolRowMap.set(toolUseId, outEl);
-        this.scrollToBottom();
-      },
-      onToolResult: (toolUseId, content) => {
-        const outEl = toolRowMap.get(toolUseId);
-        if (!outEl) return;
-        outEl.removeClass('obsidibot-tool-output-pending');
-        const trimmed = content.trim();
-        if (!trimmed) { outEl.setText('(No output)'); return; }
-        const lines = trimmed.split('\n');
-        const MAX_LINES = 5;
-        const shown = lines.slice(0, MAX_LINES).join('\n');
-        const overflow = lines.length - MAX_LINES;
-        outEl.setText(overflow > 0 ? `${shown}\n…+${overflow} lines` : shown);
-        this.scrollToBottom();
-      },
-      onPermissionDenied: (denials) => {
-        if (!pendingPermissionRequest) this.renderPermissionDenials(denials, responseGroupEl);
-      },
-      onDone: (sessionId, clean) => {
-        statusEl.remove();
-        this.activeProc = null;
-        if (!clean) this.appendMessage('system', 'Interrupted.');
-
+    this._executeTurn({
+      prompt: finalPrompt,
+      assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
+      unlock,
+      onTurnDone: ({ sessionId, pendingQueries, responseGroupEl: rg, pendingPermissionRequest, unlock: done }) => {
         if (sessionId) {
           const vaultRoot = this.plugin.getVaultRoot();
           const sessionsDir = this.getSessionsDir();
@@ -1084,99 +984,24 @@ export class ClaudeView extends ItemView {
               claudeSessionId: this.currentSessionId,
             }, sessionsDir);
           }
-
           this.updateSessionStatus();
         }
 
-        // Collapse tool events into a toggle
-        if (toolCallCount > 0) {
-          const rows = Array.from(toolEventsEl.querySelectorAll<HTMLElement>('.obsidibot-tool-event'));
-          rows.forEach(r => { r.hide(); });
-          const s = toolCallCount === 1 ? '' : 's';
-          const toggle = toolEventsEl.createEl('button', {
-            cls: 'obsidibot-tool-toggle',
-            text: `${toolCallCount} tool call${s} ▶`,
-          });
-          toolEventsEl.insertBefore(toggle, toolEventsEl.firstChild);
-          let expanded = false;
-          toggle.addEventListener('click', () => {
-            expanded = !expanded;
-            rows.forEach(r => { if (expanded) r.show(); else r.hide(); });
-            toggle.setText(`${toolCallCount} tool call${s} ${expanded ? '▼' : '▶'}`);
-          });
-        }
-
-        if (!accumulated && uiBridgeActionCount) {
-          assistantEl.remove();
-        } else if (!accumulated) {
-          assistantEl.setText('(No response)');
-        } else if (this.isAuthError(accumulated)) {
-          this.renderAuthError(assistantEl);
-        } else {
-          assistantEl.dataset.markdown = accumulated;
-          assistantEl.empty();
-          void MarkdownRenderer.render(this.app, this.addHardLineBreaks(accumulated), assistantEl, '', this);
-          this.wireInternalLinks(assistantEl);
-        }
-        if (pendingQueries.length > 0) {
-          assistantEl.dataset.queries = JSON.stringify(pendingQueries);
-        }
-        this.scrollToBottom();
-
-        // Handle vault queries collected during this turn
         const showQueries = pendingQueries.filter(q => q.mode === 'show');
         const injectQueries = pendingQueries.filter(q => q.mode === 'inject');
-
         for (const q of showQueries) {
-          const result = resolveQuery(this.app, q);
-          this.renderQueryResultCard(responseGroupEl, result);
+          this.renderQueryResultCard(rg, resolveQuery(this.app, q));
         }
-
         if (injectQueries.length > 0) {
-          // Stay locked — handleVaultInject will call unlock when done
-          this.handleVaultInject(injectQueries, responseGroupEl, unlock);
+          this.handleVaultInject(injectQueries, rg, done);
           return;
         }
-
         if (pendingPermissionRequest) {
-          // Stay locked — handlePermissionRequest will call unlock after modal resolves
-          this.handlePermissionRequest(pendingPermissionRequest, unlock);
+          this.handlePermissionRequest(pendingPermissionRequest, done);
           return;
         }
-
-        unlock();
+        done();
       },
-      onUsage: (usage) => {
-        // context window = max of cache_read (full history) + new input + output
-        const total = Math.max(usage.cacheReadTokens, this.tokenGauge.getContextTokens())
-          + usage.inputTokens + usage.outputTokens;
-        this.tokenGauge.update(total);
-
-        // Output tokens arrive as 1 per streaming delta — accumulate.
-        // Input and cache tokens are reported in full on the first event — take max.
-        turnOutputTokens += usage.outputTokens;
-        turnInputTokens = Math.max(turnInputTokens, usage.inputTokens);
-        turnCacheTokens = Math.max(turnCacheTokens, usage.cacheReadTokens);
-
-        const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-        const parts = [
-          `${fmt(turnOutputTokens)} out`,
-          `${fmt(turnInputTokens)} in`,
-        ];
-        if (turnCacheTokens > 0) parts.push(`${fmt(turnCacheTokens)} cached`);
-        tokenStatsEl.setText(parts.join(' · '));
-        tokenStatsEl.show();
-      },
-      onError: (err) => {
-        statusEl.remove();
-        this.appendMessage('system', `stderr: ${err.trim()}`);
-      },
-    });
-
-    proc.on('error', (err) => {
-      statusEl.remove();
-      assistantEl.setText(`Process error: ${err.message}`);
-      unlock();
     });
   }
 
@@ -1557,11 +1382,64 @@ export class ClaudeView extends ItemView {
     this.setSendState(true);
     this.scrollToBottom();
 
+    this._executeTurn({
+      prompt: injectPrompt,
+      assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
+      unlock,
+      onTurnDone: ({ sessionId, pendingPermissionRequest, unlock: done }) => {
+        if (sessionId && this.currentSessionId) {
+          const vaultRoot = this.plugin.getVaultRoot();
+          const now = new Date().toISOString();
+          const fileId = this.currentSessionFileId ?? this.currentSessionId;
+          saveSession(vaultRoot, {
+            id: fileId,
+            title: this.currentSessionTitle ?? this.currentSessionId.substring(0, 8),
+            createdAt: this.currentSessionCreatedAt ?? now,
+            updatedAt: now,
+            claudeSessionId: this.currentSessionId,
+          }, this.getSessionsDir());
+        }
+        if (pendingPermissionRequest) {
+          this.handlePermissionRequest(pendingPermissionRequest, done);
+          return;
+        }
+        done();
+      },
+    });
+  }
+
+  /**
+   * Shared spawn-and-stream core used by handleSend and handleVaultInject.
+   * Spawns Claude, wires all stream callbacks, handles tool-call rendering,
+   * markdown rendering, and interrupted detection — then calls onTurnDone
+   * with caller-specific context (session persistence, vault query routing).
+   */
+  private _executeTurn(opts: {
+    prompt: string;
+    assistantEl: HTMLElement;
+    statusEl: HTMLElement;
+    streamingTextEl: HTMLElement;
+    toolEventsEl: HTMLElement;
+    tokenStatsEl: HTMLElement;
+    responseGroupEl: HTMLElement;
+    unlock: () => void;
+    onTurnDone: (ctx: {
+      sessionId: string | undefined;
+      clean: boolean | undefined;
+      accumulated: string;
+      pendingQueries: VaultQuery[];
+      responseGroupEl: HTMLElement;
+      pendingPermissionRequest: { tool: string; reason: string } | null;
+      unlock: () => void;
+    }) => void;
+  }): void {
+    const { assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl, unlock } = opts;
+
     let proc: ReturnType<typeof spawnClaude>;
     try {
       proc = spawnClaude({
-        binaryPath: this.plugin.claudeBinaryPath,
-        prompt: injectPrompt,
+        binaryPath: this.plugin.claudeBinaryPath!,
+        prompt: opts.prompt,
         vaultRoot: this.plugin.getVaultRoot(),
         env: this.plugin.shellEnv,
         resumeSessionId: this.currentSessionId,
@@ -1569,7 +1447,7 @@ export class ClaudeView extends ItemView {
       });
       this.activeProc = proc;
     } catch (e) {
-      assistantEl.setText(`Failed to resume after vault query: ${e}`);
+      assistantEl.setText(`Failed to start claude: ${e}`);
       unlock();
       return;
     }
@@ -1580,6 +1458,7 @@ export class ClaudeView extends ItemView {
     let turnInputTokens = 0;
     let turnCacheTokens = 0;
     let turnOutputTokens = 0;
+    const pendingQueries: VaultQuery[] = [];
     const toolRowMap = new Map<string, HTMLElement>();
     let pendingPermissionRequest: { tool: string; reason: string } | null = null;
 
@@ -1611,13 +1490,21 @@ export class ClaudeView extends ItemView {
                 void executeAction(this.app, a, this.bridgeOptions());
               }
             }
-          } catch { /* malformed */ }
+          } catch { /* malformed — already logged in extractActions */ }
         }
+      },
+      onQuery: (line) => {
+        try {
+          const q = JSON.parse(line.slice(QUERY_PREFIX.length)) as VaultQuery;
+          pendingQueries.push(q);
+          log('onQuery — queued:', q.query, q.mode, q.path ?? '');
+        } catch { log('onQuery — malformed line:', line.substring(0, 100)); }
       },
       onToolCall: (tool, input, toolUseId) => {
         const key = tool.toLowerCase();
         if (!statusEl.isConnected) assistantEl.appendChild(statusEl);
         statusEl.setText(TOOL_STATUS[key] ?? 'Working…');
+        log('onToolCall —', tool, JSON.stringify(input).substring(0, 120));
         toolCallCount++;
         toolEventsEl.show();
         const row = toolEventsEl.createDiv({ cls: 'obsidibot-tool-event' });
@@ -1651,11 +1538,9 @@ export class ClaudeView extends ItemView {
         const total = Math.max(usage.cacheReadTokens, this.tokenGauge.getContextTokens())
           + usage.inputTokens + usage.outputTokens;
         this.tokenGauge.update(total);
-
         turnOutputTokens += usage.outputTokens;
         turnInputTokens = Math.max(turnInputTokens, usage.inputTokens);
         turnCacheTokens = Math.max(turnCacheTokens, usage.cacheReadTokens);
-
         const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
         const parts = [`${fmt(turnOutputTokens)} out`, `${fmt(turnInputTokens)} in`];
         if (turnCacheTokens > 0) parts.push(`${fmt(turnCacheTokens)} cached`);
@@ -1670,19 +1555,6 @@ export class ClaudeView extends ItemView {
         statusEl.remove();
         this.activeProc = null;
         if (!clean) this.appendMessage('system', 'Interrupted.');
-
-        if (sessionId && this.currentSessionId) {
-          const vaultRoot = this.plugin.getVaultRoot();
-          const now = new Date().toISOString();
-          const fileId = this.currentSessionFileId ?? this.currentSessionId;
-          saveSession(vaultRoot, {
-            id: fileId,
-            title: this.currentSessionTitle ?? this.currentSessionId.substring(0, 8),
-            createdAt: this.currentSessionCreatedAt ?? now,
-            updatedAt: now,
-            claudeSessionId: this.currentSessionId,
-          }, this.getSessionsDir());
-        }
 
         if (toolCallCount > 0) {
           const rows = Array.from(toolEventsEl.querySelectorAll<HTMLElement>('.obsidibot-tool-event'));
@@ -1713,14 +1585,12 @@ export class ClaudeView extends ItemView {
           void MarkdownRenderer.render(this.app, this.addHardLineBreaks(accumulated), assistantEl, '', this);
           this.wireInternalLinks(assistantEl);
         }
+        if (pendingQueries.length > 0) {
+          assistantEl.dataset.queries = JSON.stringify(pendingQueries);
+        }
         this.scrollToBottom();
 
-        if (pendingPermissionRequest) {
-          this.handlePermissionRequest(pendingPermissionRequest, unlock);
-          return;
-        }
-
-        unlock();
+        opts.onTurnDone({ sessionId, clean, accumulated, pendingQueries, responseGroupEl, pendingPermissionRequest, unlock });
       },
     });
 
