@@ -38,6 +38,7 @@ import { SessionListModal } from './modals/SessionListModal';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
 import { AboutModal } from './modals/AboutModal';
+import { TokenGauge } from './TokenGauge';
 
 export const VIEW_TYPE_CLAUDE = 'obsidibot-chat';
 
@@ -112,12 +113,9 @@ export class ClaudeView extends ItemView {
   private pendingSystemMessage: string | null = null;
   private atDropdownEl: HTMLElement;
   private atDropdownItems: TFile[] = [];
-  private tokenGaugeEl: SVGElement;
+  private tokenGauge: TokenGauge;
   private attachPopoverEl: HTMLElement;
-  private compactConfirmEl: HTMLElement;
   private permissionIconEl!: HTMLButtonElement;
-  private sessionContextTokens = 0;
-  static readonly CONTEXT_WINDOW = 200_000;
   private atDropdownIndex = -1;
   private currentUserLabel = 'User';
   private currentAssistantLabel = 'ObsidiBot';
@@ -125,6 +123,13 @@ export class ClaudeView extends ItemView {
   constructor(leaf: WorkspaceLeaf, plugin: ObsidiBotPlugin) {
     super(leaf);
     this.plugin = plugin;
+    this.tokenGauge = new TokenGauge({
+      getSessionId: () => this.currentSessionId,
+      getBinaryPath: () => this.plugin.claudeBinaryPath ?? '',
+      getVaultRoot: () => this.plugin.getVaultRoot(),
+      getEnv: () => this.plugin.shellEnv,
+      getPermissionMode: () => this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
+    });
   }
 
 
@@ -229,28 +234,7 @@ export class ClaudeView extends ItemView {
 
     inputToolbar.createDiv({ cls: 'obsidibot-input-toolbar-spacer' });
 
-    // Token gauge — SVG ring showing context window usage
-    const NS = 'http://www.w3.org/2000/svg';
-    const R = 7, C = R * 2 * Math.PI;
-    const svg = document.createElementNS(NS, 'svg') as SVGElement;
-    svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
-    svg.setAttribute('viewBox', '0 0 18 18');
-    svg.classList.add('obsidibot-token-gauge');
-    const svgTitle = document.createElementNS(NS, 'title');
-    svg.appendChild(svgTitle);
-    const track = document.createElementNS(NS, 'circle');
-    track.setAttribute('cx', '9'); track.setAttribute('cy', '9'); track.setAttribute('r', String(R));
-    track.classList.add('obsidibot-gauge-track');
-    const arc = document.createElementNS(NS, 'circle');
-    arc.setAttribute('cx', '9'); arc.setAttribute('cy', '9'); arc.setAttribute('r', String(R));
-    arc.classList.add('obsidibot-gauge-arc');
-    arc.setAttribute('stroke-dasharray', String(C));
-    arc.setAttribute('stroke-dashoffset', String(C));
-    svg.appendChild(track); svg.appendChild(arc);
-    svg.addEventListener('click', () => this.showCompactConfirm());
-    svg.classList.add('obsidibot-hidden');
-    inputToolbar.appendChild(svg);
-    this.tokenGaugeEl = svg;
+    this.tokenGauge.build(inputToolbar, inputArea);
 
     this.sendBtn = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-send' });
     setIcon(this.sendBtn, 'arrow-up');
@@ -347,18 +331,6 @@ export class ClaudeView extends ItemView {
       e.preventDefault();
       void this.handleDroppedFiles(e.dataTransfer.files);
     });
-
-    // Compact-session confirmation panel (slide-in from right, anchored above input area)
-    this.compactConfirmEl = inputArea.createDiv({ cls: 'obsidibot-compact-confirm' });
-    this.compactConfirmEl.createEl('p', {
-      text: 'Compact this session? Earlier messages will be summarized to free up context.',
-      cls: 'obsidibot-compact-confirm-msg',
-    });
-    const confirmBtnRow = this.compactConfirmEl.createDiv({ cls: 'obsidibot-compact-confirm-btns' });
-    const doCompactBtn = confirmBtnRow.createEl('button', { text: 'Compact', cls: 'mod-cta obsidibot-compact-confirm-btn' });
-    doCompactBtn.addEventListener('click', () => { this.hideCompactConfirm(); this.compactSession(); });
-    const cancelCompactBtn = confirmBtnRow.createEl('button', { text: 'Cancel', cls: 'obsidibot-compact-confirm-btn' });
-    cancelCompactBtn.addEventListener('click', () => this.hideCompactConfirm());
 
     // If Claude binary is missing, show setup guide and stop here
     if (!this.plugin.claudeBinaryPath) {
@@ -465,10 +437,9 @@ export class ClaudeView extends ItemView {
   startNewSession() {
     this.sessionPermissionOverride = null;
     this.updatePermissionIcon();
-    this.sessionContextTokens = 0;
+    this.tokenGauge.reset();
     this.currentUserLabel = 'User';
     this.currentAssistantLabel = 'ObsidiBot';
-    this.tokenGaugeEl.classList.add('obsidibot-hidden');
     this.pendingContexts = [];
     this.renderContextZone();
     const vaultRoot = this.plugin.getVaultRoot();
@@ -1172,11 +1143,9 @@ export class ClaudeView extends ItemView {
       },
       onUsage: (usage) => {
         // context window = max of cache_read (full history) + new input + output
-        const total = Math.max(usage.cacheReadTokens, this.sessionContextTokens)
+        const total = Math.max(usage.cacheReadTokens, this.tokenGauge.getContextTokens())
           + usage.inputTokens + usage.outputTokens;
-        this.sessionContextTokens = total;
-        this.tokenGaugeEl.classList.remove('obsidibot-hidden');
-        this.updateTokenGauge(total);
+        this.tokenGauge.update(total);
 
         // Output tokens arrive as 1 per streaming delta — accumulate.
         // Input and cache tokens are reported in full on the first event — take max.
@@ -1604,60 +1573,6 @@ export class ClaudeView extends ItemView {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
 
-  private updateTokenGauge(tokens: number) {
-    const arc = this.tokenGaugeEl.querySelector('.obsidibot-gauge-arc');
-    if (!arc) return;
-    const R = 7, C = R * 2 * Math.PI;
-    const fraction = Math.min(tokens / ClaudeView.CONTEXT_WINDOW, 1);
-    arc.setAttribute('stroke-dashoffset', String(C * (1 - fraction)));
-    // Color shifts green → yellow → orange → red as context fills
-    const cls = fraction < 0.6 ? 'low' : fraction < 0.8 ? 'mid' : fraction < 0.95 ? 'high' : 'full';
-    arc.setAttribute('class', `obsidibot-gauge-arc obsidibot-gauge-${cls}`);
-    const remaining = Math.round((1 - fraction) * 100);
-    const label = tokens === 0
-      ? 'Context window empty. Click to compact.'
-      : `${remaining}% of context remaining before auto-compaction. Click to compact now.`;
-    this.tokenGaugeEl.setAttribute('aria-label', label);
-    const titleEl = this.tokenGaugeEl.querySelector('title');
-    if (titleEl) titleEl.textContent = label;
-  }
-
-  private showCompactConfirm() {
-    if (!this.currentSessionId) {
-      new Notice('ObsidiBot: no active session to compact.');
-      return;
-    }
-    this.compactConfirmEl.classList.add('is-visible');
-  }
-
-  private hideCompactConfirm() {
-    this.compactConfirmEl.classList.remove('is-visible');
-  }
-
-  private compactSession() {
-    const sessionId = this.currentSessionId;
-    if (!sessionId) {
-      new Notice('ObsidiBot: no active session to compact.');
-      return;
-    }
-    // Optimistic reset — update gauge immediately
-    this.sessionContextTokens = 0;
-    this.updateTokenGauge(0);
-    new Notice('ObsidiBot: compacting session…');
-    const proc = spawnClaude({
-      binaryPath: this.plugin.claudeBinaryPath,
-      prompt: '/compact',
-      vaultRoot: this.plugin.getVaultRoot(),
-      env: this.plugin.shellEnv,
-      resumeSessionId: sessionId,
-      permissionMode: this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
-    });
-    // Drain stdout so the process doesn't stall on a full buffer
-    proc.stdout?.resume();
-    proc.on('close', () => new Notice('ObsidiBot: session compacted.'));
-    proc.on('error', (err) => new Notice(`ObsidiBot: compaction failed — ${err.message}`));
-  }
-
   private attachClickOutside: ((e: MouseEvent) => void) | null = null;
 
   private toggleAttachPopover(anchorBtn: HTMLElement) {
@@ -1967,10 +1882,9 @@ export class ClaudeView extends ItemView {
         if (!pendingPermissionRequest) this.renderPermissionDenials(denials, responseGroupEl);
       },
       onUsage: (usage) => {
-        const total = Math.max(usage.cacheReadTokens, this.sessionContextTokens)
+        const total = Math.max(usage.cacheReadTokens, this.tokenGauge.getContextTokens())
           + usage.inputTokens + usage.outputTokens;
-        this.sessionContextTokens = total;
-        this.updateTokenGauge(total);
+        this.tokenGauge.update(total);
 
         turnOutputTokens += usage.outputTokens;
         turnInputTokens = Math.max(turnInputTokens, usage.inputTokens);
