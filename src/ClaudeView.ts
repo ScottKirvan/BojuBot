@@ -15,8 +15,9 @@ import { spawn } from 'child_process';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import type ObsidiBotPlugin from '../main';
-import { spawnClaude, parseStreamOutput, killProcess, findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
+import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
+import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
 import { QUERY_PREFIX, neutralizeTriggers } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
@@ -27,10 +28,8 @@ import {
   InjectedContext,
   InjectedContextType,
   saveSession,
-  saveSessionAtTop,
   loadAllSessions,
   resolveSessionsDir,
-  titleFromPrompt,
   canResumeLocally,
   loadSessionMessages,
 } from './utils/sessionStorage';
@@ -86,32 +85,43 @@ function escapeAttr(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/** DOM elements belonging to the currently-running Claude turn. Null between turns. */
+interface ActiveTurnElements {
+  assistantEl: HTMLElement;
+  statusEl: HTMLElement;
+  streamingTextEl: HTMLElement;
+  toolEventsEl: HTMLElement;
+  tokenStatsEl: HTMLElement;
+  responseGroupEl: HTMLElement;
+  toolRowMap: Map<string, HTMLElement>;
+  toolCallCount: number;
+  uiBridgeActionCount: number;
+  accumulated: string;
+  turnInputTokens: number;
+  turnCacheTokens: number;
+  turnOutputTokens: number;
+  unlock: () => void;
+  isInjectTurn: boolean;
+}
+
 export class ClaudeView extends ItemView {
   plugin: ObsidiBotPlugin;
+  private coordinator: SessionCoordinator;
+  private _activeTurnEls: ActiveTurnElements | null = null;
   private inputEl: HTMLTextAreaElement;
   private messagesEl: HTMLElement;
   private sendBtn: HTMLButtonElement;
   private exportBtn: HTMLButtonElement;
   private attachBtn: HTMLButtonElement;
   private sessionStatusEl: HTMLElement;
-  private currentSessionId: string | undefined;      // Claude's session ID (used for --resume)
-  private currentSessionFileId: string | undefined;  // JSON file id (may differ from claudeSessionId)
-  private currentSessionTitle: string | undefined;
-  private currentSessionCreatedAt: string | undefined;
-  private placeholderSessionId: string | undefined;
   private inputHistory: string[] = [];
   private historyIndex: number = -1;
   private inputDraft: string = '';
   private suppressNextUserBubble = false;
-  private activeProc: ReturnType<typeof spawnClaude> | null = null;
   private activeSlashMenu: SlashMenu | null = null;
   private inputAreaEl: HTMLElement;
   private attachmentHandler: AttachmentHandler;
   private pendingContextZone: HTMLElement;
-  /** Overrides settings.permissionMode for the current session only. Cleared on new session. */
-  private sessionPermissionOverride: PermissionMode | null = null;
-  /** Pending system message to prepend to the next continuing-session turn (allowlist update, context refresh, etc.). */
-  private pendingSystemMessage: string | null = null;
   private atMentionController: AtMentionController;
   private tokenGauge: TokenGauge;
   private attachPopoverEl: HTMLElement;
@@ -122,12 +132,26 @@ export class ClaudeView extends ItemView {
   constructor(leaf: WorkspaceLeaf, plugin: ObsidiBotPlugin) {
     super(leaf);
     this.plugin = plugin;
+    this.coordinator = new SessionCoordinator({
+      getBinaryPath: () => this.plugin.claudeBinaryPath,
+      getVaultRoot: () => this.plugin.getVaultRoot(),
+      getConfigDir: () => this.app.vault.configDir,
+      getEnv: () => this.plugin.shellEnv,
+      getPermissionMode: () => this.plugin.settings.permissionMode,
+      getSessionsDir: () => this.getSessionsDir(),
+      saveLastActiveSessionId: async (id) => {
+        this.plugin.settings.lastActiveSessionId = id;
+        await this.plugin.saveSettings();
+      },
+      isUiBridgeEnabled: () => this.plugin.settings.uiBridgeEnabled,
+    });
+    this._setupCoordinatorEvents();
     this.tokenGauge = new TokenGauge({
-      getSessionId: () => this.currentSessionId,
+      getSessionId: () => this.coordinator.sessionId,
       getBinaryPath: () => this.plugin.claudeBinaryPath ?? '',
       getVaultRoot: () => this.plugin.getVaultRoot(),
       getEnv: () => this.plugin.shellEnv,
-      getPermissionMode: () => this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
+      getPermissionMode: () => this.coordinator.getEffectivePermissionMode(),
     });
     this.attachmentHandler = new AttachmentHandler({
       getVaultRoot: () => this.plugin.getVaultRoot(),
@@ -148,6 +172,183 @@ export class ClaudeView extends ItemView {
 
   private get appInternal(): AppInternal {
     return this.app as unknown as AppInternal;
+  }
+
+  private _setupCoordinatorEvents(): void {
+    // ── Session lifecycle ────────────────────────────────────────────────────
+
+    this.coordinator.on('session:new', () => {
+      if (!this.messagesEl) return;
+      this.tokenGauge.reset();
+      this.currentUserLabel = 'User';
+      this.currentAssistantLabel = 'ObsidiBot';
+      this.attachmentHandler.reset();
+      this.messagesEl.empty();
+      this.renderWelcomeScreen();
+      this.updateExportBtn();
+      this.updateSessionStatus();
+    });
+
+    this.coordinator.on('session:updated', () => {
+      this.updateSessionStatus();
+    });
+
+    // ── Turn streaming ───────────────────────────────────────────────────────
+
+    this.coordinator.on('turn:text', (accumulated) => {
+      if (!this._activeTurnEls) return;
+      const { statusEl, streamingTextEl } = this._activeTurnEls;
+      statusEl.remove();
+      this._activeTurnEls.accumulated = accumulated;
+      streamingTextEl.textContent = accumulated;
+      this.scrollToBottom();
+    });
+
+    this.coordinator.on('turn:action', (action) => {
+      if (!this._activeTurnEls) return;
+      this._activeTurnEls.uiBridgeActionCount++;
+      void executeAction(this.app, action, this.bridgeOptions());
+    });
+
+    this.coordinator.on('turn:tool-call', (tool, input, toolUseId) => {
+      if (!this._activeTurnEls) return;
+      const { assistantEl, statusEl, toolEventsEl, toolRowMap } = this._activeTurnEls;
+      const key = tool.toLowerCase();
+      if (!statusEl.isConnected) assistantEl.appendChild(statusEl);
+      statusEl.setText(TOOL_STATUS[key] ?? 'Working…');
+      this._activeTurnEls.toolCallCount++;
+      toolEventsEl.show();
+      const row = toolEventsEl.createDiv({ cls: 'obsidibot-tool-event' });
+      const header = row.createDiv({ cls: 'obsidibot-tool-event-header' });
+      const iconEl = header.createSpan({ cls: 'obsidibot-tool-event-icon' });
+      setIcon(iconEl, TOOL_ICONS[key] ?? 'zap');
+      const detail = extractToolDetail(key, input);
+      header.createSpan({ cls: 'obsidibot-tool-event-label', text: detail ? `${tool}: ${detail}` : tool });
+      const outEl = row.createDiv({ cls: 'obsidibot-tool-event-output obsidibot-tool-output-pending' });
+      outEl.setText('…');
+      toolRowMap.set(toolUseId, outEl);
+      this.scrollToBottom();
+    });
+
+    this.coordinator.on('turn:tool-result', (toolUseId, content) => {
+      if (!this._activeTurnEls) return;
+      const outEl = this._activeTurnEls.toolRowMap.get(toolUseId);
+      if (!outEl) return;
+      outEl.removeClass('obsidibot-tool-output-pending');
+      const trimmed = content.trim();
+      if (!trimmed) { outEl.setText('(No output)'); return; }
+      const lines = trimmed.split('\n');
+      const MAX_LINES = 5;
+      const shown = lines.slice(0, MAX_LINES).join('\n');
+      const overflow = lines.length - MAX_LINES;
+      outEl.setText(overflow > 0 ? `${shown}\n…+${overflow} lines` : shown);
+      this.scrollToBottom();
+    });
+
+    this.coordinator.on('turn:usage', (usage) => {
+      if (!this._activeTurnEls) return;
+      const { tokenStatsEl } = this._activeTurnEls;
+      const total = Math.max(usage.cacheReadTokens, this.tokenGauge.getContextTokens())
+        + usage.inputTokens + usage.outputTokens;
+      this.tokenGauge.update(total);
+      this._activeTurnEls.turnOutputTokens += usage.outputTokens;
+      this._activeTurnEls.turnInputTokens = Math.max(this._activeTurnEls.turnInputTokens, usage.inputTokens);
+      this._activeTurnEls.turnCacheTokens = Math.max(this._activeTurnEls.turnCacheTokens, usage.cacheReadTokens);
+      const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+      const { turnOutputTokens, turnInputTokens, turnCacheTokens } = this._activeTurnEls;
+      const parts = [`${fmt(turnOutputTokens)} out`, `${fmt(turnInputTokens)} in`];
+      if (turnCacheTokens > 0) parts.push(`${fmt(turnCacheTokens)} cached`);
+      tokenStatsEl.setText(parts.join(' · '));
+      tokenStatsEl.show();
+    });
+
+    this.coordinator.on('turn:stderr', (err) => {
+      if (this._activeTurnEls) this._activeTurnEls.statusEl.remove();
+      this.appendMessage('system', `stderr: ${err.trim()}`);
+    });
+
+    this.coordinator.on('turn:error', (err) => {
+      if (!this._activeTurnEls) return;
+      const { statusEl, assistantEl, unlock } = this._activeTurnEls;
+      this._activeTurnEls = null;
+      statusEl.remove();
+      assistantEl.setText(`Process error: ${err}`);
+      unlock();
+    });
+
+    this.coordinator.on('permission:denied', (denials, hasPendingRequest) => {
+      if (hasPendingRequest || !this._activeTurnEls) return;
+      this.renderPermissionDenials(denials, this._activeTurnEls.responseGroupEl);
+    });
+
+    this.coordinator.on('turn:done', (result) => {
+      if (!this._activeTurnEls) return;
+      const {
+        assistantEl, statusEl, toolEventsEl, responseGroupEl,
+        toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn,
+      } = this._activeTurnEls;
+      this._activeTurnEls = null;
+
+      statusEl.remove();
+      if (!result.clean) this.appendMessage('system', 'Interrupted.');
+
+      // Collapse tool calls into a toggle
+      if (toolCallCount > 0) {
+        const rows = Array.from(toolEventsEl.querySelectorAll<HTMLElement>('.obsidibot-tool-event'));
+        rows.forEach(r => r.hide());
+        const s = toolCallCount === 1 ? '' : 's';
+        const toggle = toolEventsEl.createEl('button', {
+          cls: 'obsidibot-tool-toggle',
+          text: `${toolCallCount} tool call${s} ▶`,
+        });
+        toolEventsEl.insertBefore(toggle, toolEventsEl.firstChild);
+        let expanded = false;
+        toggle.addEventListener('click', () => {
+          expanded = !expanded;
+          rows.forEach(r => { if (expanded) r.show(); else r.hide(); });
+          toggle.setText(`${toolCallCount} tool call${s} ${expanded ? '▼' : '▶'}`);
+        });
+      }
+
+      // Render assistant response
+      if (!accumulated && uiBridgeActionCount) {
+        assistantEl.remove();
+      } else if (!accumulated) {
+        assistantEl.setText('(No response)');
+      } else if (this.isAuthError(accumulated)) {
+        this.renderAuthError(assistantEl);
+      } else {
+        assistantEl.dataset.markdown = accumulated;
+        assistantEl.empty();
+        void MarkdownRenderer.render(this.app, this.addHardLineBreaks(accumulated), assistantEl, '', this);
+        this.wireInternalLinks(assistantEl);
+      }
+      if (result.pendingQueries.length > 0) {
+        assistantEl.dataset.queries = JSON.stringify(result.pendingQueries);
+      }
+
+      this.scrollToBottom();
+      this.updateSessionStatus();
+
+      if (!isInjectTurn) {
+        const showQueries = result.pendingQueries.filter(q => q.mode === 'show');
+        const injectQueries = result.pendingQueries.filter(q => q.mode === 'inject');
+        for (const q of showQueries) {
+          this.renderQueryResultCard(responseGroupEl, resolveQuery(this.app, q));
+        }
+        if (injectQueries.length > 0) {
+          this.handleVaultInject(injectQueries, responseGroupEl, unlock);
+          return;
+        }
+      }
+
+      if (result.pendingPermissionRequest) {
+        this.handlePermissionRequest(result.pendingPermissionRequest, unlock);
+        return;
+      }
+
+      unlock();
+    });
   }
 
   getViewType(): string { return VIEW_TYPE_CLAUDE; }
@@ -256,7 +457,7 @@ export class ClaudeView extends ItemView {
 
     this.sendBtn.addEventListener('click', () => {
       if (this.sendBtn.dataset.state === 'running') {
-        if (this.activeProc) killProcess(this.activeProc);
+        this.coordinator.cancel();
       } else {
         void this.handleSend();
       }
@@ -385,18 +586,19 @@ export class ClaudeView extends ItemView {
   async onClose() { /* nothing to clean up yet */ }
 
   getEffectivePermissionMode(): PermissionMode {
-    return this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+    return this.coordinator.getEffectivePermissionMode();
   }
 
   onSettingsChanged(): void {
-    this.sessionPermissionOverride = null;
+    this.coordinator.setPermissionOverride(null);
     this.updatePermissionIcon();
-    if (this.currentSessionId) {
+    if (this.coordinator.sessionId) {
       const perm = PERMISSION_DESCRIPTIONS[this.plugin.settings.permissionMode];
-      this.pendingSystemMessage =
+      this.coordinator.setPendingSystemMessage(
         `[System: Permission mode changed to ${perm.summary}. ` +
         `You can now: ${perm.can}. ` +
-        `You cannot: ${perm.cannot}.]`;
+        `You cannot: ${perm.cannot}.]`,
+      );
     }
   }
 
@@ -417,7 +619,7 @@ export class ClaudeView extends ItemView {
 
   private updatePermissionIcon(): void {
     if (!this.permissionIconEl) return;
-    const mode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+    const mode = this.coordinator.getEffectivePermissionMode();
     this.permissionIconEl.removeClass('obsidibot-perm-restricted', 'obsidibot-perm-readonly', 'obsidibot-perm-standard', 'obsidibot-perm-full');
     switch (mode) {
       case 'restricted':
@@ -443,37 +645,9 @@ export class ClaudeView extends ItemView {
   }
 
   startNewSession() {
-    this.sessionPermissionOverride = null;
+    this.coordinator.startNewSession();
+    // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
     this.updatePermissionIcon();
-    this.tokenGauge.reset();
-    this.currentUserLabel = 'User';
-    this.currentAssistantLabel = 'ObsidiBot';
-    this.attachmentHandler.reset();
-    const vaultRoot = this.plugin.getVaultRoot();
-    const now = new Date().toISOString();
-    const sessionId = now.replace(/[:.]/g, '-');
-
-    const newSession: StoredSession = {
-      id: sessionId,
-      title: 'Untitled session',
-      createdAt: now,
-      updatedAt: now,
-      claudeSessionId: '',
-    };
-
-    saveSessionAtTop(vaultRoot, newSession, this.getSessionsDir(), this.app.vault.configDir);
-    this.placeholderSessionId = sessionId;
-    this.currentSessionId = undefined;
-    this.currentSessionFileId = sessionId;
-    this.currentSessionTitle = 'Untitled session';
-    this.currentSessionCreatedAt = now;
-    this.plugin.settings.lastActiveSessionId = sessionId;
-    void this.plugin.saveSettings();
-    this.messagesEl.empty();
-    this.renderWelcomeScreen();
-    this.updateExportBtn();
-    this.updateSessionStatus();
-    log('New session placeholder created:', sessionId);
   }
 
   showSessionHistory() {
@@ -486,9 +660,8 @@ export class ClaudeView extends ItemView {
       this.startNewSession();
     }, () => {
       this.inputEl?.focus();
-    }, this.currentSessionFileId, (session) => {
-      if (session.id === this.currentSessionFileId) {
-        this.currentSessionTitle = session.title;
+    }, this.coordinator.sessionFileId, (session) => {
+      if (session.id === this.coordinator.sessionFileId) {
         this.updateSessionStatus();
       }
     }, (session) => {
@@ -550,8 +723,8 @@ export class ClaudeView extends ItemView {
   exportToVault(): void {
     const messages = this.messagesEl.querySelectorAll('.obsidibot-message');
     if (messages.length === 0) { new Notice('No conversation to export'); return; }
-    const title = this.currentSessionTitle || 'ObsidiBot Session';
-    const sessionId = this.currentSessionId ?? '';
+    const title = this.coordinator.sessionTitle || 'ObsidiBot Session';
+    const sessionId = this.coordinator.sessionId ?? '';
     const date = new Date().toISOString().slice(0, 10);
     const safeName = title.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
     const folder = this.plugin.settings.exportFolder.trim();
@@ -607,8 +780,8 @@ export class ClaudeView extends ItemView {
     }
 
     let markdown = `# ObsidiBot Conversation\n`;
-    if (this.currentSessionTitle) {
-      markdown += `**Session:** ${this.currentSessionTitle}\n\n`;
+    if (this.coordinator.sessionTitle) {
+      markdown += `**Session:** ${this.coordinator.sessionTitle}\n\n`;
     }
 
     messages.forEach((msgEl) => {
@@ -672,11 +845,12 @@ export class ClaudeView extends ItemView {
       onSetLabel: (userLabel: string, assistantLabel: string) => {
         this.currentUserLabel = userLabel;
         this.currentAssistantLabel = assistantLabel;
-        if (!this.currentSessionFileId) return;
+        const fileId = this.coordinator.sessionFileId;
+        if (!fileId) return;
         const vaultRoot = this.plugin.getVaultRoot();
         const sessionsDir = this.getSessionsDir();
         const sessions = loadAllSessions(vaultRoot, sessionsDir, this.app.vault.configDir);
-        const session = sessions.find(s => s.id === this.currentSessionFileId);
+        const session = sessions.find(s => s.id === fileId);
         if (session) {
           session.userLabel = userLabel;
           session.assistantLabel = assistantLabel;
@@ -692,8 +866,9 @@ export class ClaudeView extends ItemView {
 
   injectAllowlistUpdate(newAllowlist: string[]) {
     if (newAllowlist.length === 0) {
-      this.pendingSystemMessage =
-        '[System: The command allowlist was updated — it is now empty. You can still use run-command for any command; the user will be prompted to approve or deny each attempt.]';
+      this.coordinator.setPendingSystemMessage(
+        '[System: The command allowlist was updated — it is now empty. You can still use run-command for any command; the user will be prompted to approve or deny each attempt.]',
+      );
     } else {
       const rows = newAllowlist
         .map(id => {
@@ -701,18 +876,19 @@ export class ClaudeView extends ItemView {
           return `| "${name}" | ${id} |`;
         })
         .join('\n');
-      this.pendingSystemMessage =
-        `[System: The command allowlist was updated mid-session. These commands now execute immediately via run-command:\n${rows}\nAny other command will prompt the user for approval — do not assume unlisted commands are blocked.]`;
+      this.coordinator.setPendingSystemMessage(
+        `[System: The command allowlist was updated mid-session. These commands now execute immediately via run-command:\n${rows}\nAny other command will prompt the user for approval — do not assume unlisted commands are blocked.]`,
+      );
     }
   }
 
   async refreshSessionContext() {
-    if (!this.currentSessionId) {
+    if (!this.coordinator.sessionId) {
       this.appendMessage('system', 'No active session to refresh — context will be fully injected with your first message.');
       return;
     }
 
-    const effectiveMode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+    const effectiveMode = this.coordinator.getEffectivePermissionMode();
     const ctx = new ContextManager(
       this.app,
       this.plugin.settings.contextFilePath,
@@ -722,33 +898,26 @@ export class ClaudeView extends ItemView {
       effectiveMode,
     );
     const context = await ctx.buildSessionContext();
-    this.pendingSystemMessage = `[System: Session context refreshed at user request.]\n\n${context}`;
+    this.coordinator.setPendingSystemMessage(`[System: Session context refreshed at user request.]\n\n${context}`);
     this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
   }
 
   private async loadSession(session: StoredSession) {
-    this.placeholderSessionId = undefined;
-    this.currentSessionId = session.claudeSessionId || undefined;
-    this.currentSessionFileId = session.id;
-    this.currentSessionTitle = session.title;
-    this.currentSessionCreatedAt = session.createdAt;
     this.currentUserLabel = session.userLabel ?? 'User';
     this.currentAssistantLabel = session.assistantLabel ?? 'ObsidiBot';
+
+    // Coordinator updates session state and emits 'session:loaded' — we also
+    // need the payload data synchronously for DOM rendering, so capture it here.
+    const isNew = !session.claudeSessionId;
+    const canResume = !isNew && canResumeLocally(session.claudeSessionId);
+
+    await this.coordinator.loadSession(session);
+
     this.messagesEl.empty();
     this.updateExportBtn();
     this.updateSessionStatus();
 
-    this.plugin.settings.lastActiveSessionId = session.id;
-    await this.plugin.saveSettings();
-
-    const isNew = !session.claudeSessionId;
-    const resumable = !isNew && canResumeLocally(session.claudeSessionId);
-
-    if (isNew) {
-      this.placeholderSessionId = session.id;
-    }
-
-    if (resumable) {
+    if (canResume) {
       const messages = loadSessionMessages(session.claudeSessionId);
       if (messages.length > 0) {
         for (const msg of messages) {
@@ -793,17 +962,17 @@ export class ClaudeView extends ItemView {
     } else {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }
-
-    log('Loaded session:', session.claudeSessionId || '(new)', session.title, resumable ? '(local)' : isNew ? '(new)' : '(remote)');
   }
 
   private updateSessionStatus() {
-    if (this.currentSessionTitle) {
-      this.sessionStatusEl.setText(this.currentSessionTitle);
-      this.sessionStatusEl.title = this.currentSessionId ?? '';
-    } else if (this.currentSessionId) {
-      this.sessionStatusEl.setText(`Session: ${this.currentSessionId.substring(0, 8)}…`);
-      this.sessionStatusEl.title = this.currentSessionId;
+    const title = this.coordinator.sessionTitle;
+    const sessionId = this.coordinator.sessionId;
+    if (title) {
+      this.sessionStatusEl.setText(title);
+      this.sessionStatusEl.title = sessionId ?? '';
+    } else if (sessionId) {
+      this.sessionStatusEl.setText(`Session: ${sessionId.substring(0, 8)}…`);
+      this.sessionStatusEl.title = sessionId;
     } else {
       this.sessionStatusEl.setText('New session');
       this.sessionStatusEl.title = '';
@@ -827,9 +996,8 @@ export class ClaudeView extends ItemView {
     }
 
     const unlock = () => this.setSendState(false);
-    const isNewSession = !this.currentSessionId;
-    const firstPrompt = isNewSession ? prompt : undefined;
-    log('handleSend — session:', this.currentSessionId ?? 'new', '— prompt:', prompt.substring(0, 60));
+    const isNewSession = !this.coordinator.sessionId;
+    log('handleSend — session:', this.coordinator.sessionId ?? 'new', '— prompt:', prompt.substring(0, 60));
 
     this.inputHistory.push(prompt);
     this.historyIndex = -1;
@@ -908,7 +1076,7 @@ export class ClaudeView extends ItemView {
     }
 
     if (isNewSession) {
-      const sessionMode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+      const sessionMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
         this.app,
         this.plugin.settings.contextFilePath,
@@ -928,81 +1096,23 @@ export class ClaudeView extends ItemView {
         log(`[NEW SESSION] No context injected, Prompt: ~${promptTokens} tokens`);
       }
     } else {
-      if (this.pendingSystemMessage) {
-        finalPrompt = `<obsidibot-context type="system-message">${this.pendingSystemMessage}</obsidibot-context>\n\n${finalPrompt}`;
-        this.pendingSystemMessage = null;
+      const pending = this.coordinator.getPendingSystemMessage();
+      if (pending) {
+        finalPrompt = `<obsidibot-context type="system-message">${pending}</obsidibot-context>\n\n${finalPrompt}`;
+        this.coordinator.clearPendingSystemMessage();
       }
-      log(`[CONTINUE SESSION ${this.currentSessionId?.substring(0, 8)}] Prompt: ~${estimateTokens(finalPrompt)} tokens`);
+      log(`[CONTINUE SESSION ${this.coordinator.sessionId?.substring(0, 8)}] Prompt: ~${estimateTokens(finalPrompt)} tokens`);
     }
 
     finalPrompt = activeFileNote + finalPrompt;
 
-    this._executeTurn({
-      prompt: finalPrompt,
+    this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
-      unlock,
-      onTurnDone: ({ sessionId, pendingQueries, responseGroupEl: rg, pendingPermissionRequest, unlock: done }) => {
-        if (sessionId) {
-          const vaultRoot = this.plugin.getVaultRoot();
-          const sessionsDir = this.getSessionsDir();
-          const now = new Date().toISOString();
-
-          if (this.placeholderSessionId) {
-            this.currentSessionId = sessionId;
-            this.currentSessionFileId = this.placeholderSessionId;
-            if (firstPrompt) this.currentSessionTitle = titleFromPrompt(firstPrompt);
-            saveSession(vaultRoot, {
-              id: this.placeholderSessionId,
-              title: this.currentSessionTitle ?? 'Untitled session',
-              createdAt: this.currentSessionCreatedAt ?? now,
-              updatedAt: now,
-              claudeSessionId: sessionId,
-            }, sessionsDir);
-            const placeholderId = this.placeholderSessionId;
-            this.placeholderSessionId = undefined;
-            log('Placeholder session updated:', placeholderId, '→', sessionId);
-          } else if (isNewSession && firstPrompt) {
-            this.currentSessionId = sessionId;
-            this.currentSessionFileId = sessionId;
-            this.currentSessionTitle = titleFromPrompt(firstPrompt);
-            this.currentSessionCreatedAt = now;
-            saveSession(vaultRoot, {
-              id: sessionId,
-              title: this.currentSessionTitle,
-              createdAt: now,
-              updatedAt: now,
-              claudeSessionId: sessionId,
-            }, sessionsDir);
-            log('Session saved:', sessionId, this.currentSessionTitle);
-          } else if (this.currentSessionId) {
-            const fileId = this.currentSessionFileId ?? this.currentSessionId;
-            saveSession(vaultRoot, {
-              id: fileId,
-              title: this.currentSessionTitle ?? this.currentSessionId.substring(0, 8),
-              createdAt: this.currentSessionCreatedAt ?? now,
-              updatedAt: now,
-              claudeSessionId: this.currentSessionId,
-            }, sessionsDir);
-          }
-          this.updateSessionStatus();
-        }
-
-        const showQueries = pendingQueries.filter(q => q.mode === 'show');
-        const injectQueries = pendingQueries.filter(q => q.mode === 'inject');
-        for (const q of showQueries) {
-          this.renderQueryResultCard(rg, resolveQuery(this.app, q));
-        }
-        if (injectQueries.length > 0) {
-          this.handleVaultInject(injectQueries, rg, done);
-          return;
-        }
-        if (pendingPermissionRequest) {
-          this.handlePermissionRequest(pendingPermissionRequest, done);
-          return;
-        }
-        done();
-      },
-    });
+      toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '',
+      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0,
+      unlock, isInjectTurn: false,
+    };
+    this.coordinator.send(finalPrompt, prompt);
   }
 
   private renderWelcomeScreen() {
@@ -1049,7 +1159,7 @@ export class ClaudeView extends ItemView {
 
     // Recent sessions footer
     const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
-      .filter(s => s.id !== this.currentSessionFileId);
+      .filter(s => s.id !== this.coordinator.sessionFileId);
     if (sessions.length > 0) {
       const recent = welcome.createDiv({ cls: 'obsidibot-welcome-recent' });
       recent.createEl('p', { cls: 'obsidibot-welcome-recent-label', text: 'Recent sessions' });
@@ -1214,7 +1324,7 @@ export class ClaudeView extends ItemView {
     void promptPermissionRequest(this.app, request.tool, request.reason).then(granted => {
       unlock();
       if (granted) {
-        this.sessionPermissionOverride = 'full';
+        this.coordinator.setPermissionOverride('full');
         this.updatePermissionIcon();
         this.inputEl.value = `[Permission granted] Full access is now enabled. Please retry the blocked ${request.tool} operation and complete the task.`;
       } else {
@@ -1234,7 +1344,7 @@ export class ClaudeView extends ItemView {
       list.createEl('li', { text: detail ? `${d.tool}: ${detail}` : d.tool });
     }
 
-    const currentMode = this.sessionPermissionOverride ?? this.plugin.settings.permissionMode;
+    const currentMode = this.coordinator.getEffectivePermissionMode();
     if (currentMode !== 'full') {
       const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
       const upgradeLabel = currentMode === 'restricted' ? 'Allow standard access for this session' : 'Allow full access for this session';
@@ -1247,7 +1357,7 @@ export class ClaudeView extends ItemView {
         text: upgradeLabel,
       });
       upgradeBtn.addEventListener('click', () => {
-        this.sessionPermissionOverride = upgradeTarget;
+        this.coordinator.setPermissionOverride(upgradeTarget);
         this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
@@ -1382,223 +1492,13 @@ export class ClaudeView extends ItemView {
     this.setSendState(true);
     this.scrollToBottom();
 
-    this._executeTurn({
-      prompt: injectPrompt,
+    this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
-      unlock,
-      onTurnDone: ({ sessionId, pendingPermissionRequest, unlock: done }) => {
-        if (sessionId && this.currentSessionId) {
-          const vaultRoot = this.plugin.getVaultRoot();
-          const now = new Date().toISOString();
-          const fileId = this.currentSessionFileId ?? this.currentSessionId;
-          saveSession(vaultRoot, {
-            id: fileId,
-            title: this.currentSessionTitle ?? this.currentSessionId.substring(0, 8),
-            createdAt: this.currentSessionCreatedAt ?? now,
-            updatedAt: now,
-            claudeSessionId: this.currentSessionId,
-          }, this.getSessionsDir());
-        }
-        if (pendingPermissionRequest) {
-          this.handlePermissionRequest(pendingPermissionRequest, done);
-          return;
-        }
-        done();
-      },
-    });
-  }
-
-  /**
-   * Shared spawn-and-stream core used by handleSend and handleVaultInject.
-   * Spawns Claude, wires all stream callbacks, handles tool-call rendering,
-   * markdown rendering, and interrupted detection — then calls onTurnDone
-   * with caller-specific context (session persistence, vault query routing).
-   */
-  private _executeTurn(opts: {
-    prompt: string;
-    assistantEl: HTMLElement;
-    statusEl: HTMLElement;
-    streamingTextEl: HTMLElement;
-    toolEventsEl: HTMLElement;
-    tokenStatsEl: HTMLElement;
-    responseGroupEl: HTMLElement;
-    unlock: () => void;
-    onTurnDone: (ctx: {
-      sessionId: string | undefined;
-      clean: boolean | undefined;
-      accumulated: string;
-      pendingQueries: VaultQuery[];
-      responseGroupEl: HTMLElement;
-      pendingPermissionRequest: { tool: string; reason: string } | null;
-      unlock: () => void;
-    }) => void;
-  }): void {
-    const { assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl, unlock } = opts;
-
-    let proc: ReturnType<typeof spawnClaude>;
-    try {
-      proc = spawnClaude({
-        binaryPath: this.plugin.claudeBinaryPath!,
-        prompt: opts.prompt,
-        vaultRoot: this.plugin.getVaultRoot(),
-        env: this.plugin.shellEnv,
-        resumeSessionId: this.currentSessionId,
-        permissionMode: this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
-      });
-      this.activeProc = proc;
-    } catch (e) {
-      assistantEl.setText(`Failed to start claude: ${e}`);
-      unlock();
-      return;
-    }
-
-    let toolCallCount = 0;
-    let accumulated = '';
-    let uiBridgeActionCount = 0;
-    let turnInputTokens = 0;
-    let turnCacheTokens = 0;
-    let turnOutputTokens = 0;
-    const pendingQueries: VaultQuery[] = [];
-    const toolRowMap = new Map<string, HTMLElement>();
-    let pendingPermissionRequest: { tool: string; reason: string } | null = null;
-
-    parseStreamOutput(proc, {
-      onText: (delta) => {
-        statusEl.remove();
-        accumulated += delta;
-        if (this.plugin.settings.uiBridgeEnabled) {
-          const { clean, actions } = extractActions(accumulated);
-          accumulated = clean;
-          uiBridgeActionCount += actions.length;
-          for (const a of actions) void executeAction(this.app, a, this.bridgeOptions());
-        }
-        streamingTextEl.textContent = accumulated;
-        this.scrollToBottom();
-      },
-      onAction: (line) => {
-        if (this.plugin.settings.uiBridgeEnabled) {
-          try {
-            const { actions } = extractActions(line + '\n');
-            for (const a of actions) {
-              if (a.action === 'request-permission') {
-                pendingPermissionRequest = {
-                  tool: (a.tool as string) ?? 'unknown tool',
-                  reason: (a.reason as string) ?? '',
-                };
-              } else {
-                uiBridgeActionCount++;
-                void executeAction(this.app, a, this.bridgeOptions());
-              }
-            }
-          } catch { /* malformed — already logged in extractActions */ }
-        }
-      },
-      onQuery: (line) => {
-        try {
-          const q = JSON.parse(line.slice(QUERY_PREFIX.length)) as VaultQuery;
-          pendingQueries.push(q);
-          log('onQuery — queued:', q.query, q.mode, q.path ?? '');
-        } catch { log('onQuery — malformed line:', line.substring(0, 100)); }
-      },
-      onToolCall: (tool, input, toolUseId) => {
-        const key = tool.toLowerCase();
-        if (!statusEl.isConnected) assistantEl.appendChild(statusEl);
-        statusEl.setText(TOOL_STATUS[key] ?? 'Working…');
-        log('onToolCall —', tool, JSON.stringify(input).substring(0, 120));
-        toolCallCount++;
-        toolEventsEl.show();
-        const row = toolEventsEl.createDiv({ cls: 'obsidibot-tool-event' });
-        const header = row.createDiv({ cls: 'obsidibot-tool-event-header' });
-        const iconEl = header.createSpan({ cls: 'obsidibot-tool-event-icon' });
-        setIcon(iconEl, TOOL_ICONS[key] ?? 'zap');
-        const detail = extractToolDetail(key, input);
-        header.createSpan({ cls: 'obsidibot-tool-event-label', text: detail ? `${tool}: ${detail}` : tool });
-        const outEl = row.createDiv({ cls: 'obsidibot-tool-event-output obsidibot-tool-output-pending' });
-        outEl.setText('…');
-        toolRowMap.set(toolUseId, outEl);
-        this.scrollToBottom();
-      },
-      onToolResult: (toolUseId, content) => {
-        const outEl = toolRowMap.get(toolUseId);
-        if (!outEl) return;
-        outEl.removeClass('obsidibot-tool-output-pending');
-        const trimmed = content.trim();
-        if (!trimmed) { outEl.setText('(No output)'); return; }
-        const lines = trimmed.split('\n');
-        const MAX_LINES = 5;
-        const shown = lines.slice(0, MAX_LINES).join('\n');
-        const overflow = lines.length - MAX_LINES;
-        outEl.setText(overflow > 0 ? `${shown}\n…+${overflow} lines` : shown);
-        this.scrollToBottom();
-      },
-      onPermissionDenied: (denials) => {
-        if (!pendingPermissionRequest) this.renderPermissionDenials(denials, responseGroupEl);
-      },
-      onUsage: (usage) => {
-        const total = Math.max(usage.cacheReadTokens, this.tokenGauge.getContextTokens())
-          + usage.inputTokens + usage.outputTokens;
-        this.tokenGauge.update(total);
-        turnOutputTokens += usage.outputTokens;
-        turnInputTokens = Math.max(turnInputTokens, usage.inputTokens);
-        turnCacheTokens = Math.max(turnCacheTokens, usage.cacheReadTokens);
-        const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-        const parts = [`${fmt(turnOutputTokens)} out`, `${fmt(turnInputTokens)} in`];
-        if (turnCacheTokens > 0) parts.push(`${fmt(turnCacheTokens)} cached`);
-        tokenStatsEl.setText(parts.join(' · '));
-        tokenStatsEl.show();
-      },
-      onError: (err) => {
-        statusEl.remove();
-        this.appendMessage('system', `stderr: ${err.trim()}`);
-      },
-      onDone: (sessionId, clean) => {
-        statusEl.remove();
-        this.activeProc = null;
-        if (!clean) this.appendMessage('system', 'Interrupted.');
-
-        if (toolCallCount > 0) {
-          const rows = Array.from(toolEventsEl.querySelectorAll<HTMLElement>('.obsidibot-tool-event'));
-          rows.forEach(r => { r.hide(); });
-          const s = toolCallCount === 1 ? '' : 's';
-          const toggle = toolEventsEl.createEl('button', {
-            cls: 'obsidibot-tool-toggle',
-            text: `${toolCallCount} tool call${s} ▶`,
-          });
-          toolEventsEl.insertBefore(toggle, toolEventsEl.firstChild);
-          let expanded = false;
-          toggle.addEventListener('click', () => {
-            expanded = !expanded;
-            rows.forEach(r => { if (expanded) r.show(); else r.hide(); });
-            toggle.setText(`${toolCallCount} tool call${s} ${expanded ? '▼' : '▶'}`);
-          });
-        }
-
-        if (!accumulated && uiBridgeActionCount) {
-          assistantEl.remove();
-        } else if (!accumulated) {
-          assistantEl.setText('(No response)');
-        } else if (this.isAuthError(accumulated)) {
-          this.renderAuthError(assistantEl);
-        } else {
-          assistantEl.dataset.markdown = accumulated;
-          assistantEl.empty();
-          void MarkdownRenderer.render(this.app, this.addHardLineBreaks(accumulated), assistantEl, '', this);
-          this.wireInternalLinks(assistantEl);
-        }
-        if (pendingQueries.length > 0) {
-          assistantEl.dataset.queries = JSON.stringify(pendingQueries);
-        }
-        this.scrollToBottom();
-
-        opts.onTurnDone({ sessionId, clean, accumulated, pendingQueries, responseGroupEl, pendingPermissionRequest, unlock });
-      },
-    });
-
-    proc.on('error', (err) => {
-      statusEl.remove();
-      assistantEl.setText(`Process error: ${err.message}`);
-      unlock();
-    });
+      toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '',
+      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0,
+      unlock, isInjectTurn: true,
+    };
+    this.coordinator.send(injectPrompt);
   }
 
   /**
@@ -1965,9 +1865,9 @@ export class ClaudeView extends ItemView {
         name: 'Export session',
         description: 'Save this session to your vault',
         action: () => {
-          if (!this.currentSessionFileId) { new Notice('No active session to export.'); return; }
+          if (!this.coordinator.sessionFileId) { new Notice('No active session to export.'); return; }
           const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir);
-          const session = sessions.find(s => s.id === this.currentSessionFileId);
+          const session = sessions.find(s => s.id === this.coordinator.sessionFileId);
           if (session) void this.exportSessionToVault(session);
           else new Notice('Session not found.');
         },
