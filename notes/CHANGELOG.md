@@ -1,5 +1,12 @@
 # Changelog
 
+<!-- PENDING — add to next release-please PR manually:
+  Bug Fixes:
+  * @-mention dropdown now includes all vault file types by default (`*`); extensionless files
+    (e.g. LICENSE) are now matchable via trailing comma; setting description updated.
+    (buried in refactor commit a6aec10 — PR #205)
+-->
+
 ## [2.14.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.13.0...2.14.0) (2026-05-07)
 
 
