@@ -20,7 +20,7 @@ Open **Settings → ObsidiBot** to configure:
 | **Enable debug log**               | On                                                   | Write a debug log file. See [Troubleshooting](./troubleshooting#logging).                                                                                            |
 | **Log file path**                  | `.obsidian/plugins/obsidibot/obsidibot-debug.log`    | Vault-relative path for the log file. Defaults to the plugin folder so it stays out of your vault and git history.                                                   |
 | **Log verbosity**                  | Normal                                               | **Normal** logs session events and errors. **Verbose** adds raw stream data and token breakdowns.                                                                    |
-| **@-mention file types**           | `md, pdf, fountain, txt`                             | Comma-separated file extensions included in the `@` autocomplete dropdown.                                                                                           |
+| **@-mention file types**           | `*` (all vault files)                                | Comma-separated extensions for the `@` autocomplete dropdown. `*` includes all vault files. To restrict, list extensions explicitly (e.g. `md, pdf, txt`). Add a trailing comma to also match files with no extension (e.g. `md, txt,`). |
 | **Inject split-pane files**        | On                                                   | When in split-pane view, include all visible file paths as active note context.                                                                                      |
 
 ## Session storage location

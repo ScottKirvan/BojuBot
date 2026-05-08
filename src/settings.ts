@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   logEnabled: false,
   logFilePath: '',
   logVerbosity: 'normal',
-  atMentionExtensions: 'md, canvas, pdf, fountain, txt',
+  atMentionExtensions: '*',
   injectSplitPaneFiles: true,
   injectStackedTabFiles: false,
   exportFolder: 'ObsidiBot Exports',
@@ -147,7 +147,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('@-mention file types')
       // eslint-disable-next-line obsidianmd/ui/sentence-case
-      .setDesc('Comma-separated extensions to include in @-mention search (e.g. md, pdf, fountain, txt).')
+      .setDesc('Comma-separated extensions for @-mention search (e.g. md, pdf, txt). Use * to match all file types. Add a trailing comma to also include files with no extension.')
       .addText((text) =>
         text
           // eslint-disable-next-line obsidianmd/ui/sentence-case
