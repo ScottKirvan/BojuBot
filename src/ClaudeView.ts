@@ -12,7 +12,7 @@ import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal, SlashParam } from './modals/SlashParamModal';
 import { canvasToText } from './utils/canvasParser';
 import { spawn } from 'child_process';
-import { writeFileSync, mkdirSync, existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import type ObsidiBotPlugin from '../main';
 import { spawnClaude, parseStreamOutput, killProcess, findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
@@ -39,6 +39,7 @@ import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
 import { AboutModal } from './modals/AboutModal';
 import { TokenGauge } from './TokenGauge';
+import { AttachmentHandler, PendingContext } from './AttachmentHandler';
 
 export const VIEW_TYPE_CLAUDE = 'obsidibot-chat';
 
@@ -105,7 +106,7 @@ export class ClaudeView extends ItemView {
   private activeProc: ReturnType<typeof spawnClaude> | null = null;
   private activeSlashMenu: SlashMenu | null = null;
   private inputAreaEl: HTMLElement;
-  private pendingContexts: Array<{ text: string; source: string; pinned: boolean; type?: 'text' | 'url' | 'image' | 'pdf' }> = [];
+  private attachmentHandler: AttachmentHandler;
   private pendingContextZone: HTMLElement;
   /** Overrides settings.permissionMode for the current session only. Cleared on new session. */
   private sessionPermissionOverride: PermissionMode | null = null;
@@ -129,6 +130,12 @@ export class ClaudeView extends ItemView {
       getVaultRoot: () => this.plugin.getVaultRoot(),
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.sessionPermissionOverride ?? this.plugin.settings.permissionMode,
+    });
+    this.attachmentHandler = new AttachmentHandler({
+      getVaultRoot: () => this.plugin.getVaultRoot(),
+      getConfigDir: () => this.app.vault.configDir,
+      getCanvasMaxChars: () => this.plugin.settings.canvasMaxChars,
+      focusInput: () => this.inputEl?.focus(),
     });
   }
 
@@ -193,9 +200,9 @@ export class ClaudeView extends ItemView {
     this.attachPopoverEl = inputArea.createDiv({ cls: 'obsidibot-attach-popover' });
     this.attachPopoverEl.hide();
     const attachFileBtn = this.attachPopoverEl.createEl('button', { cls: 'obsidibot-attach-option', text: '📄  Attach file' });
-    attachFileBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.closeAttachPopover(); this.openFilePicker(); });
+    attachFileBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.closeAttachPopover(); this.attachmentHandler.openFilePicker(); });
     const attachUrlBtn = this.attachPopoverEl.createEl('button', { cls: 'obsidibot-attach-option', text: '🔗  URL' });
-    attachUrlBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.closeAttachPopover(); new AttachUrlModal(this.app, (url) => this.attachUrl(url)).open(); });
+    attachUrlBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.closeAttachPopover(); new AttachUrlModal(this.app, (url) => this.attachmentHandler.attachUrl(url)).open(); });
     const attachAtBtn = this.attachPopoverEl.createEl('button', { cls: 'obsidibot-attach-option', text: '@ add note' });
     attachAtBtn.addEventListener('mousedown', (e) => {
       e.preventDefault(); this.closeAttachPopover();
@@ -206,7 +213,7 @@ export class ClaudeView extends ItemView {
     });
 
     this.pendingContextZone = inputArea.createDiv({ cls: 'obsidibot-pending-context' });
-    this.pendingContextZone.hide();
+    this.attachmentHandler.build(this.pendingContextZone);
 
     this.inputEl = inputArea.createEl('textarea', {
       cls: 'obsidibot-input',
@@ -312,7 +319,7 @@ export class ClaudeView extends ItemView {
     });
 
     this.inputEl.addEventListener('paste', (e: ClipboardEvent) => {
-      void this.handlePaste(e);
+      void this.attachmentHandler.handlePaste(e);
     });
 
     root.addEventListener('dragover', (e: DragEvent) => {
@@ -329,7 +336,7 @@ export class ClaudeView extends ItemView {
       root.classList.remove('obsidibot-drag-over');
       if (!e.dataTransfer?.files.length) return;
       e.preventDefault();
-      void this.handleDroppedFiles(e.dataTransfer.files);
+      void this.attachmentHandler.handleDroppedFiles(e.dataTransfer.files);
     });
 
     // If Claude binary is missing, show setup guide and stop here
@@ -440,8 +447,7 @@ export class ClaudeView extends ItemView {
     this.tokenGauge.reset();
     this.currentUserLabel = 'User';
     this.currentAssistantLabel = 'ObsidiBot';
-    this.pendingContexts = [];
-    this.renderContextZone();
+    this.attachmentHandler.reset();
     const vaultRoot = this.plugin.getVaultRoot();
     const now = new Date().toISOString();
     const sessionId = now.replace(/[:.]/g, '-');
@@ -680,9 +686,7 @@ export class ClaudeView extends ItemView {
   }
 
   injectSelectionContext(selection: string, sourceName: string) {
-    this.pendingContexts.push({ text: selection, source: sourceName, pinned: false });
-    this.renderContextZone();
-    this.inputEl.focus();
+    this.attachmentHandler.injectSelectionContext(selection, sourceName);
   }
 
   injectAllowlistUpdate(newAllowlist: string[]) {
@@ -831,11 +835,11 @@ export class ClaudeView extends ItemView {
     this.inputDraft = '';
     this.inputEl.value = '';
     this.setSendState(true);
-    // Capture manually-added contexts now (before pendingContexts is cleared after send)
+    // Capture manually-added contexts now (before clearNonPinned after send)
     // and convert to InjectedContext for badge display in the message bubble.
-    const liveContextBadges: InjectedContext[] = this.pendingContexts
-      .filter(c => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text')
-      .map(c => {
+    const liveContextBadges: InjectedContext[] = this.attachmentHandler.getContexts()
+      .filter((c: PendingContext) => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text')
+      .map((c: PendingContext) => {
         if (c.type === 'url')   return { type: 'url' as const,        url: c.text };
         if (c.type === 'image') return { type: 'image' as const,      source: c.source, path: c.text };
         if (c.type === 'pdf')   return { type: 'pdf' as const,        source: c.source, path: c.text };
@@ -888,9 +892,10 @@ export class ClaudeView extends ItemView {
     }
 
     let finalPrompt = prompt;
-    if (this.pendingContexts.length > 0) {
-      const contextBlock = this.pendingContexts
-        .map(c => {
+    const pendingContexts = this.attachmentHandler.getContexts();
+    if (pendingContexts.length > 0) {
+      const contextBlock = pendingContexts
+        .map((c: PendingContext) => {
           if (c.type === 'url') return `<obsidibot-context type="url" url="${escapeAttr(c.text)}"></obsidibot-context>`;
           if (c.type === 'image') return `<obsidibot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</obsidibot-context>`;
           if (c.type === 'pdf') return `<obsidibot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</obsidibot-context>`;
@@ -898,8 +903,7 @@ export class ClaudeView extends ItemView {
         })
         .join('\n\n');
       finalPrompt = `${contextBlock}\n\n${prompt}`;
-      this.pendingContexts = this.pendingContexts.filter(c => c.pinned);
-      this.renderContextZone();
+      this.attachmentHandler.clearNonPinned();
     }
 
     if (isNewSession) {
@@ -1541,34 +1545,6 @@ export class ClaudeView extends ItemView {
     this.atDropdownIndex = -1;
   }
 
-  private renderContextZone() {
-    const zone = this.pendingContextZone;
-    zone.empty();
-    if (this.pendingContexts.length === 0) { zone.hide(); return; }
-    zone.show();
-    for (const entry of this.pendingContexts) {
-      const row = zone.createDiv({ cls: 'obsidibot-pending-context-row' + (entry.pinned ? ' obsidibot-context-pinned' : '') });
-      const preview = entry.text.length > 80 ? entry.text.substring(0, 80) + '…' : entry.text;
-      const iconName = entry.type === 'image' ? 'image' : entry.type === 'pdf' ? 'file-text' : entry.type === 'url' ? 'link' : 'paperclip';
-      const iconEl = row.createSpan({ cls: 'obsidibot-pending-context-icon' });
-      setIcon(iconEl, iconName);
-      row.createSpan({ cls: 'obsidibot-pending-context-label', text: `${entry.source}: ` });
-      if (entry.type !== 'image' && entry.type !== 'pdf') {
-        row.createSpan({ cls: 'obsidibot-pending-context-preview', text: preview });
-      }
-      const pinBtn = row.createEl('button', { cls: 'obsidibot-context-pin' });
-      setIcon(pinBtn, entry.pinned ? 'pin-off' : 'pin');
-      pinBtn.title = entry.pinned ? 'Unpin (remove after send)' : 'Pin (keep after send)';
-      pinBtn.addEventListener('click', () => { entry.pinned = !entry.pinned; this.renderContextZone(); });
-      const clearBtn = row.createEl('button', { cls: 'obsidibot-context-clear', text: '×' });
-      clearBtn.title = 'Remove';
-      clearBtn.addEventListener('click', () => {
-        this.pendingContexts.splice(this.pendingContexts.indexOf(entry), 1);
-        this.renderContextZone();
-      });
-    }
-  }
-
   private scrollToBottom() {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
   }
@@ -1598,132 +1574,6 @@ export class ClaudeView extends ItemView {
       document.removeEventListener('click', this.attachClickOutside);
       this.attachClickOutside = null;
     }
-  }
-
-  private openFilePicker() {
-    const TEXT_EXTS = new Set(['txt', 'md', 'fountain', 'js', 'ts', 'jsx', 'tsx', 'json', 'canvas', 'css', 'html', 'xml', 'csv', 'yaml', 'yml', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'sh', 'bat', 'ps1']);
-    const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'heic', 'heif', 'avif']);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.onchange = async () => {
-      const f = input.files?.[0];
-      if (!f) return;
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
-        // file.path is undefined in Obsidian's sandboxed renderer — read binary
-        // data and save to vault tmp so Claude always gets a readable path.
-        const filePath = this.saveBinaryToTmp(f.name, await f.arrayBuffer());
-        const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-        this.pendingContexts.push({ text: filePath, source: f.name, pinned: false, type });
-      } else {
-        let text = TEXT_EXTS.has(ext) ? await f.text() : f.name;
-        if (ext === 'canvas') text = canvasToText(f.name, text, this.plugin.settings.canvasMaxChars);
-        this.pendingContexts.push({ text, source: f.name, pinned: false });
-      }
-      this.renderContextZone();
-      this.inputEl.focus();
-    };
-    input.click();
-  }
-
-  private async handlePaste(e: ClipboardEvent): Promise<void> {
-    const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'heic', 'heif', 'avif']);
-
-    // Use Electron's clipboard API to get real file paths when a file was
-    // copied from Explorer. Works even with context isolation unlike file.path.
-    try {
-      // Electron is only accessible via require() in Obsidian's renderer process
-      const { clipboard } = require('electron') as { clipboard: { readFilePaths(): string[] } };
-      const filePaths = clipboard.readFilePaths();
-      if (filePaths.length > 0) {
-        let handled = false;
-        for (const filePath of filePaths) {
-          const name = filePath.replace(/\\/g, '/').split('/').pop() ?? filePath;
-          const ext = name.split('.').pop()?.toLowerCase() ?? '';
-          if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
-            e.preventDefault();
-            const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-            this.pendingContexts.push({ text: filePath, source: name, pinned: false, type });
-            handled = true;
-          }
-        }
-        if (handled) { this.renderContextZone(); return; }
-      }
-    } catch { /* Electron API unavailable — fall through */ }
-
-    // clipboardData.files has the real filename even when readFilePaths() fails.
-    // file.path is unavailable (context isolation) so save binary data to tmp.
-    // Always generate a unique paste name — Windows names every screenshot "image.jpg".
-    const files = e.clipboardData?.files;
-    if (files?.length) {
-      for (const f of Array.from(files)) {
-        const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-        if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
-          e.preventDefault();
-          const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-          const uniqueName = `paste-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
-          const filePath = this.saveBinaryToTmp(uniqueName, await f.arrayBuffer());
-          this.pendingContexts.push({ text: filePath, source: uniqueName, pinned: false, type });
-          this.renderContextZone();
-          return;
-        }
-      }
-    }
-
-    // Last resort: raw image data from clipboard (screenshots have no filename)
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const blob = item.getAsFile();
-        if (!blob) continue;
-        const ext = item.type.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png';
-        const filename = `paste-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
-        const filePath = this.saveBinaryToTmp(filename, await blob.arrayBuffer());
-        this.pendingContexts.push({ text: filePath, source: filename, pinned: false, type: 'image' });
-        this.renderContextZone();
-        return;
-      }
-    }
-  }
-
-  private async handleDroppedFiles(files: FileList): Promise<void> {
-    const TEXT_EXTS = new Set(['txt', 'md', 'fountain', 'js', 'ts', 'jsx', 'tsx', 'json', 'canvas', 'css', 'html', 'xml', 'csv', 'yaml', 'yml', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'sh', 'bat', 'ps1']);
-    const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'heic', 'heif', 'avif']);
-    for (const f of Array.from(files)) {
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
-        const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-        const filePath = this.saveBinaryToTmp(f.name, await f.arrayBuffer());
-        this.pendingContexts.push({ text: filePath, source: f.name, pinned: false, type });
-      } else if (TEXT_EXTS.has(ext)) {
-        let text = await f.text();
-        if (ext === 'canvas') text = canvasToText(f.name, text, this.plugin.settings.canvasMaxChars);
-        this.pendingContexts.push({ text, source: f.name, pinned: false });
-      } else {
-        // Unknown binary — pass filename; Claude can attempt to read it
-        this.pendingContexts.push({ text: f.name, source: f.name, pinned: false });
-      }
-    }
-    this.renderContextZone();
-    this.inputEl.focus();
-  }
-
-  private saveBinaryToTmp(filename: string, data: ArrayBuffer): string {
-    const vaultRoot = this.plugin.getVaultRoot();
-    const tmpDir = join(vaultRoot, this.app.vault.configDir, 'plugins', 'obsidibot', 'tmp');
-    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
-    const filePath = join(tmpDir, filename);
-    writeFileSync(filePath, Buffer.from(data));
-    return filePath;
-  }
-
-  private attachUrl(url: string) {
-    const label = url.replace(/^https?:\/\//, '').split('/')[0];
-    this.pendingContexts.push({ text: url, source: label, pinned: false, type: 'url' });
-    this.renderContextZone();
-    this.inputEl.focus();
   }
 
   /** Render a vault query result card inside a response group (mode: show). */
@@ -2203,9 +2053,8 @@ export class ClaudeView extends ItemView {
       if (params?.length) {
         new SlashParamModal(this.app, name, params, body, autorun, (result, shouldRun, attachments) => {
           for (const att of attachments) {
-            this.pendingContexts.push({ text: att.text, source: att.source, pinned: false });
+            this.attachmentHandler.add({ text: att.text, source: att.source, pinned: false });
           }
-          if (attachments.length) this.renderContextZone();
           if (shouldRun) {
             this.inputEl.value = result;
             this.inputEl.dispatchEvent(new Event('input'));
@@ -2272,11 +2121,9 @@ export class ClaudeView extends ItemView {
               if (!this.inputEl) return;
               if (params?.length) {
                 new SlashParamModal(this.app, name, params, body, autorun, (result, shouldRun, attachments) => {
-                  // Add note attachments to pending context (shown as badges, like @-mention)
                   for (const att of attachments) {
-                    this.pendingContexts.push({ text: att.text, source: att.source, pinned: false });
+                    this.attachmentHandler.add({ text: att.text, source: att.source, pinned: false });
                   }
-                  if (attachments.length) this.renderContextZone();
 
                   if (shouldRun) {
                     this.inputEl.value = result;
