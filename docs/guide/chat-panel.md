@@ -14,7 +14,7 @@ Attached items appear in a bar above the input field. Click **×** to remove an 
 
 Type `@` anywhere in the input to open an autocomplete dropdown. The currently open note is pre-selected — press **Enter** immediately to attach it. Start typing to filter by name. Press **↑ / ↓** to navigate, **Enter** or **Tab** to select, **Escape** to dismiss. The full contents of the selected note are prepended to your message.
 
-Non-Markdown files (`.fountain`, `.txt`, etc.) show their extension in the dropdown. The file types included are configurable — see **@-mention file types** in [Settings](./settings).
+Non-Markdown files show their extension in the dropdown. By default all vault files are included. To restrict to specific types, change **@-mention file types** in [Settings](./settings.md).
 
 ### Attachment button (paperclip)
 

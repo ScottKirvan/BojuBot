@@ -10,7 +10,7 @@ interface AppInternal {
 }
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal, SlashParam } from './modals/SlashParamModal';
-import { canvasToText } from './utils/canvasParser';
+import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
@@ -112,12 +112,10 @@ export class ClaudeView extends ItemView {
   private sessionPermissionOverride: PermissionMode | null = null;
   /** Pending system message to prepend to the next continuing-session turn (allowlist update, context refresh, etc.). */
   private pendingSystemMessage: string | null = null;
-  private atDropdownEl: HTMLElement;
-  private atDropdownItems: TFile[] = [];
+  private atMentionController: AtMentionController;
   private tokenGauge: TokenGauge;
   private attachPopoverEl: HTMLElement;
   private permissionIconEl!: HTMLButtonElement;
-  private atDropdownIndex = -1;
   private currentUserLabel = 'User';
   private currentAssistantLabel = 'ObsidiBot';
 
@@ -136,6 +134,14 @@ export class ClaudeView extends ItemView {
       getConfigDir: () => this.app.vault.configDir,
       getCanvasMaxChars: () => this.plugin.settings.canvasMaxChars,
       focusInput: () => this.inputEl?.focus(),
+    });
+    this.atMentionController = new AtMentionController({
+      getAtMentionExtensions: () => this.plugin.settings.atMentionExtensions,
+      getCanvasMaxChars: () => this.plugin.settings.canvasMaxChars,
+      getVault: () => this.app.vault,
+      getActiveFile: () => this.app.workspace.getActiveFile(),
+      getInputEl: () => this.inputEl,
+      injectSelectionContext: (text, source) => this.injectSelectionContext(text, source),
     });
   }
 
@@ -194,8 +200,9 @@ export class ClaudeView extends ItemView {
     const inputArea = root.createDiv({ cls: 'obsidibot-input-area' });
     this.inputAreaEl = inputArea;
 
-    this.atDropdownEl = inputArea.createDiv({ cls: 'obsidibot-at-dropdown' });
-    this.atDropdownEl.hide();
+    const atDropdownEl = inputArea.createDiv({ cls: 'obsidibot-at-dropdown' });
+    atDropdownEl.hide();
+    this.atMentionController.build(atDropdownEl);
 
     this.attachPopoverEl = inputArea.createDiv({ cls: 'obsidibot-attach-popover' });
     this.attachPopoverEl.hide();
@@ -255,13 +262,12 @@ export class ClaudeView extends ItemView {
       }
     });
     this.inputEl.addEventListener('input', () => {
-      this.handleAtMention();
+      this.atMentionController.handleInput();
       this.handleSlashTrigger();
     });
 
     this.inputEl.addEventListener('blur', () => {
-      // Delay so mousedown on a dropdown item fires before the dropdown hides
-      setTimeout(() => this.atDropdownHide(), 150);
+      this.atMentionController.handleBlur();
     });
 
     this.inputEl.addEventListener('keydown', (e) => {
@@ -273,12 +279,7 @@ export class ClaudeView extends ItemView {
       }
 
       // Dropdown navigation takes priority over everything else
-      if (this.atDropdownEl.style.display !== 'none') {
-        if (e.key === 'ArrowDown') { e.preventDefault(); this.atDropdownNav(1); return; }
-        if (e.key === 'ArrowUp') { e.preventDefault(); this.atDropdownNav(-1); return; }
-        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); void this.atDropdownSelect(); return; }
-        if (e.key === 'Escape') { this.atDropdownHide(); return; }
-      }
+      if (this.atMentionController.handleKeyDown(e)) return;
 
       if (e.key === 'Enter' && !e.shiftKey && this.plugin.settings.sendOnEnter) {
         e.preventDefault();
@@ -1458,91 +1459,6 @@ export class ClaudeView extends ItemView {
         setTimeout(() => copyBtn.setText('Copy'), 2000);
       });
     });
-  }
-
-  private handleAtMention() {
-    const { value, selectionStart } = this.inputEl;
-    if (selectionStart === null) { this.atDropdownHide(); return; }
-
-    const before = value.substring(0, selectionStart);
-    const match = before.match(/@(\S*)$/);
-    if (!match) { this.atDropdownHide(); return; }
-
-    const textExts = new Set(
-      this.plugin.settings.atMentionExtensions.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-    );
-    const query = match[1].toLowerCase();
-    const activeFile = this.app.workspace.getActiveFile();
-    const files = this.app.vault.getFiles()
-      .filter(f => textExts.has(f.extension) && (!query || f.basename.toLowerCase().includes(query)))
-      .sort((a, b) => {
-        // Active note always sorts first when no query is typed
-        if (!query) {
-          if (a === activeFile) return -1;
-          if (b === activeFile) return 1;
-        }
-        return a.basename.localeCompare(b.basename);
-      })
-      .slice(0, 8);
-
-    if (files.length === 0) { this.atDropdownHide(); return; }
-
-    this.atDropdownItems = files;
-    if (this.atDropdownIndex < 0 || this.atDropdownIndex >= files.length) {
-      this.atDropdownIndex = 0;
-    }
-    this.atDropdownRender();
-  }
-
-  private atDropdownRender() {
-    const el = this.atDropdownEl;
-    el.empty();
-    el.show();
-    this.atDropdownItems.forEach((file, i) => {
-      const item = el.createDiv({ cls: 'obsidibot-at-item' + (i === this.atDropdownIndex ? ' obsidibot-at-item-active' : '') });
-      const nameEl = item.createSpan({ cls: 'obsidibot-at-item-name', text: file.basename });
-      if (file.extension !== 'md') nameEl.createSpan({ cls: 'obsidibot-at-item-ext', text: '.' + file.extension });
-      const parentPath = file.parent?.path;
-      if (parentPath && parentPath !== '/') {
-        item.createSpan({ cls: 'obsidibot-at-item-path', text: parentPath });
-      }
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault(); // prevent textarea blur before select fires
-        this.atDropdownIndex = i;
-        void this.atDropdownSelect();
-      });
-    });
-  }
-
-  private atDropdownNav(dir: number) {
-    this.atDropdownIndex = Math.max(0, Math.min(this.atDropdownItems.length - 1, this.atDropdownIndex + dir));
-    this.atDropdownRender();
-  }
-
-  private async atDropdownSelect() {
-    const file = this.atDropdownItems[this.atDropdownIndex];
-    if (!file) return;
-    this.atDropdownHide();
-
-    // Remove @query from textarea and restore cursor
-    const { value, selectionStart } = this.inputEl;
-    if (selectionStart !== null) {
-      const before = value.substring(0, selectionStart);
-      const after = value.substring(selectionStart);
-      const newBefore = before.replace(/@\S*$/, '');
-      this.inputEl.value = newBefore + after;
-      this.inputEl.setSelectionRange(newBefore.length, newBefore.length);
-    }
-
-    const raw = await this.app.vault.read(file);
-    const content = file.extension === 'canvas' ? canvasToText(file.name, raw, this.plugin.settings.canvasMaxChars) : raw;
-    this.injectSelectionContext(content, file.basename);
-  }
-
-  private atDropdownHide() {
-    this.atDropdownEl.hide();
-    this.atDropdownItems = [];
-    this.atDropdownIndex = -1;
   }
 
   private scrollToBottom() {
