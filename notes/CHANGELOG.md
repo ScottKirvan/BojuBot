@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [2.14.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.14.0...2.14.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* @-mention dropdown now includes all vault file types by default (`*`); ([c2809ff](https://github.com/ScottKirvan/ObsidiBot/commit/c2809ff8984a4baa38329102c742863d4e4faf47))
+
 ## [2.14.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.13.0...2.14.0) (2026-05-07)
 
 
