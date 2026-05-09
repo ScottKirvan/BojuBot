@@ -9,15 +9,7 @@ import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
 import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
 import { ContextGenerationModal } from './src/ContextGenerationModal';
-
-/** Minimal shape of Obsidian's private settings/commands APIs. */
-interface AppInternal {
-  setting: { open(): void; openTabById(id: string): void };
-  commands: {
-    commands: Record<string, { id: string; name: string }>;
-    removeCommand(id: string): void;
-  };
-}
+import { AppInternal } from './src/obsidianInternal';
 
 export default class ObsidiBotPlugin extends Plugin {
   settings: ObsidiBotSettings;

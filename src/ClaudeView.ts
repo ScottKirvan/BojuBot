@@ -3,11 +3,7 @@ import spriteUrl from '../assets/media/ObsidiBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import welcomeData from './welcome.json';
 
-/** Minimal shape of Obsidian's private settings/commands APIs. */
-interface AppInternal {
-  setting: { open(): void; openTabById(id: string): void };
-  commands: { commands: Record<string, { id: string; name: string }> };
-}
+import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal, SlashParam } from './modals/SlashParamModal';
 import { AtMentionController } from './AtMentionController';
