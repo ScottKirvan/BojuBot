@@ -1,15 +1,14 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App, parseYaml } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
 import spriteUrl from '../assets/media/ObsidiBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import welcomeData from './welcome.json';
 
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
-import { SlashParamModal, SlashParam } from './modals/SlashParamModal';
+import { SlashParamModal } from './modals/SlashParamModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join, isAbsolute } from 'path';
+import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type ObsidiBotPlugin from '../main';
 import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
@@ -1703,175 +1702,61 @@ export class ClaudeView extends ItemView {
   }
 
   private resolveCommandsFolder(): string {
-    const vaultRoot = this.plugin.getVaultRoot();
-    const custom = this.plugin.settings.commandsFolder;
-    if (custom?.trim()) {
-      const p = custom.trim();
-      return isAbsolute(p) ? p : join(vaultRoot, p);
-    }
-    return join(vaultRoot, '_ObsidiBot Skills');
+    return resolveSkillsFolder(this.plugin.getVaultRoot(), this.plugin.settings.commandsFolder ?? '');
   }
 
-  /** Execute a template file by absolute path — used by Ctrl+P registered commands. */
+  /** Execute a skill file by absolute path — used by Ctrl+P registered commands. */
   executeSkill(filePath: string) {
     if (!this.inputEl) return;
     try {
-      const raw = readFileSync(filePath, 'utf8');
-      let body = raw;
-      let params: SlashParam[] | undefined;
-      let autorun = false;
-      const pathParts = filePath.split(/[\\/]/);
-      const fileName = pathParts[pathParts.length - 1] ?? '';
-      const name = fileName === 'SKILL.md'
-        ? (pathParts[pathParts.length - 2] ?? 'Command')
-        : fileName.replace(/\.md$/, '') || 'Command';
-
-      const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-      if (fmMatch) {
-        body = fmMatch[2].trim();
-        try {
-          const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
-          if (fm.autorun === true) autorun = true;
-          if (Array.isArray(fm.params)) {
-            params = fm.params as SlashParam[];
-          } else if (Array.isArray(fm.arguments)) {
-            const argHint = typeof fm['argument-hint'] === 'string' ? fm['argument-hint'] : '';
-            params = (fm.arguments as string[]).map((argName, i) => ({
-              id: String(argName),
-              type: 'input' as const,
-              label: String(argName),
-              placeholder: i === 0 ? argHint : '',
-            }));
-          }
-        } catch { /* use defaults */ }
-      }
-
-      if (params?.length) {
-        new SlashParamModal(this.app, name, params, body, autorun, (result, shouldRun, attachments) => {
-          for (const att of attachments) {
-            this.attachmentHandler.add({ text: att.text, source: att.source, pinned: false });
-          }
-          if (shouldRun) {
-            this.inputEl.value = result;
-            this.inputEl.dispatchEvent(new Event('input'));
-            this.appendMessage('system', `Running: ${name}`);
-            this.suppressNextUserBubble = true;
-            void this.handleSend();
-          } else {
-            this.inputEl.value = result;
-            this.inputEl.dispatchEvent(new Event('input'));
-            this.inputEl.focus();
-            this.inputEl.setSelectionRange(result.length, result.length);
-          }
-        }).open();
-      } else if (autorun) {
-        this.inputEl.value = body;
-        this.inputEl.dispatchEvent(new Event('input'));
-        this.appendMessage('system', `Running: ${name}`);
-        this.suppressNextUserBubble = true;
-        void this.handleSend();
-      } else {
-        const current = this.inputEl.value;
-        const insert = current ? current + '\n\n' + body : body;
-        this.inputEl.value = insert;
-        this.inputEl.dispatchEvent(new Event('input'));
-        this.inputEl.focus();
-        this.inputEl.setSelectionRange(insert.length, insert.length);
-      }
+      this._executeSkillDef(parseSkillFile(filePath, nameFromPath(filePath)));
     } catch { /* file unreadable */ }
   }
 
-  private loadSkillCommands(): SlashCommand[] {
-    const folder = this.resolveCommandsFolder();
-    if (!existsSync(folder)) return [];
-    const commands: SlashCommand[] = [];
-    try {
-      const skillEntries: { filePath: string; name: string }[] = [];
-      for (const entry of readdirSync(folder, { withFileTypes: true })) {
-        if (entry.isFile() && entry.name.endsWith('.md')) {
-          skillEntries.push({ filePath: join(folder, entry.name), name: entry.name.replace(/\.md$/, '') });
-        } else if (entry.isDirectory()) {
-          const skillMd = join(folder, entry.name, 'SKILL.md');
-          if (existsSync(skillMd)) {
-            skillEntries.push({ filePath: skillMd, name: entry.name });
-          }
+  private _executeSkillDef(skill: SkillDef): void {
+    const { name, body, params, autorun } = skill;
+    if (!this.inputEl) return;
+    if (params?.length) {
+      new SlashParamModal(this.app, name, params, body, autorun, (result, shouldRun, attachments) => {
+        for (const att of attachments) {
+          this.attachmentHandler.add({ text: att.text, source: att.source, pinned: false });
         }
-      }
-      for (const { filePath, name } of skillEntries) {
-        try {
-          const raw = readFileSync(filePath, 'utf8');
-          let body = raw;
-          let category = 'Prompts';
-          let description: string | undefined;
-          let params: SlashParam[] | undefined;
-          let autorun = false;
+        if (shouldRun) {
+          this.inputEl.value = result;
+          this.inputEl.dispatchEvent(new Event('input'));
+          this.appendMessage('system', `Running: ${name}`);
+          this.suppressNextUserBubble = true;
+          void this.handleSend();
+        } else {
+          this.inputEl.value = result;
+          this.inputEl.dispatchEvent(new Event('input'));
+          this.inputEl.focus();
+          this.inputEl.setSelectionRange(result.length, result.length);
+        }
+      }).open();
+    } else if (autorun) {
+      this.inputEl.value = body;
+      this.inputEl.dispatchEvent(new Event('input'));
+      this.appendMessage('system', `Running: ${name}`);
+      this.suppressNextUserBubble = true;
+      void this.handleSend();
+    } else {
+      const current = this.inputEl.value;
+      const insert = current ? current + '\n\n' + body : body;
+      this.inputEl.value = insert;
+      this.inputEl.dispatchEvent(new Event('input'));
+      this.inputEl.focus();
+      this.inputEl.setSelectionRange(insert.length, insert.length);
+    }
+  }
 
-          const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-          if (fmMatch) {
-            body = fmMatch[2].trim();
-            try {
-              const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
-              if (typeof fm.category === 'string') category = fm.category;
-              if (typeof fm.description === 'string') description = fm.description;
-              if (fm.autorun === true) autorun = true;
-              if (Array.isArray(fm.params)) {
-                params = fm.params as SlashParam[];
-              } else if (Array.isArray(fm.arguments)) {
-                const argHint = typeof fm['argument-hint'] === 'string' ? fm['argument-hint'] : '';
-                params = (fm.arguments as string[]).map((argName, i) => ({
-                  id: String(argName),
-                  type: 'input' as const,
-                  label: String(argName),
-                  placeholder: i === 0 ? argHint : '',
-                }));
-              }
-            } catch { /* malformed frontmatter — use defaults */ }
-          }
-          commands.push({
-            category,
-            name,
-            description,
-            action: () => {
-              if (!this.inputEl) return;
-              if (params?.length) {
-                new SlashParamModal(this.app, name, params, body, autorun, (result, shouldRun, attachments) => {
-                  for (const att of attachments) {
-                    this.attachmentHandler.add({ text: att.text, source: att.source, pinned: false });
-                  }
-
-                  if (shouldRun) {
-                    this.inputEl.value = result;
-                    this.inputEl.dispatchEvent(new Event('input'));
-                    this.appendMessage('system', `Running: ${name}`);
-                    this.suppressNextUserBubble = true;
-                    void this.handleSend();
-                  } else {
-                    this.inputEl.value = result;
-                    this.inputEl.dispatchEvent(new Event('input'));
-                    this.inputEl.focus();
-                    this.inputEl.setSelectionRange(result.length, result.length);
-                  }
-                }).open();
-              } else if (autorun) {
-                this.inputEl.value = body;
-                this.inputEl.dispatchEvent(new Event('input'));
-                this.appendMessage('system', `Running: ${name}`);
-                this.suppressNextUserBubble = true;
-                void this.handleSend();
-              } else {
-                const current = this.inputEl.value;
-                const insert = current ? current + '\n\n' + body : body;
-                this.inputEl.value = insert;
-                this.inputEl.dispatchEvent(new Event('input'));
-                this.inputEl.focus();
-                this.inputEl.setSelectionRange(insert.length, insert.length);
-              }
-            },
-          });
-        } catch { /* skip malformed files */ }
-      }
-    } catch { /* folder unreadable */ }
-    return commands;
+  private loadSkillCommands(): SlashCommand[] {
+    return loadSkills(this.resolveCommandsFolder()).map(skill => ({
+      category: skill.category,
+      name: skill.name,
+      description: skill.description,
+      action: () => this._executeSkillDef(skill),
+    }));
   }
 
   private buildCommands(): SlashCommand[] {

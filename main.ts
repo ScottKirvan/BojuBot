@@ -1,6 +1,6 @@
 import { Plugin, Notice, addIcon } from 'obsidian';
-import { writeFileSync, existsSync, readdirSync } from 'fs';
-import { join, isAbsolute } from 'path';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { ObsidiBotSettings, DEFAULT_SETTINGS, ObsidiBotSettingsTab } from './src/settings';
 import { findClaudeBinary, PermissionMode } from './src/ClaudeProcess';
@@ -10,6 +10,7 @@ import { AboutModal } from './src/modals/AboutModal';
 import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
 import { ContextGenerationModal } from './src/ContextGenerationModal';
 import { AppInternal } from './src/obsidianInternal';
+import { resolveSkillsFolder, scanSkillFolder } from './src/SkillLoader';
 
 export default class ObsidiBotPlugin extends Plugin {
   settings: ObsidiBotSettings;
@@ -416,12 +417,7 @@ export default class ObsidiBotPlugin extends Plugin {
   }
 
   private resolveCommandsFolder(): string {
-    const custom = this.settings.commandsFolder;
-    if (custom?.trim()) {
-      const p = custom.trim();
-      return isAbsolute(p) ? p : join(this.getVaultRoot(), p);
-    }
-    return join(this.getVaultRoot(), this.manifest.dir, 'commands');
+    return resolveSkillsFolder(this.getVaultRoot(), this.settings.commandsFolder ?? '');
   }
 
   reloadSkillCommands() {
@@ -435,20 +431,9 @@ export default class ObsidiBotPlugin extends Plugin {
     if (!this.settings.registerSkillsAsCommands) return;
 
     const folder = this.resolveCommandsFolder();
-    if (!existsSync(folder)) return;
 
     try {
-      const skillEntries: { filePath: string; name: string }[] = [];
-      for (const entry of readdirSync(folder, { withFileTypes: true })) {
-        if (entry.isFile() && entry.name.endsWith('.md')) {
-          skillEntries.push({ filePath: join(folder, entry.name), name: entry.name.replace(/\.md$/, '') });
-        } else if (entry.isDirectory()) {
-          const skillMd = join(folder, entry.name, 'SKILL.md');
-          if (existsSync(skillMd)) {
-            skillEntries.push({ filePath: skillMd, name: entry.name });
-          }
-        }
-      }
+      const skillEntries = scanSkillFolder(folder);
       for (const { filePath, name } of skillEntries) {
         const commandId = `skill-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
         const fullId = `obsidibot:${commandId}`;
