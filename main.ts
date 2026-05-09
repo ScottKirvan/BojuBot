@@ -438,10 +438,18 @@ export default class ObsidiBotPlugin extends Plugin {
     if (!existsSync(folder)) return;
 
     try {
-      const files = readdirSync(folder).filter(f => f.endsWith('.md'));
-      for (const file of files) {
-        const filePath = join(folder, file);
-        const name = file.replace(/\.md$/, '');
+      const skillEntries: { filePath: string; name: string }[] = [];
+      for (const entry of readdirSync(folder, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith('.md')) {
+          skillEntries.push({ filePath: join(folder, entry.name), name: entry.name.replace(/\.md$/, '') });
+        } else if (entry.isDirectory()) {
+          const skillMd = join(folder, entry.name, 'SKILL.md');
+          if (existsSync(skillMd)) {
+            skillEntries.push({ filePath: skillMd, name: entry.name });
+          }
+        }
+      }
+      for (const { filePath, name } of skillEntries) {
         const commandId = `skill-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
         const fullId = `obsidibot:${commandId}`;
 
@@ -464,7 +472,7 @@ export default class ObsidiBotPlugin extends Plugin {
 
         this.skillCommandIds.add(fullId);
       }
-      log(`Registered ${files.length} skill(s) in Ctrl+P`);
+      log(`Registered ${skillEntries.length} skill(s) in Ctrl+P`);
     } catch (e) {
       warn('Failed to register skill commands:', e);
     }
