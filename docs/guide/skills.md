@@ -61,7 +61,7 @@ When `params` is defined, ObsidiBot shows a modal form before running the skill.
 | `textarea`   | Multi-line text field                                                                                                         |
 | `dropdown`   | Select from a fixed list of options                                                                                           |
 | `checkboxes` | One or more boolean toggles — result is a comma-separated string                                                              |
-| `note`       | Vault note picker — fuzzy search over all vault notes; injects the **full note content** as an attachment (same as @-mention) |
+| `obsidianmd_note` | Vault note picker — fuzzy search over all vault notes; injects the **full note content** as an attachment (same as @-mention). Alias: `note` (legacy, still supported) |
 
 ### Variable interpolation
 
@@ -170,7 +170,7 @@ description: Summarize any vault note
 autorun: true
 params:
   - id: target_note
-    type: note
+    type: obsidianmd_note
     label: Note to summarize
     validations:
       required: true
@@ -195,7 +195,7 @@ params:
     validations:
       required: true
   - id: context_note
-    type: note
+    type: obsidianmd_note
     label: Relevant design note (optional)
 ---
 You are acting as a senior software engineer working in this vault's codebase.
