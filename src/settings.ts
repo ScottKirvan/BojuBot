@@ -2,10 +2,7 @@ import { App, PluginSettingTab, Setting } from 'obsidian';
 import type ObsidiBotPlugin from '../main';
 import type { PermissionMode } from './ClaudeProcess';
 export type { PermissionMode };
-
-interface AppInternal {
-  commands: { commands: Record<string, { id: string; name: string }> };
-}
+import { AppInternal } from './obsidianInternal';
 
 export interface ObsidiBotSettings {
   binaryPath: string;

@@ -109,7 +109,7 @@ export class SessionCoordinator {
     event: K,
     listener: (...args: SessionCoordinatorEvents[K]) => void,
   ): this {
-    this._emitter.on(event as string, listener as (...args: unknown[]) => void);
+    this._emitter.on(event, listener);
     return this;
   }
 
@@ -117,7 +117,7 @@ export class SessionCoordinator {
     event: K,
     listener: (...args: SessionCoordinatorEvents[K]) => void,
   ): this {
-    this._emitter.off(event as string, listener as (...args: unknown[]) => void);
+    this._emitter.off(event, listener);
     return this;
   }
 
@@ -125,7 +125,7 @@ export class SessionCoordinator {
     event: K,
     ...args: SessionCoordinatorEvents[K]
   ): void {
-    this._emitter.emit(event as string, ...args);
+    this._emitter.emit(event, ...args);
   }
 
   // ── State accessors ────────────────────────────────────────────────────────

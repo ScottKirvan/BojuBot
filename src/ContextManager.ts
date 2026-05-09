@@ -1,8 +1,5 @@
 import { App } from 'obsidian';
-
-interface AppInternal {
-  commands: { commands: Record<string, { id: string; name: string }> };
-}
+import { AppInternal } from './obsidianInternal';
 import { buildVaultTree } from './utils/fileTree';
 import { log, estimateTokens } from './utils/logger';
 import { neutralizeTriggers } from './constants';
