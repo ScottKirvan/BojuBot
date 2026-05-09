@@ -7,6 +7,15 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [2.15.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.15.0...2.15.1) (2026-05-09)
+
+
+### Bug Fixes
+
+* add unit tests for six code review gaps; extract extractActions to testable utility ([aa13159](https://github.com/ScottKirvan/ObsidiBot/commit/aa131595eaabb4eb6907c732e72f9241c346ec1d))
+* remove unused vue dependency ([bfa6ee7](https://github.com/ScottKirvan/ObsidiBot/commit/bfa6ee754bf9571fc38747cdc41e6400ef1cdc71))
+* surface stdin null as explicit error; document protocol freeze and design decisions ([26c860b](https://github.com/ScottKirvan/ObsidiBot/commit/26c860bf73f2062dfc6a30084352ab0377b2ad4b))
+
 ## [2.15.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.14.1...2.15.0) (2026-05-09)
 
 
