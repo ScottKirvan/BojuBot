@@ -339,7 +339,10 @@ export class SessionCoordinator {
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
       log('Placeholder session updated:', placeholderId, '→', sessionId);
     } else if (wasNew && firstUserInput) {
-      // Brand-new session with no pre-created placeholder
+      // Brand-new session with no pre-created placeholder.
+      // In practice this branch is unreachable through the normal UI: startNewSession()
+      // always sets _placeholderSessionId, and loadSession() sets it for new sessions.
+      // This is a defensive guard in case send() is called on an unconfigured coordinator.
       this._sessionId = sessionId;
       this._sessionFileId = sessionId;
       this._sessionTitle = titleFromPrompt(firstUserInput);

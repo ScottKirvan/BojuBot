@@ -144,8 +144,13 @@ export function spawnClaude(opts: SpawnOptions): ChildProcess {
 
   // Write prompt via stdin — bypasses all shell/arg quoting issues.
   // claude --print reads from stdin when no positional prompt arg is given.
-  proc.stdin?.write(opts.prompt, 'utf8');
-  proc.stdin?.end();
+  if (!proc.stdin) {
+    // stdin null means the process failed to open the pipe; throw so the
+    // try/catch in the caller surfaces a real error instead of a silent close.
+    throw new Error('Claude process started with no stdin pipe — cannot send prompt.');
+  }
+  proc.stdin.write(opts.prompt, 'utf8');
+  proc.stdin.end();
 
   return proc;
 }
