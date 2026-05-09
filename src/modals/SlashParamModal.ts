@@ -2,13 +2,19 @@ import { App, FuzzySuggestModal, Modal, TFile } from 'obsidian';
 
 export interface SlashParam {
   id: string;
-  type: 'input' | 'textarea' | 'dropdown' | 'checkboxes' | 'note';
+  /** `obsidianmd_note` is the canonical vault-picker type; `note` is a legacy alias. */
+  type: 'input' | 'textarea' | 'dropdown' | 'checkboxes' | 'obsidianmd_note' | 'note';
   label: string;
   description?: string;
   placeholder?: string;
   options?: string[];
   default?: string;
   validations?: { required?: boolean };
+}
+
+/** True for both the canonical `obsidianmd_note` type and the legacy `note` alias. */
+function isNoteType(type: SlashParam['type']): boolean {
+  return type === 'obsidianmd_note' || type === 'note';
 }
 
 export interface SlashParamAttachment {
@@ -41,7 +47,7 @@ export class SlashParamModal extends Modal {
   ) {
     super(app);
     for (const p of params) {
-      if (p.type !== 'note') this.values[p.id] = p.default ?? '';
+      if (!isNoteType(p.type)) this.values[p.id] = p.default ?? '';
     }
   }
 
@@ -101,7 +107,7 @@ export class SlashParamModal extends Modal {
           });
         }
 
-      } else if (param.type === 'note') {
+      } else if (isNoteType(param.type)) {
         const noteInput = fieldEl.createEl('input', {
           cls: 'obsidibot-param-input obsidibot-param-note-input',
           attr: { type: 'text', placeholder: 'Click to pick a note…', readonly: 'true' },
@@ -133,7 +139,7 @@ export class SlashParamModal extends Modal {
       let valid = true;
       for (const param of this.params) {
         const errEl = errorEls[param.id];
-        const hasValue = param.type === 'note'
+        const hasValue = isNoteType(param.type)
           ? !!this.noteValues[param.id]
           : !!this.values[param.id]?.trim();
         if (param.validations?.required && !hasValue) {
@@ -151,7 +157,7 @@ export class SlashParamModal extends Modal {
       const attachments: SlashParamAttachment[] = [];
 
       for (const param of this.params) {
-        if (param.type === 'note') {
+        if (isNoteType(param.type)) {
           const note = this.noteValues[param.id];
           if (note) attachments.push({ text: note.content, source: note.basename });
           // Remove the {{id}} placeholder from the prompt body
@@ -175,7 +181,7 @@ export class SlashParamModal extends Modal {
   }
 }
 
-/** Fuzzy vault-file picker used by the `note` field type. */
+/** Fuzzy vault-file picker used by the `obsidianmd_note` field type (and legacy `note` alias). */
 class NotePicker extends FuzzySuggestModal<TFile> {
   constructor(app: App, private onChoose: (file: TFile) => Promise<void>) {
     super(app);
