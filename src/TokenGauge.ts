@@ -114,6 +114,12 @@ export class TokenGauge {
     this.confirmEl.classList.remove('is-visible');
   }
 
+  /**
+   * Trigger Claude Code's native /compact slash command via a --resume turn.
+   * Claude Code writes a compact_boundary entry to the session .jsonl; ObsidiBot
+   * reads that marker in loadSessionMessages() to render the compaction divider.
+   * No custom summarization is performed here — all compaction logic lives in the CLI.
+   */
   compact(): void {
     const sessionId = this.host.getSessionId();
     if (!sessionId) {
