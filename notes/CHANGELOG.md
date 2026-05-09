@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [2.15.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.14.1...2.15.0) (2026-05-09)
+
+
+### Features
+
+* extract SessionCoordinator from ClaudeView ([98bd6f8](https://github.com/ScottKirvan/ObsidiBot/commit/98bd6f831b5d00e7e2127cab484b39532cc25e7e))
+
 ## [2.14.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.14.0...2.14.1) (2026-05-08)
 
 
