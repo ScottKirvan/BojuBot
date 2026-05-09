@@ -168,6 +168,19 @@ export class SlashParamModal extends Modal {
         }
       }
 
+      // $ARGUMENTS / $name / $0 interpolation (Claude Code skills format)
+      const positional = this.params.filter(p => p.id in this.values);
+      const allArgValues = positional.map(p => (this.values[p.id] ?? '').trim()).filter(v => v);
+      result = result.replace(/\$ARGUMENTS\b/g, allArgValues.join(' '));
+      positional.forEach((p, i) => {
+        result = result.replace(new RegExp(`\\$${i}(?!\\d)`, 'g'), this.values[p.id] ?? '');
+      });
+      const sortedByLength = [...positional].sort((a, b) => b.id.length - a.id.length);
+      for (const p of sortedByLength) {
+        const escapedId = p.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        result = result.replace(new RegExp(`\\$${escapedId}(?![\\w])`, 'g'), this.values[p.id] ?? '');
+      }
+
       // Strip any remaining unresolved tokens and collapse extra blank lines
       result = result.replace(/\{\{\w+\}\}/g, '').replace(/\n{3,}/g, '\n\n').trim();
 

@@ -1720,7 +1720,11 @@ export class ClaudeView extends ItemView {
       let body = raw;
       let params: SlashParam[] | undefined;
       let autorun = false;
-      const name = filePath.split(/[\\/]/).pop()?.replace(/\.md$/, '') ?? 'Command';
+      const pathParts = filePath.split(/[\\/]/);
+      const fileName = pathParts[pathParts.length - 1] ?? '';
+      const name = fileName === 'SKILL.md'
+        ? (pathParts[pathParts.length - 2] ?? 'Command')
+        : fileName.replace(/\.md$/, '') || 'Command';
 
       const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
       if (fmMatch) {
@@ -1728,7 +1732,17 @@ export class ClaudeView extends ItemView {
         try {
           const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
           if (fm.autorun === true) autorun = true;
-          if (Array.isArray(fm.params)) params = fm.params as SlashParam[];
+          if (Array.isArray(fm.params)) {
+            params = fm.params as SlashParam[];
+          } else if (Array.isArray(fm.arguments)) {
+            const argHint = typeof fm['argument-hint'] === 'string' ? fm['argument-hint'] : '';
+            params = (fm.arguments as string[]).map((argName, i) => ({
+              id: String(argName),
+              type: 'input' as const,
+              label: String(argName),
+              placeholder: i === 0 ? argHint : '',
+            }));
+          }
         } catch { /* use defaults */ }
       }
 
@@ -1772,10 +1786,20 @@ export class ClaudeView extends ItemView {
     if (!existsSync(folder)) return [];
     const commands: SlashCommand[] = [];
     try {
-      const files = readdirSync(folder).filter(f => f.endsWith('.md'));
-      for (const file of files) {
+      const skillEntries: { filePath: string; name: string }[] = [];
+      for (const entry of readdirSync(folder, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith('.md')) {
+          skillEntries.push({ filePath: join(folder, entry.name), name: entry.name.replace(/\.md$/, '') });
+        } else if (entry.isDirectory()) {
+          const skillMd = join(folder, entry.name, 'SKILL.md');
+          if (existsSync(skillMd)) {
+            skillEntries.push({ filePath: skillMd, name: entry.name });
+          }
+        }
+      }
+      for (const { filePath, name } of skillEntries) {
         try {
-          const raw = readFileSync(join(folder, file), 'utf8');
+          const raw = readFileSync(filePath, 'utf8');
           let body = raw;
           let category = 'Prompts';
           let description: string | undefined;
@@ -1790,11 +1814,19 @@ export class ClaudeView extends ItemView {
               if (typeof fm.category === 'string') category = fm.category;
               if (typeof fm.description === 'string') description = fm.description;
               if (fm.autorun === true) autorun = true;
-              if (Array.isArray(fm.params)) params = fm.params as SlashParam[];
+              if (Array.isArray(fm.params)) {
+                params = fm.params as SlashParam[];
+              } else if (Array.isArray(fm.arguments)) {
+                const argHint = typeof fm['argument-hint'] === 'string' ? fm['argument-hint'] : '';
+                params = (fm.arguments as string[]).map((argName, i) => ({
+                  id: String(argName),
+                  type: 'input' as const,
+                  label: String(argName),
+                  placeholder: i === 0 ? argHint : '',
+                }));
+              }
             } catch { /* malformed frontmatter — use defaults */ }
           }
-
-          const name = file.replace(/\.md$/, '');
           commands.push({
             category,
             name,
