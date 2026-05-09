@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   lastActiveSessionId: '',
   sessionStoragePath: '',
   commandsFolder: '',
-  registerSkillsAsCommands: false,
+  registerSkillsAsCommands: true,
   persistFullAccess: false,
   canvasMaxChars: 50000,
 };
