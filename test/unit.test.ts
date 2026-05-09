@@ -12,15 +12,17 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
+import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir } from '../src/utils/sessionStorage';
 import { estimateTokens } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
+import { extractActions } from '../src/utils/actionParser';
+import { resolveShellEnv } from '../src/utils/shellEnv';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -736,5 +738,182 @@ describe('compact confirm panel', () => {
     const { panelEl, hideCompactConfirm } = makePanel('sess-1');
     assert.doesNotThrow(() => hideCompactConfirm());
     assert.equal(panelEl.classList.has('is-visible'), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractActions — UIBridge action parser
+// ---------------------------------------------------------------------------
+
+describe('extractActions', () => {
+  test('returns empty actions and original text when no action lines present', () => {
+    const { clean, actions } = extractActions('Hello\nworld\n');
+    assert.equal(clean, 'Hello\nworld\n');
+    assert.deepEqual(actions, []);
+  });
+
+  test('parses a valid action line and removes it from clean output', () => {
+    const line = '@@CORTEX_ACTION {"action":"show-notice","message":"hi"}';
+    const { clean, actions } = extractActions(`before\n${line}\nafter`);
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0].action, 'show-notice');
+    assert.ok(!clean.includes('@@CORTEX_ACTION'), 'action line must not appear in clean output');
+  });
+
+  test('silently skips malformed JSON — no throw, no action pushed, bad line not in clean', () => {
+    const bad = '@@CORTEX_ACTION {not valid json}';
+    let threw = false;
+    let result: ReturnType<typeof extractActions> | undefined;
+    try {
+      result = extractActions(`before\n${bad}\nafter`);
+    } catch {
+      threw = true;
+    }
+    assert.equal(threw, false, 'must not throw on malformed JSON');
+    assert.deepEqual(result!.actions, [], 'malformed action must not be pushed');
+    assert.ok(!result!.clean.includes('@@CORTEX_ACTION'), 'malformed line must not appear in clean output');
+  });
+
+  test('strips @@CORTEX_QUERY lines from clean output', () => {
+    const { clean, actions } = extractActions('before\n@@CORTEX_QUERY {"query":"test"}\nafter');
+    assert.ok(!clean.includes('@@CORTEX_QUERY'), 'query lines must be stripped from clean');
+    assert.deepEqual(actions, []);
+  });
+
+  test('handles multiple actions in one text block', () => {
+    const text = [
+      '@@CORTEX_ACTION {"action":"open-file","path":"a.md"}',
+      '@@CORTEX_ACTION {"action":"show-notice","message":"done"}',
+    ].join('\n');
+    const { actions, clean } = extractActions(text);
+    assert.equal(actions.length, 2);
+    assert.equal(clean.trim(), '', 'clean output should be empty when all lines are actions');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// saveSessionAtTop — sparse sort order logic
+// ---------------------------------------------------------------------------
+
+describe('saveSessionAtTop sort order', () => {
+  const makeSession = (id: string, order?: number) => ({
+    id,
+    title: `Session ${id}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    claudeSessionId: `claude-${id}`,
+    ...(order !== undefined ? { sortOrder: order } : {}),
+  });
+
+  test('no sortOrder assigned when no existing sessions have one', () => {
+    const sessDir = join(tmpDir, 'sortorder-1');
+    mkdirSync(sessDir, { recursive: true });
+    const s = makeSession('s-top-1');
+    saveSessionAtTop(tmpDir, s, sessDir, 'test-config');
+    const loaded = loadAllSessions(tmpDir, sessDir, 'test-config');
+    const found = loaded.find(x => x.id === 's-top-1');
+    assert.ok(found);
+    assert.equal(found!.sortOrder, undefined);
+  });
+
+  test('new session gets sortOrder = min(existing) - 1', () => {
+    const sessDir = join(tmpDir, 'sortorder-2');
+    mkdirSync(sessDir, { recursive: true });
+    saveSession(tmpDir, makeSession('existing-1', 10), sessDir);
+    saveSession(tmpDir, makeSession('existing-2', 5), sessDir);
+    const newSess = makeSession('new-top');
+    saveSessionAtTop(tmpDir, newSess, sessDir, 'test-config');
+    const loaded = loadAllSessions(tmpDir, sessDir, 'test-config');
+    const found = loaded.find(x => x.id === 'new-top');
+    assert.ok(found);
+    assert.equal(found!.sortOrder, 4, 'sortOrder must be min(5,10) - 1 = 4');
+    assert.equal(loaded[0].id, 'new-top', 'new session must sort first');
+  });
+
+  test('existing session files are NOT rewritten on insert', () => {
+    const sessDir = join(tmpDir, 'sortorder-3');
+    mkdirSync(sessDir, { recursive: true });
+    saveSession(tmpDir, makeSession('stable', 10), sessDir);
+    const statBefore = statSync(join(sessDir, 'stable.json'));
+    // Give the filesystem a moment so a write would produce a different mtime
+    const start = Date.now();
+    while (Date.now() - start < 10) { /* spin */ }
+    saveSessionAtTop(tmpDir, makeSession('new-3'), sessDir, 'test-config');
+    const statAfter = statSync(join(sessDir, 'stable.json'));
+    assert.equal(statBefore.mtimeMs, statAfter.mtimeMs, 'existing session file must not be rewritten');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveSessionsDir — path resolution branches
+// ---------------------------------------------------------------------------
+
+describe('resolveSessionsDir', () => {
+  const CONFIG = '.obsidian/plugins/obsidibot';
+
+  test('undefined customPath → default sessions dir', () => {
+    const result = resolveSessionsDir('/vault', undefined, CONFIG);
+    const expected = getSessionsDir('/vault', CONFIG);
+    assert.equal(result, expected);
+  });
+
+  test('whitespace-only customPath → default sessions dir', () => {
+    const result = resolveSessionsDir('/vault', '   ', CONFIG);
+    const expected = getSessionsDir('/vault', CONFIG);
+    assert.equal(result, expected);
+  });
+
+  test('absolute customPath → returned as-is', () => {
+    const abs = isAbsolute('/custom/sessions') ? '/custom/sessions' : 'C:\\custom\\sessions';
+    const result = resolveSessionsDir('/vault', abs, CONFIG);
+    assert.equal(result, abs);
+  });
+
+  test('relative customPath → joined with vaultRoot', () => {
+    const result = resolveSessionsDir('/vault', 'my/sessions', CONFIG);
+    assert.equal(result, join('/vault', 'my/sessions'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// titleFromPrompt — newline-only edge cases (gap from code review)
+// ---------------------------------------------------------------------------
+
+describe('titleFromPrompt newline edge cases', () => {
+  test('single newline returns empty string', () => {
+    assert.equal(titleFromPrompt('\n'), '');
+  });
+
+  test('multiple newlines return empty string', () => {
+    assert.equal(titleFromPrompt('\n\n\n'), '');
+  });
+
+  test('whitespace and newlines return empty string', () => {
+    assert.equal(titleFromPrompt('  \n  \t  '), '');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveShellEnv — basic contract (platform-branch behaviour)
+// ---------------------------------------------------------------------------
+
+describe('resolveShellEnv', () => {
+  test('returns a Promise that resolves to a string→string record', async () => {
+    const env = await resolveShellEnv();
+    assert.equal(typeof env, 'object');
+    assert.ok(env !== null && !Array.isArray(env));
+    for (const [k, v] of Object.entries(env)) {
+      assert.equal(typeof k, 'string', `key ${k} must be a string`);
+      assert.equal(typeof v, 'string', `value for ${k} must be a string`);
+    }
+  });
+
+  test('on win32: result mirrors process.env without undefined values', async () => {
+    if (process.platform !== 'win32') return;
+    const env = await resolveShellEnv();
+    assert.ok('PATH' in env || 'Path' in env, 'PATH must be present');
+    for (const v of Object.values(env)) {
+      assert.equal(typeof v, 'string', 'no undefined values — process.env entries with undefined must be excluded');
+    }
   });
 });
