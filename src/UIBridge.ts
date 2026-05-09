@@ -1,7 +1,9 @@
 import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
-import { ACTION_PREFIX, QUERY_PREFIX } from './constants';
+import { ACTION_PREFIX } from './constants';
 export { ACTION_PREFIX } from './constants';
+export { ObsidiBotAction, extractActions } from './utils/actionParser';
+import type { ObsidiBotAction } from './utils/actionParser';
 
 interface UIBridgeInternal {
   setting: { open(): void; openTabById(id: string): void };
@@ -9,11 +11,6 @@ interface UIBridgeInternal {
     commands: Record<string, { id: string; name: string }>;
     executeCommandById(id: string): boolean;
   };
-}
-
-export interface ObsidiBotAction {
-  action: string;
-  [key: string]: unknown;
 }
 
 export interface UIBridgeOptions {
@@ -118,34 +115,6 @@ class RequestPermissionModal extends Modal {
 
 export function promptPermissionRequest(app: App, tool: string, reason: string): Promise<boolean> {
   return new Promise<boolean>(resolve => new RequestPermissionModal(app, tool, reason, resolve).open());
-}
-
-/**
- * Scan accumulated text for complete @@CORTEX_ACTION lines.
- * Returns cleaned text (lines stripped) and parsed actions.
- */
-export function extractActions(text: string): { clean: string; actions: ObsidiBotAction[] } {
-  const actions: ObsidiBotAction[] = [];
-  const lines = text.split('\n');
-  const kept: string[] = [];
-
-  for (const line of lines) {
-    if (line.startsWith(ACTION_PREFIX)) {
-      try {
-        const action = JSON.parse(line.slice(ACTION_PREFIX.length)) as ObsidiBotAction;
-        actions.push(action);
-        log('UIBridge: parsed action:', action.action, action);
-      } catch {
-        warn('UIBridge: malformed action line:', line);
-      }
-    } else if (line.startsWith(QUERY_PREFIX)) {
-      // Strip query lines — they are intercepted at stream time and must never appear in the UI
-    } else {
-      kept.push(line);
-    }
-  }
-
-  return { clean: kept.join('\n'), actions };
 }
 
 /**
