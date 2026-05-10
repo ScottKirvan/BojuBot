@@ -250,14 +250,92 @@ describe('permissionArgs', () => {
     assert.ok(!args[idx + 1].includes('Bash'));
   });
 
+  test('restricted → default mode + web-only allowedTools', () => {
+    const args = permissionArgs('restricted');
+    assert.ok(args.includes('default'));
+    const idx = args.indexOf('--allowedTools');
+    assert.ok(idx !== -1);
+    const tools = args[idx + 1].split(',');
+    assert.ok(tools.includes('WebFetch'));
+    assert.ok(tools.includes('WebSearch'));
+    assert.ok(!tools.includes('Read'));
+    assert.ok(!tools.includes('Write'));
+    assert.ok(!tools.includes('Bash'));
+  });
+
   test('full → bypassPermissions', () => {
     const args = permissionArgs('full');
     assert.ok(args.includes('bypassPermissions'));
   });
 
   test('no mode ever includes dangerously-skip-permissions', () => {
-    for (const mode of ['standard', 'readonly', 'full'] as const) {
+    for (const mode of ['standard', 'readonly', 'full', 'restricted'] as const) {
       assert.ok(!permissionArgs(mode).some(a => a.includes('dangerously')));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Permission picker mode table — data-layer invariants
+// ---------------------------------------------------------------------------
+
+describe('permission picker mode table', () => {
+  // Mirror the PERMISSION_MODES data from PermissionPickerModal.ts without
+  // importing the file (which depends on the Obsidian API).
+  type PermissionMode = 'restricted' | 'readonly' | 'standard' | 'full';
+  interface ModeOption {
+    mode: PermissionMode;
+    icon: string;
+    colorClass: string;
+    label: string;
+    description: string;
+  }
+  const EXPECTED_MODES: ModeOption[] = [
+    { mode: 'restricted', icon: 'lock',           colorClass: 'obsidibot-perm-restricted', label: 'Chat only',   description: 'web only, no vault access' },
+    { mode: 'readonly',   icon: 'eye',            colorClass: 'obsidibot-perm-readonly',   label: 'Read only',   description: 'read vault, no writes' },
+    { mode: 'standard',   icon: 'shield',         colorClass: 'obsidibot-perm-standard',   label: 'Standard',    description: 'read+write vault, no bash' },
+    { mode: 'full',       icon: 'triangle-alert', colorClass: 'obsidibot-perm-full',       label: 'Full access', description: 'unrestricted, including bash' },
+  ];
+
+  const ALL_MODES: PermissionMode[] = ['restricted', 'readonly', 'standard', 'full'];
+
+  test('all four permission modes are represented', () => {
+    const modes = EXPECTED_MODES.map(m => m.mode);
+    for (const m of ALL_MODES) {
+      assert.ok(modes.includes(m), `missing mode: ${m}`);
+    }
+    assert.equal(EXPECTED_MODES.length, 4);
+  });
+
+  test('each mode entry has a non-empty icon, colorClass, label, and description', () => {
+    for (const entry of EXPECTED_MODES) {
+      assert.ok(entry.icon.length > 0,       `${entry.mode}: icon is empty`);
+      assert.ok(entry.colorClass.length > 0, `${entry.mode}: colorClass is empty`);
+      assert.ok(entry.label.length > 0,      `${entry.mode}: label is empty`);
+      assert.ok(entry.description.length > 0, `${entry.mode}: description is empty`);
+    }
+  });
+
+  test('color classes use the obsidibot-perm- prefix', () => {
+    for (const entry of EXPECTED_MODES) {
+      assert.ok(entry.colorClass.startsWith('obsidibot-perm-'), `${entry.mode}: colorClass must start with obsidibot-perm-`);
+    }
+  });
+
+  test('each mode maps to a unique label', () => {
+    const labels = EXPECTED_MODES.map(m => m.label);
+    assert.equal(new Set(labels).size, labels.length, 'labels must be unique');
+  });
+
+  test('each mode maps to a unique icon', () => {
+    const icons = EXPECTED_MODES.map(m => m.icon);
+    assert.equal(new Set(icons).size, icons.length, 'icons must be unique');
+  });
+
+  test('permissionArgs handles every mode listed in the picker', () => {
+    for (const entry of EXPECTED_MODES) {
+      const args = permissionArgs(entry.mode);
+      assert.ok(Array.isArray(args) && args.length > 0, `permissionArgs('${entry.mode}') returned no args`);
     }
   });
 });

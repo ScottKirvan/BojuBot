@@ -1535,6 +1535,83 @@
 .obsidibot-permission-icon .svg-icon circle,
 .obsidibot-permission-icon .svg-icon rect { stroke-width: 2.5 !important; }
 
+/* ── Permission picker — shared row layout (popover + modal) ── */
+.obsidibot-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.obsidibot-perm-row-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.obsidibot-perm-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.obsidibot-perm-row-label {
+  font-size: var(--font-ui-small);
+  font-weight: 500;
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+
+.obsidibot-perm-row-desc {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.obsidibot-perm-row--active .obsidibot-perm-row-label {
+  color: var(--interactive-accent);
+}
+
+/* ── Permission picker popover (icon click) ── */
+.obsidibot-perm-popover {
+  position: fixed;
+  z-index: 9999;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.obsidibot-perm-popover-row:hover,
+.obsidibot-perm-popover-row--focused {
+  background: var(--background-modifier-hover);
+}
+
+/* ── Permission picker modal (Ctrl+P) ── */
+.obsidibot-permission-picker-modal .suggestion-item.obsidibot-perm-row {
+  padding: 6px 10px;
+}
+
+.obsidibot-permission-picker-modal .suggestion-item.is-selected .obsidibot-perm-row-label {
+  color: var(--text-on-accent);
+}
+
+.obsidibot-permission-picker-modal .suggestion-item.is-selected .obsidibot-perm-row-desc {
+  color: var(--text-on-accent-muted, var(--text-on-accent));
+  opacity: 0.8;
+}
+
 /* ── Memory audit modal ── */
 .obsidibot-audit-btn-row {
   display: flex;

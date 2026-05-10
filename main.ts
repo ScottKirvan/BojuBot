@@ -11,6 +11,7 @@ import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
 import { ContextGenerationModal } from './src/ContextGenerationModal';
 import { AppInternal } from './src/obsidianInternal';
 import { resolveSkillsFolder, scanSkillFolder } from './src/SkillLoader';
+import { PermissionPickerModal } from './src/modals/PermissionPickerModal';
 
 export default class ObsidiBotPlugin extends Plugin {
   settings: ObsidiBotSettings;
@@ -216,6 +217,14 @@ export default class ObsidiBotPlugin extends Plugin {
       callback: () => {
         this.showAbout();
       }
+    });
+
+    this.addCommand({
+      id: 'change-permission-mode',
+      name: 'Change permission mode',
+      callback: () => {
+        new PermissionPickerModal(this.app, this, this.getEffectivePermissionMode()).open();
+      },
     });
 
     this.addCommand({
