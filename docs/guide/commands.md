@@ -24,6 +24,7 @@ Press **Ctrl+P** (Windows/Linux) or **Cmd+P** (Mac) to open the Command Palette 
 | **ObsidiBot: Export conversation**       | `export-obsidibot-conversation` | Copy the current conversation as markdown to the clipboard.                                                                     |
 | **ObsidiBot: Export session to vault**   | `export-obsidibot-to-vault`     | Save the current conversation as a vault note. Prompts for a path (defaults to configured Export folder).                       |
 | **ObsidiBot: Copy last response**        | `copy-obsidibot-last-response`  | Copy Claude's last response to the clipboard.                                                                                   |
+| **ObsidiBot: Change permission mode**    | `change-obsidibot-permission-mode` | Open a picker to switch the active permission mode (Chat only / Read only / Standard / Full access). Takes effect on the next message. |
 | **ObsidiBot: Open settings**             | `open-obsidibot-settings`       | Jump directly to the ObsidiBot settings panel.                                                                                  |
 | **ObsidiBot: Send selection as context** | `send-selection-to-obsidibot`   | Highlight text in any note, then run this command to attach it as context.                                                      |
 | **ObsidiBot: Focus chat input**          | `focus-obsidibot-input`         | Open the ObsidiBot panel and place the cursor in the chat input. Good for hotkey binding.                                       |

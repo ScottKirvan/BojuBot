@@ -11,7 +11,11 @@ ObsidiBot runs Claude Code as a subprocess and controls what it's allowed to do 
 | **Read only**                | 🟢 eye      | Read files, search, fetch web — no writes or shell commands                               |
 | **Full access**              | 🔴 warning  | Everything, including shell commands (Bash, git, etc.)                                    |
 
-Configure in **Settings → ObsidiBot → Permission mode**.
+**Change the mode any time** by clicking the colored permission icon in the input toolbar — a picker appears above it with all four options. The current mode is highlighted. Use arrow keys + Enter or click to select; Escape or click outside to cancel.
+
+The same picker is available from the Command Palette: **ObsidiBot: Change permission mode**.
+
+The default for new sessions is set in **Settings → ObsidiBot → Permission mode**.
 
 ### Chat only
 
@@ -34,7 +38,7 @@ The upgrade option in the denial card depends on the current mode:
 - **Chat only** → offers **Allow standard access for this session**
 - **Standard / Read only** → offers **Allow full access for this session**
 
-The session override is cleared when you start a new session or when you change the permission mode in settings.
+The session override is cleared when you start a new session or when you change the permission mode via the picker or settings.
 
 ::: warning
 Permission granularity is at the **tool level**, not the command level. "Allow full access" unlocks all shell commands for the rest of the session — there is no way to approve `git status` while still blocking `rm`. This is a constraint of how Claude Code works in streaming mode.
