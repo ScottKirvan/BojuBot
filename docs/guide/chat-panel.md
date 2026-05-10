@@ -43,6 +43,21 @@ Highlight text in any open note, then run **ObsidiBot: Send selection as context
 
 ---
 
+## Permission Icon
+
+A **colored icon** in the input toolbar shows the current permission mode at a glance:
+
+| Icon | Color | Mode |
+|------|-------|------|
+| lock | blue | Chat only |
+| eye | green | Read only |
+| shield | yellow | Standard |
+| triangle | red | Full access |
+
+Click it to open a quick picker and switch modes. The change takes effect on the next message. See [Permissions](./permissions.md) for details on what each mode allows.
+
+---
+
 ## Context Gauge
 
 A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.
