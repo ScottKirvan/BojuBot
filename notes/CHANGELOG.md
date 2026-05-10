@@ -7,6 +7,21 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [2.16.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.15.1...2.16.0) (2026-05-10)
+
+
+### Features
+
+* Claude Code skill format compatibility ([c8e2225](https://github.com/ScottKirvan/ObsidiBot/commit/c8e222538e6a089b75053f572584a38f74b746b8))
+* permission picker popover + Ctrl+P command ([9a2af37](https://github.com/ScottKirvan/ObsidiBot/commit/9a2af37e2c6723e04d6bc5ee15b9da66ff115ab4))
+* rename note param type to obsidianmd_note for Claude Code compatibility ([7a46703](https://github.com/ScottKirvan/ObsidiBot/commit/7a467030f6e61fc4eddd4eea86cab1d3ac179316))
+
+
+### Bug Fixes
+
+* default registerSkillsAsCommands to true ([75d19c1](https://github.com/ScottKirvan/ObsidiBot/commit/75d19c175c52d7215173c5151f41d82bdcc7e22a)), closes [#147](https://github.com/ScottKirvan/ObsidiBot/issues/147)
+* permission popover background transparent when appended to document.body ([6ba66f4](https://github.com/ScottKirvan/ObsidiBot/commit/6ba66f4295033a073ea8e1fa39a2a14aebd8f4cb))
+
 ## [2.15.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.15.0...2.15.1) (2026-05-09)
 
 
