@@ -1,0 +1,156 @@
+import { App, FuzzySuggestModal, setIcon } from 'obsidian';
+import type ObsidiBotPlugin from '../../main';
+import type { PermissionMode } from '../ClaudeProcess';
+
+interface ModeOption {
+  mode: PermissionMode;
+  icon: string;
+  colorClass: string;
+  label: string;
+  description: string;
+}
+
+export const PERMISSION_MODES: ModeOption[] = [
+  { mode: 'restricted', icon: 'lock',           colorClass: 'obsidibot-perm-restricted', label: 'Chat only',   description: 'web only, no vault access' },
+  { mode: 'readonly',   icon: 'eye',            colorClass: 'obsidibot-perm-readonly',   label: 'Read only',   description: 'read vault, no writes' },
+  { mode: 'standard',   icon: 'shield',         colorClass: 'obsidibot-perm-standard',   label: 'Standard',    description: 'read+write vault, no bash' },
+  { mode: 'full',       icon: 'triangle-alert', colorClass: 'obsidibot-perm-full',       label: 'Full access', description: 'unrestricted, including bash' },
+];
+
+function applyPermission(plugin: ObsidiBotPlugin, mode: PermissionMode): void {
+  plugin.settings.permissionMode = mode;
+  void plugin.saveSettings();
+  plugin.notifyPermissionChanged();
+}
+
+function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean): void {
+  if (isCurrent) el.addClass('obsidibot-perm-row--active');
+  const iconEl = el.createDiv({ cls: `obsidibot-perm-row-icon ${opt.colorClass}` });
+  setIcon(iconEl, opt.icon);
+  const textEl = el.createDiv({ cls: 'obsidibot-perm-row-text' });
+  textEl.createSpan({ cls: 'obsidibot-perm-row-label', text: opt.label });
+  textEl.createSpan({ cls: 'obsidibot-perm-row-desc', text: opt.description });
+}
+
+// ---------------------------------------------------------------------------
+// Ctrl+P modal (FuzzySuggestModal — centered, filterable, keyboard-native)
+// ---------------------------------------------------------------------------
+
+export class PermissionPickerModal extends FuzzySuggestModal<ModeOption> {
+  constructor(
+    app: App,
+    private plugin: ObsidiBotPlugin,
+    private currentMode: PermissionMode,
+  ) {
+    super(app);
+    this.setPlaceholder('Select permission mode…');
+    this.modalEl.addClass('obsidibot-permission-picker-modal');
+  }
+
+  getItems(): ModeOption[] { return PERMISSION_MODES; }
+  getItemText(opt: ModeOption): string { return opt.label; }
+
+  renderSuggestion(fuzzy: { item: ModeOption }, el: HTMLElement): void {
+    el.addClass('obsidibot-perm-row');
+    renderRow(el, fuzzy.item, fuzzy.item.mode === this.currentMode);
+  }
+
+  onChooseItem(opt: ModeOption): void {
+    applyPermission(this.plugin, opt.mode);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Icon-click popover (positioned above the toolbar icon)
+// ---------------------------------------------------------------------------
+
+export function openPermissionPopover(
+  plugin: ObsidiBotPlugin,
+  iconEl: HTMLElement,
+  currentMode: PermissionMode,
+): void {
+  document.querySelector('.obsidibot-perm-popover')?.remove();
+
+  const rect = iconEl.getBoundingClientRect();
+  const popover = document.body.createDiv({ cls: 'obsidibot-perm-popover' });
+
+  // Measure after inserting so we get real height; use an estimate for initial placement.
+  const rowHeight = 44;
+  const padding = 8;
+  const estimatedHeight = PERMISSION_MODES.length * rowHeight + padding;
+  const gap = 4;
+  const topAbove = rect.top - estimatedHeight - gap;
+
+  popover.style.position = 'fixed';
+  popover.style.left = `${rect.left}px`;
+  if (topAbove >= 8) {
+    popover.style.top = `${topAbove}px`;
+  } else {
+    popover.style.top = `${rect.bottom + gap}px`;
+  }
+
+  let focusedIndex = PERMISSION_MODES.findIndex(m => m.mode === currentMode);
+  if (focusedIndex < 0) focusedIndex = 2;
+
+  const rows: HTMLElement[] = [];
+
+  PERMISSION_MODES.forEach((opt, i) => {
+    const row = popover.createDiv({ cls: 'obsidibot-perm-popover-row obsidibot-perm-row' });
+    renderRow(row, opt, opt.mode === currentMode);
+
+    row.addEventListener('mouseenter', () => {
+      focusedIndex = i;
+      updateFocus();
+    });
+
+    row.addEventListener('click', () => {
+      close();
+      applyPermission(plugin, opt.mode);
+    });
+
+    rows.push(row);
+  });
+
+  function updateFocus() {
+    rows.forEach((r, j) => r.toggleClass('obsidibot-perm-popover-row--focused', j === focusedIndex));
+  }
+  updateFocus();
+
+  function close() {
+    popover.remove();
+    document.removeEventListener('keydown', keyHandler, true);
+    document.removeEventListener('mousedown', outsideHandler, true);
+  }
+
+  const keyHandler = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedIndex = (focusedIndex + 1) % PERMISSION_MODES.length;
+      updateFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedIndex = (focusedIndex - 1 + PERMISSION_MODES.length) % PERMISSION_MODES.length;
+      updateFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      close();
+      applyPermission(plugin, PERMISSION_MODES[focusedIndex].mode);
+    }
+  };
+
+  const outsideHandler = (e: MouseEvent) => {
+    if (!popover.contains(e.target as Node) && e.target !== iconEl) {
+      close();
+    }
+  };
+
+  // Defer so the icon's own click event doesn't immediately trigger outsideHandler.
+  setTimeout(() => {
+    document.addEventListener('keydown', keyHandler, true);
+    document.addEventListener('mousedown', outsideHandler, true);
+  }, 0);
+}

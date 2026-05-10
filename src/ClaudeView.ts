@@ -6,6 +6,7 @@ import welcomeData from './welcome.json';
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
+import { openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
@@ -437,8 +438,7 @@ export class ClaudeView extends ItemView {
 
     this.permissionIconEl = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn obsidibot-permission-icon' });
     this.permissionIconEl.addEventListener('click', () => {
-      this.appInternal.setting.open();
-      this.appInternal.setting.openTabById('obsidibot');
+      openPermissionPopover(this.plugin, this.permissionIconEl, this.getEffectivePermissionMode());
     });
     this.updatePermissionIcon();
 
