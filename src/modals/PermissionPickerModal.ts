@@ -81,13 +81,17 @@ export function openPermissionPopover(
   const gap = 4;
   const topAbove = rect.top - estimatedHeight - gap;
 
-  popover.style.position = 'fixed';
-  popover.style.left = `${rect.left}px`;
-  if (topAbove >= 8) {
-    popover.style.top = `${topAbove}px`;
-  } else {
-    popover.style.top = `${rect.bottom + gap}px`;
-  }
+  // Set layout/visual properties inline so they win the cascade when appended to document.body,
+  // where Obsidian's base rules have higher specificity than our plugin class.
+  const top = topAbove >= 8 ? topAbove : rect.bottom + gap;
+  popover.setAttribute('style',
+    `position:fixed;left:${rect.left}px;top:${top}px;z-index:9999;` +
+    `background:var(--background-primary);` +
+    `border:1px solid var(--background-modifier-border);` +
+    `border-radius:6px;padding:4px;` +
+    `display:flex;flex-direction:column;gap:2px;min-width:220px;` +
+    `box-shadow:0 6px 20px rgba(0,0,0,0.35);`
+  );
 
   let focusedIndex = PERMISSION_MODES.findIndex(m => m.mode === currentMode);
   if (focusedIndex < 0) focusedIndex = 2;
