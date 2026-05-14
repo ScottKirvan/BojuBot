@@ -1113,11 +1113,6 @@ export class ClaudeView extends ItemView {
   private renderWelcomeScreen() {
     const { greetings, tips } = welcomeData.welcome;
 
-    // Username from OS, capitalized
-    let name = '';
-    try { name = require('os').userInfo().username; } catch { /* ignore */ }
-    if (name) name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-
     // Time-of-day bucket
     const hour = new Date().getHours();
     const bucket = hour >= 5 && hour < 12 ? greetings.morning
@@ -1125,11 +1120,9 @@ export class ClaudeView extends ItemView {
       : hour >= 18 && hour < 22 ? greetings.evening
       : greetings.night;
 
-    // Random greeting from bucket
+    // Random greeting from bucket — always anonymous until the user introduces themselves
     const entry = bucket[Math.floor(Math.random() * bucket.length)];
-    const greetingText = name
-      ? entry.withName.replace('{{name}}', name)
-      : entry.withoutName;
+    const greetingText = entry.withoutName;
 
     const tip = tips[Math.floor(Math.random() * tips.length)];
 
