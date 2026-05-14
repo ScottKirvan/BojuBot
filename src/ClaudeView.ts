@@ -840,6 +840,12 @@ export class ClaudeView extends ItemView {
       onSetLabel: (userLabel: string, assistantLabel: string) => {
         this.currentUserLabel = userLabel;
         this.currentAssistantLabel = assistantLabel;
+        // Persist cross-session so the welcome screen can greet by name
+        const knownName = userLabel !== 'User' ? userLabel : '';
+        if (this.plugin.settings.userLabel !== knownName) {
+          this.plugin.settings.userLabel = knownName;
+          void this.plugin.saveSettings();
+        }
         const fileId = this.coordinator.sessionFileId;
         if (!fileId) return;
         const vaultRoot = this.plugin.getVaultRoot();
@@ -1120,9 +1126,12 @@ export class ClaudeView extends ItemView {
       : hour >= 18 && hour < 22 ? greetings.evening
       : greetings.night;
 
-    // Random greeting from bucket — always anonymous until the user introduces themselves
+    // Use name only if the user has consensually introduced themselves via conversation
+    const knownName = this.plugin.settings.userLabel?.trim() || '';
     const entry = bucket[Math.floor(Math.random() * bucket.length)];
-    const greetingText = entry.withoutName;
+    const greetingText = knownName
+      ? entry.withName.replace('{{name}}', knownName)
+      : entry.withoutName;
 
     const tip = tips[Math.floor(Math.random() * tips.length)];
 

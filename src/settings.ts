@@ -61,6 +61,8 @@ export interface ObsidiBotSettings {
   persistFullAccess: boolean;
   /** Max characters of canvas text injected as context. 0 = no limit. */
   canvasMaxChars: number;
+  /** User's preferred name, set via conversation (set-label action). Empty = unknown. */
+  userLabel: string;
 }
 
 export const DEFAULT_SETTINGS: ObsidiBotSettings = {
@@ -89,6 +91,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   registerSkillsAsCommands: true,
   persistFullAccess: false,
   canvasMaxChars: 50000,
+  userLabel: '',
 };
 
 export class ObsidiBotSettingsTab extends PluginSettingTab {
