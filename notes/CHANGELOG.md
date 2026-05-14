@@ -7,6 +7,14 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [2.16.1](https://github.com/ScottKirvan/ObsidiBot/compare/2.16.0...2.16.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* greet by name when user has introduced themselves via conversation ([1cea903](https://github.com/ScottKirvan/ObsidiBot/commit/1cea903f571d920570ece766060a2d0d16240b77))
+* remove OS username from welcome screen greeting ([9e47562](https://github.com/ScottKirvan/ObsidiBot/commit/9e47562da046d6eb97b75192e272240c120ad1f8)), closes [#221](https://github.com/ScottKirvan/ObsidiBot/issues/221)
+
 ## [2.16.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.15.1...2.16.0) (2026-05-10)
 
 
