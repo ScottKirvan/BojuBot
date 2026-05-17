@@ -3,6 +3,7 @@ import type ObsidiBotPlugin from '../main';
 import type { PermissionMode } from './ClaudeProcess';
 export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
+import { FolderSuggest } from './utils/FolderSuggest';
 
 export interface ObsidiBotSettings {
   binaryPath: string;
@@ -269,7 +270,8 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Export folder')
       .setDesc('Vault-relative folder where "export session to vault" saves notes. Created automatically if it does not exist.')
-      .addText((text) =>
+      .addText((text) => {
+        new FolderSuggest(this.app, text.inputEl);
         text
           // eslint-disable-next-line obsidianmd/ui/sentence-case
           .setPlaceholder('ObsidiBot Exports')
@@ -277,8 +279,8 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.exportFolder = value;
             await this.plugin.saveSettings();
-          })
-      );
+          });
+      });
 
     new Setting(containerEl)
       .setName('Session storage path')
@@ -289,15 +291,16 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
         'or an absolute path to store them outside the vault entirely. ' +
         'Restart ObsidiBot after changing this.'
       )
-      .addText((text) =>
+      .addText((text) => {
+        new FolderSuggest(this.app, text.inputEl);
         text
           .setPlaceholder('Default (Obsidian config folder/obsidibot/sessions)')
           .setValue(this.plugin.settings.sessionStoragePath)
           .onChange(async (value) => {
             this.plugin.settings.sessionStoragePath = value.trim();
             await this.plugin.saveSettings();
-          })
-      );
+          });
+      });
 
     new Setting(containerEl)
       .setName('Skills folder')
@@ -307,7 +310,8 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
         'Use a vault-relative path (e.g. _skills) to keep skills in your vault, ' +
         'or an absolute path. Skills reload each time you open the / menu.'
       )
-      .addText((text) =>
+      .addText((text) => {
+        new FolderSuggest(this.app, text.inputEl);
         text
           .setPlaceholder('Default (plugin dir/commands)')
           .setValue(this.plugin.settings.commandsFolder)
@@ -317,8 +321,8 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
             if (this.plugin.settings.registerSkillsAsCommands) {
               this.plugin.reloadSkillCommands();
             }
-          })
-      );
+          });
+      });
 
     new Setting(containerEl)
       .setName('Register skills as Ctrl+P commands')
