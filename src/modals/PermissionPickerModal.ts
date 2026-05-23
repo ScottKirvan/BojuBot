@@ -1,5 +1,5 @@
 import { App, FuzzySuggestModal, setIcon } from 'obsidian';
-import type ObsidiBotPlugin from '../../main';
+import type BojuBotPlugin from '../../main';
 import type { PermissionMode } from '../ClaudeProcess';
 
 interface ModeOption {
@@ -11,25 +11,25 @@ interface ModeOption {
 }
 
 export const PERMISSION_MODES: ModeOption[] = [
-  { mode: 'restricted', icon: 'lock',           colorClass: 'obsidibot-perm-restricted', label: 'Chat only',   description: 'web only, no vault access' },
-  { mode: 'readonly',   icon: 'eye',            colorClass: 'obsidibot-perm-readonly',   label: 'Read only',   description: 'read vault, no writes' },
-  { mode: 'standard',   icon: 'shield',         colorClass: 'obsidibot-perm-standard',   label: 'Standard',    description: 'read+write vault, no bash' },
-  { mode: 'full',       icon: 'triangle-alert', colorClass: 'obsidibot-perm-full',       label: 'Full access', description: 'unrestricted, including bash' },
+  { mode: 'restricted', icon: 'lock', colorClass: 'bojubot-perm-restricted', label: 'Chat only', description: 'web only, no vault access' },
+  { mode: 'readonly', icon: 'eye', colorClass: 'bojubot-perm-readonly', label: 'Read only', description: 'read vault, no writes' },
+  { mode: 'standard', icon: 'shield', colorClass: 'bojubot-perm-standard', label: 'Standard', description: 'read+write vault, no bash' },
+  { mode: 'full', icon: 'triangle-alert', colorClass: 'bojubot-perm-full', label: 'Full access', description: 'unrestricted, including bash' },
 ];
 
-function applyPermission(plugin: ObsidiBotPlugin, mode: PermissionMode): void {
+function applyPermission(plugin: BojuBotPlugin, mode: PermissionMode): void {
   plugin.settings.permissionMode = mode;
   void plugin.saveSettings();
   plugin.notifyPermissionChanged();
 }
 
 function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean): void {
-  if (isCurrent) el.addClass('obsidibot-perm-row--active');
-  const iconEl = el.createDiv({ cls: `obsidibot-perm-row-icon ${opt.colorClass}` });
+  if (isCurrent) el.addClass('bojubot-perm-row--active');
+  const iconEl = el.createDiv({ cls: `bojubot-perm-row-icon ${opt.colorClass}` });
   setIcon(iconEl, opt.icon);
-  const textEl = el.createDiv({ cls: 'obsidibot-perm-row-text' });
-  textEl.createSpan({ cls: 'obsidibot-perm-row-label', text: opt.label });
-  textEl.createSpan({ cls: 'obsidibot-perm-row-desc', text: opt.description });
+  const textEl = el.createDiv({ cls: 'bojubot-perm-row-text' });
+  textEl.createSpan({ cls: 'bojubot-perm-row-label', text: opt.label });
+  textEl.createSpan({ cls: 'bojubot-perm-row-desc', text: opt.description });
 }
 
 // ---------------------------------------------------------------------------
@@ -39,19 +39,19 @@ function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean): void {
 export class PermissionPickerModal extends FuzzySuggestModal<ModeOption> {
   constructor(
     app: App,
-    private plugin: ObsidiBotPlugin,
+    private plugin: BojuBotPlugin,
     private currentMode: PermissionMode,
   ) {
     super(app);
     this.setPlaceholder('Select permission mode…');
-    this.modalEl.addClass('obsidibot-permission-picker-modal');
+    this.modalEl.addClass('bojubot-permission-picker-modal');
   }
 
   getItems(): ModeOption[] { return PERMISSION_MODES; }
   getItemText(opt: ModeOption): string { return opt.label; }
 
   renderSuggestion(fuzzy: { item: ModeOption }, el: HTMLElement): void {
-    el.addClass('obsidibot-perm-row');
+    el.addClass('bojubot-perm-row');
     renderRow(el, fuzzy.item, fuzzy.item.mode === this.currentMode);
   }
 
@@ -65,14 +65,14 @@ export class PermissionPickerModal extends FuzzySuggestModal<ModeOption> {
 // ---------------------------------------------------------------------------
 
 export function openPermissionPopover(
-  plugin: ObsidiBotPlugin,
+  plugin: BojuBotPlugin,
   iconEl: HTMLElement,
   currentMode: PermissionMode,
 ): void {
-  document.querySelector('.obsidibot-perm-popover')?.remove();
+  document.querySelector('.bojubot-perm-popover')?.remove();
 
   const rect = iconEl.getBoundingClientRect();
-  const popover = document.body.createDiv({ cls: 'obsidibot-perm-popover' });
+  const popover = document.body.createDiv({ cls: 'bojubot-perm-popover' });
 
   // Measure after inserting so we get real height; use an estimate for initial placement.
   const rowHeight = 44;
@@ -99,7 +99,7 @@ export function openPermissionPopover(
   const rows: HTMLElement[] = [];
 
   PERMISSION_MODES.forEach((opt, i) => {
-    const row = popover.createDiv({ cls: 'obsidibot-perm-popover-row obsidibot-perm-row' });
+    const row = popover.createDiv({ cls: 'bojubot-perm-popover-row bojubot-perm-row' });
     renderRow(row, opt, opt.mode === currentMode);
 
     row.addEventListener('mouseenter', () => {
@@ -116,7 +116,7 @@ export function openPermissionPopover(
   });
 
   function updateFocus() {
-    rows.forEach((r, j) => r.toggleClass('obsidibot-perm-popover-row--focused', j === focusedIndex));
+    rows.forEach((r, j) => r.toggleClass('bojubot-perm-popover-row--focused', j === focusedIndex));
   }
   updateFocus();
 

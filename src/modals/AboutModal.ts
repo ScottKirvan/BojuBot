@@ -28,14 +28,14 @@ const LINK_ITEMS: LinkItem[] = [
     title: 'Documentation',
     desc: 'Official guide, skill reference, and setup instructions.',
     label: 'Visit',
-    href: 'https://www.scottkirvan.com/ObsidiBot/',
+    href: 'https://www.scottkirvan.com/BojuBot/',
     accent: true,
   },
   {
     icon: '',
     svgInline: DISCORD_SVG,
     title: 'Discord',
-    desc: 'Chat with other ObsidiBot users and get support.',
+    desc: 'Chat with other BojuBot users and get support.',
     label: 'Join',
     href: 'https://discord.gg/TN6XJSNK5Y',
   },
@@ -44,7 +44,7 @@ const LINK_ITEMS: LinkItem[] = [
     title: 'GitHub',
     desc: 'Source code, issues, and release notes.',
     label: 'View',
-    href: 'https://github.com/ScottKirvan/ObsidiBot',
+    href: 'https://github.com/ScottKirvan/BojuBot',
   },
 ];
 
@@ -58,36 +58,36 @@ export class AboutModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass('obsidibot-about-modal');
+    contentEl.addClass('bojubot-about-modal');
 
-    const header = contentEl.createDiv({ cls: 'obsidibot-about-header' });
-    const logoImg = header.createEl('img', { cls: 'obsidibot-about-logo' });
+    const header = contentEl.createDiv({ cls: 'bojubot-about-header' });
+    const logoImg = header.createEl('img', { cls: 'bojubot-about-logo' });
     logoImg.src = logoDataUrl;
-    logoImg.alt = 'ObsidiBot';
-    header.createEl('div', { text: 'ObsidiBot', cls: 'obsidibot-about-name' });
+    logoImg.alt = 'BojuBot';
+    header.createEl('div', { text: 'BojuBot', cls: 'bojubot-about-name' });
     header.createEl('div', {
       text: `Version ${this.plugin.manifest.version}`,
-      cls: 'obsidibot-about-version',
+      cls: 'bojubot-about-version',
     });
 
-    const list = contentEl.createDiv({ cls: 'obsidibot-about-list' });
+    const list = contentEl.createDiv({ cls: 'bojubot-about-list' });
     for (const item of LINK_ITEMS) {
-      const row = list.createDiv({ cls: 'obsidibot-about-item' });
+      const row = list.createDiv({ cls: 'bojubot-about-item' });
 
-      const iconEl = row.createDiv({ cls: 'obsidibot-about-item-icon' });
+      const iconEl = row.createDiv({ cls: 'bojubot-about-item-icon' });
       if (item.svgInline) {
         iconEl.innerHTML = item.svgInline;
       } else {
         setIcon(iconEl, item.icon);
       }
 
-      const text = row.createDiv({ cls: 'obsidibot-about-item-text' });
-      text.createEl('div', { text: item.title, cls: 'obsidibot-about-item-title' });
-      text.createEl('div', { text: item.desc, cls: 'obsidibot-about-item-desc' });
+      const text = row.createDiv({ cls: 'bojubot-about-item-text' });
+      text.createEl('div', { text: item.title, cls: 'bojubot-about-item-title' });
+      text.createEl('div', { text: item.desc, cls: 'bojubot-about-item-desc' });
 
       const btn = row.createEl('a', {
         text: item.label,
-        cls: 'obsidibot-about-item-btn' + (item.accent ? ' mod-cta' : ''),
+        cls: 'bojubot-about-item-btn' + (item.accent ? ' mod-cta' : ''),
         href: item.href,
       });
       btn.setAttr('target', '_blank');

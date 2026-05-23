@@ -10,7 +10,7 @@ import {
 } from './ClaudeProcess';
 import { VaultQuery } from './QueryHandler';
 import { QUERY_PREFIX } from './constants';
-import { extractActions, ObsidiBotAction } from './UIBridge';
+import { extractActions, BojuBotAction } from './UIBridge';
 import {
   StoredSession,
   ChatMessage,
@@ -65,12 +65,12 @@ export interface SessionCoordinatorEvents {
   /** Fired on each text chunk; `accumulated` is the full clean text so far. */
   'turn:text': [accumulated: string];
   /** Fired for each parsed UI bridge action (request-permission excluded). */
-  'turn:action': [action: ObsidiBotAction];
+  'turn:action': [action: BojuBotAction];
   /** Fired when Claude initiates a tool call. */
   'turn:tool-call': [tool: string, input: unknown, toolUseId: string];
   /** Fired when a tool result arrives. */
   'turn:tool-result': [toolUseId: string, content: string];
-  /** Fired for each @@CORTEX_QUERY line received. */
+  /** Fired for each @@BOJU_QUERY line received. */
   'turn:query': [query: VaultQuery];
   /** Fired when token-usage data arrives. */
   'turn:usage': [usage: TokenUsage];
@@ -101,7 +101,7 @@ export class SessionCoordinator {
   private _pendingSystemMessage: string | null = null;
   private _activeProc: ChildProcess | null = null;
 
-  constructor(private readonly host: SessionCoordinatorHost) {}
+  constructor(private readonly host: SessionCoordinatorHost) { }
 
   // ── Typed event API ────────────────────────────────────────────────────────
 
@@ -250,7 +250,7 @@ export class SessionCoordinator {
     const pendingQueries: VaultQuery[] = [];
     let pendingPermissionRequest: { tool: string; reason: string } | null = null;
 
-    const handleAction = (action: ObsidiBotAction) => {
+    const handleAction = (action: BojuBotAction) => {
       if (action.action === 'request-permission') {
         pendingPermissionRequest = {
           tool: (action['tool'] as string) ?? 'unknown tool',

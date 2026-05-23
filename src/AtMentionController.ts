@@ -20,7 +20,7 @@ export class AtMentionController {
   private items: TFile[] = [];
   private index = -1;
 
-  constructor(private readonly host: AtMentionControllerHost) {}
+  constructor(private readonly host: AtMentionControllerHost) { }
 
   /** Attach to the dropdown element created in onOpen(). */
   build(dropdownEl: HTMLElement): void {
@@ -97,15 +97,15 @@ export class AtMentionController {
     el.show();
     this.items.forEach((file, i) => {
       const item = el.createDiv({
-        cls: 'obsidibot-at-item' + (i === this.index ? ' obsidibot-at-item-active' : ''),
+        cls: 'bojubot-at-item' + (i === this.index ? ' bojubot-at-item-active' : ''),
       });
-      const nameEl = item.createSpan({ cls: 'obsidibot-at-item-name', text: file.basename });
+      const nameEl = item.createSpan({ cls: 'bojubot-at-item-name', text: file.basename });
       if (file.extension !== 'md') {
-        nameEl.createSpan({ cls: 'obsidibot-at-item-ext', text: '.' + file.extension });
+        nameEl.createSpan({ cls: 'bojubot-at-item-ext', text: '.' + file.extension });
       }
       const parentPath = file.parent?.path;
       if (parentPath && parentPath !== '/') {
-        item.createSpan({ cls: 'obsidibot-at-item-path', text: parentPath });
+        item.createSpan({ cls: 'bojubot-at-item-path', text: parentPath });
       }
       item.addEventListener('mousedown', (e) => {
         e.preventDefault(); // prevent textarea blur before select fires

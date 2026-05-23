@@ -329,7 +329,7 @@ export default class ClaudePlugin extends Plugin {
     // Register a custom SVG icon, then use it for the ribbon.
     // Pass only the inner SVG elements (no <svg> wrapper); use currentColor for all strokes/fills.
     // Obsidian expects a 0 0 100 100 coordinate space.
-    addIcon('obsidibot', `
+    addIcon('bojubot', `
       <path d="M10,32 C24,12 38,12 50,32 C62,52 76,52 90,32"
             stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round"/>
       <path d="M10,50 C24,30 38,30 50,50 C62,70 76,70 90,50"
@@ -339,7 +339,7 @@ export default class ClaudePlugin extends Plugin {
     `);
 
     // Ribbon icon to open panel
-    this.addRibbonIcon('obsidibot', 'ObsidiBot', () => {
+    this.addRibbonIcon('bojubot', 'BojuBot', () => {
       this.activateView();
     });
 

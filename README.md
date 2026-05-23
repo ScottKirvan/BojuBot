@@ -3,26 +3,26 @@ last_updated: 2026-04-30
 status: active
 ---
 
-# ObsidiBot [![starline](https://starlines.qoo.monster/assets/ScottKirvan/ObsidiBot)](https://github.com/qoomon/starline)
+# BojuBot [![starline](https://starlines.qoo.monster/assets/ScottKirvan/BojuBot)](https://github.com/qoomon/starline)
 
 <div align="center">
-  <img src="assets/media/logo.png" alt="ObsidiBot logo" width="200" height="auto" />
+  <img src="assets/media/logo.png" alt="BojuBot logo" width="200" height="auto" />
 
-  <h3>More than a writing assistant — ObsidiBot turns your Obsidian vault into a personal AI platform.</h3>
+  <h3>More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform.</h3>
 
   <p>
-    <a href="https://github.com/ScottKirvan/ObsidiBot/graphs/contributors"><img src="https://img.shields.io/github/contributors/ScottKirvan/ObsidiBot" alt="contributors" /></a>
-    <a href=""><img src="https://img.shields.io/github/last-commit/ScottKirvan/ObsidiBot" alt="last update" /></a>
-    <a href="https://github.com/ScottKirvan/ObsidiBot/stargazers"><img src="https://img.shields.io/github/stars/ScottKirvan/ObsidiBot" alt="stars" /></a>
-    <a href="https://github.com/ScottKirvan/ObsidiBot/issues/"><img src="https://img.shields.io/github/issues/ScottKirvan/ObsidiBot" alt="open issues" /></a>
-    <a href="https://github.com/ScottKirvan/ObsidiBot/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/ScottKirvan/ObsidiBot.svg" alt="license" /></a>
+    <a href="https://github.com/ScottKirvan/BojuBot/graphs/contributors"><img src="https://img.shields.io/github/contributors/ScottKirvan/BojuBot" alt="contributors" /></a>
+    <a href=""><img src="https://img.shields.io/github/last-commit/ScottKirvan/BojuBot" alt="last update" /></a>
+    <a href="https://github.com/ScottKirvan/BojuBot/stargazers"><img src="https://img.shields.io/github/stars/ScottKirvan/BojuBot" alt="stars" /></a>
+    <a href="https://github.com/ScottKirvan/BojuBot/issues/"><img src="https://img.shields.io/github/issues/ScottKirvan/BojuBot" alt="open issues" /></a>
+    <a href="https://github.com/ScottKirvan/BojuBot/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/ScottKirvan/BojuBot.svg" alt="license" /></a>
   </p>
 
   <h4>
-    <a href="https://www.scottkirvan.com/ObsidiBot/">Docs</a> ·
+    <a href="https://www.scottkirvan.com/BojuBot/">Docs</a> ·
     <a href="https://discord.gg/TN6XJSNK5Y">Discord</a> ·
-    <a href="https://github.com/ScottKirvan/ObsidiBot/issues/new?template=bug_report.md">Report Bug</a> ·
-    <a href="https://github.com/ScottKirvan/ObsidiBot/issues/new?template=feature_request.md">Request Feature</a>
+    <a href="https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md">Report Bug</a> ·
+    <a href="https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md">Request Feature</a>
   </h4>
 </div>
 
@@ -30,7 +30,7 @@ status: active
 Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and organization. Safely extend it to match how you think, and what you do.  You're in control and everything happens using regular, conversational language — write, plan, build custom commands, even develop Obsidian plugins — without leaving Obsidian.
 
 
-| You ask…                                                                                                         | ObsidiBot does…                                                                                                          |
+| You ask…                                                                                                         | BojuBot does…                                                                                                            |
 | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | "Summarize my meeting notes from last week"                                                                      | Creates a summary note and opens it in your editor                                                                       |
 | "Rename all my untitled notes based on their content"                                                            | Finds them, renames them, reports back                                                                                   |
@@ -46,41 +46,41 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 - *[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) installed and authenticated — included in Claude Pro/Max subscriptions. (Windows,: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)*
 ### Install Via BRAT (recommended)
 1. Install **BRAT** from the Obsidian community plugin browser
-2. In BRAT settings → **Add Beta Plugin** → `ScottKirvan/ObsidiBot`
+2. In BRAT settings → **Add Beta Plugin** → `ScottKirvan/BojuBot`
 ### Install Manually
-1. Download `obsidibot-<version>.zip` from [Releases](https://github.com/ScottKirvan/ObsidiBot/releases)
-2. Extract to `<your-vault>/.obsidian/plugins/obsidibot/`
-3. **Settings → Community Plugins** → enable **ObsidiBot**
+1. Download `bojubot-<version>.zip` from [Releases](https://github.com/ScottKirvan/BojuBot/releases)
+2. Extract to `<your-vault>/.obsidian/plugins/bojubot/`
+3. **Settings → Community Plugins** → enable **BojuBot**
 
 ---
 ## Quick Start
 
-1. Open the ObsidiBot panel from the ribbon (brain/circuit icon) or Command Palette: `ObsidiBot: Open agent panel`
+1. Open the BojuBot panel from the ribbon (brain/circuit icon) or Command Palette: `BojuBot: Open agent panel`
 2. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
-3. See the [User Guide](https://www.scottkirvan.com/ObsidiBot/) for details on Skills, session management, and settings
+3. See the [User Guide](https://www.scottkirvan.com/BojuBot/) for details on Skills, session management, and settings
 
 ---
-## What makes ObsidiBot different?
+## What makes BojuBot different?
 <details>
 <summary><b>🔧 Create custom commands — expand Obsidian's capabilities</b></summary>
 
 <!--[GIF: Skills form modal opening, user filling fields, Claude executing]-->
 
 <br>
-<b>Skills</b> are the "bot" in ObsidiBot. Write a natural language prompt, save it as a markdown file in your commands folder, and it becomes a first-class command — available in the '/' slash menu, in the Obsidian command palette with hotkey support, <em>and</em> exposed as an API endpoint, callable by any plugin or script within Obsidian.
+<b>Skills</b> are the "bot" in BojuBot. Write a natural language prompt, save it as a markdown file in your commands folder, and it becomes a first-class command — available in the '/' slash menu, in the Obsidian command palette with hotkey support, <em>and</em> exposed as an API endpoint, callable by any plugin or script within Obsidian.
 <br><br>
 Add YAML frontmatter and Skills grow into parameterized forms that can prompt for input: dropdowns, text inputs, note pickers with fuzzy search. Your most-compicated recurring workflows become generalized, reusable, one-click operations.
 <br><br>
-→ <a href="https://www.scottkirvan.com/ObsidiBot/guide/skills.html">Learn about Skills</a>
+→ <a href="https://www.scottkirvan.com/BojuBot/guide/skills.html">Learn about Skills</a>
 <br><br>
 </details>
 <details>
 <summary><b>✏️ Deep Obsidian integration</b></summary>
 
-<!--[GIF: ObsidiBot opening a file, navigating to a heading, showing toast notification]-->
+<!--[GIF: BojuBot opening a file, navigating to a heading, showing toast notification]-->
 
 <br>
-ObsidiBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> Obsidian:
+BojuBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> Obsidian:
 <br><br>
 <ul>
 <li><b>Obsidian UI control</b> — opens files, splits panes, navigates headings, shows notifications</li>
@@ -89,7 +89,7 @@ ObsidiBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> 
 <li><b>Canvas</b> — reads and generates <code>.canvas</code> files natively</li>
 </ul>
 <br>
-→ <a href="https://www.scottkirvan.com/ObsidiBot/features">Full feature list</a>
+→ <a href="https://www.scottkirvan.com/BojuBot/features">Full feature list</a>
 <br><br>
 </details>
 <details>
@@ -108,12 +108,12 @@ ObsidiBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> 
 <summary><b>🌐 Reach beyond your vault</b></summary>
 
 <br>
-ObsidiBot doesn't stop at the edges of your vault. Given proper permissions (which you control), it can search the web, work with files anywhere on your system, and interact with external services — and everything it finds comes back as a note, woven into your vault where it belongs.
+BojuBot doesn't stop at the edges of your vault. Given proper permissions (which you control), it can search the web, work with files anywhere on your system, and interact with external services — and everything it finds comes back as a note, woven into your vault where it belongs.
 <br><br>
 <ul>
 <li><b>Web search</b> — Claude can search the web mid-conversation and bring results back as chat responses or notes</li>
-<li><b>Filesystem access</b> — ObsidiBot, under your direction, can read, write, and organize files anywhere on your system, not just inside the vault</li>
-<li><b>External services</b> — Home automation, calendar/weather, GitHub, etc.  For example, ObsidiBot can manage GitHub issues, pull in data, run CLI tools — all from a single conversational interface</li>
+<li><b>Filesystem access</b> — BojuBot, under your direction, can read, write, and organize files anywhere on your system, not just inside the vault</li>
+<li><b>External services</b> — Home automation, calendar/weather, GitHub, etc.  For example, BojuBot can manage GitHub issues, pull in data, run CLI tools — all from a single conversational interface</li>
 <li><b>Your vault as hub</b> — everything that comes in lands where you decide, searchable and linked</li>
 </ul>
 <br><br>
@@ -123,7 +123,7 @@ ObsidiBot doesn't stop at the edges of your vault. Given proper permissions (whi
 
 ## Support the project
 
-ObsidiBot is free, open source, and built in spare time. If it's useful:
+BojuBot is free, open source, and built in spare time. If it's useful:
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/ScottKirvan?style=social)](https://github.com/sponsors/ScottKirvan)
 
@@ -139,4 +139,4 @@ MIT — see [LICENSE.md](LICENSE.md)
 
 ---
 
-[CHANGELOG](notes/CHANGELOG.md) · [User Guide](https://www.scottkirvan.com/ObsidiBot/) · [Roadmap](https://github.com/users/ScottKirvan/projects/3)
+[CHANGELOG](notes/CHANGELOG.md) · [User Guide](https://www.scottkirvan.com/BojuBot/) · [Roadmap](https://github.com/users/ScottKirvan/projects/3)

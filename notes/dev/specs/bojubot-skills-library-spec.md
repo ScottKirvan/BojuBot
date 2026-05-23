@@ -1,11 +1,11 @@
-# ObsidiBot Community Skills Library — Design Spec
+# BojuBot Community Skills Library — Design Spec
 
 **Status: PROPOSED** — not yet implemented. Depends on the `SKILL.md` subdirectory convention (shipped) but the registry, marketplace browser, and install flow are not built.
 
 Updated: 2026-05-02
 ## Overview
 
-The ObsidiBot Skills Library is a community-driven repository of Claude Code skills that users can browse, install, and update directly within Obsidian. It is designed to be low-friction for contributors, reliable for users, and extensible as the ecosystem grows.
+The BojuBot Skills Library is a community-driven repository of Claude Code skills that users can browse, install, and update directly within Obsidian. It is designed to be low-friction for contributors, reliable for users, and extensible as the ecosystem grows.
 
 ---
 
@@ -14,7 +14,7 @@ The ObsidiBot Skills Library is a community-driven repository of Claude Code ski
 A skill is a folder containing a `SKILL.md` file (the actual Claude Code instructions) plus supporting metadata. Skills are grouped into **libraries** — one contributor, one repo, one or more skills.
 
 ```
-my-obsidibot-skills/
+my-bojubot-skills/
   library.json               ← single library manifest
   meeting-summarizer/
     SKILL.md
@@ -32,7 +32,7 @@ my-obsidibot-skills/
   "author": "janesmith",
   "version": "2.1.0",
   "description": "Skills for meetings, email, and daily review.",
-  "repo": "janesmith/my-obsidibot-skills",
+  "repo": "janesmith/my-bojubot-skills",
   "skills": [
     { "id": "meeting-summarizer", "path": "meeting-summarizer", "tags": ["meetings", "productivity"] },
     { "id": "email-drafter",      "path": "email-drafter",      "tags": ["email", "writing"] }
@@ -46,7 +46,7 @@ Version numbers are **library-level semver** — the contributor manages one ver
 
 ## Registry
 
-A single public GitHub repo — `ObsidiBot/skills-registry` — maintains an index of all published libraries. Each entry is a pointer to a contributor's library, not a copy of it.
+A single public GitHub repo — `BojuBot/skills-registry` — maintains an index of all published libraries. Each entry is a pointer to a contributor's library, not a copy of it.
 
 ### registry/index.json entry
 
@@ -55,7 +55,7 @@ A single public GitHub repo — `ObsidiBot/skills-registry` — maintains an ind
   "id": "janesmith-productivity",
   "name": "Jane's Productivity Skills",
   "author": "janesmith",
-  "repo": "janesmith/my-obsidibot-skills",
+  "repo": "janesmith/my-bojubot-skills",
   "version": "2.1.0",
   "tags": ["meetings", "productivity", "email"],
   "downloads": 1240
@@ -72,7 +72,7 @@ This is the primary path for developers and technical contributors.
 
 1. Create a GitHub repo with the folder structure above
 2. Write your `SKILL.md` files and `library.json`
-3. Submit a PR to `ObsidiBot/skills-registry` adding your entry to `index.json`
+3. Submit a PR to `BojuBot/skills-registry` adding your entry to `index.json`
 4. A GitHub Action validates:
    - `library.json` schema is correct
    - All listed skill paths exist and contain a `SKILL.md`
@@ -96,12 +96,12 @@ The initial PR receives a human review (Obsidian-style). Subsequent version upda
 
 ## Contributing — Web Upload Path
 
-For non-developer contributors, a web portal at `scottkirvan.com/ObsidiBot/submit` accepts direct uploads.
+For non-developer contributors, a web portal at `scottkirvan.com/BojuBot/submit` accepts direct uploads.
 
 - Fill out name, description, tags
 - Paste `SKILL.md` content into a text area (one skill) or upload a zip (full library)
 - An automated Claude-powered review checks for quality and completeness
-- On approval, the skill lands in an ObsidiBot-managed repo and is registered automatically
+- On approval, the skill lands in an BojuBot-managed repo and is registered automatically
 
 Both paths produce the same registry entries and the same install experience on the user side.
 
@@ -120,7 +120,7 @@ A dedicated Obsidian sidebar panel shows the registry inside the app:
 
 ### Web Browser
 
-`scottkirvan.com/ObsidiBot/skills` — browsable and searchable for users who haven't installed yet, or who want to preview before installing.
+`scottkirvan.com/BojuBot/skills` — browsable and searchable for users who haven't installed yet, or who want to preview before installing.
 
 ---
 
@@ -130,7 +130,7 @@ From the in-vault browser, clicking **Install**:
 
 1. Plugin fetches `library.json` from the contributor's repo via `raw.githubusercontent.com` (plain HTTP, no git required)
 2. Fetches each selected `SKILL.md` the same way
-3. Writes files to `.obsidibot/skills/community/{library-id}/{skill-id}/`
+3. Writes files to `.bojubot/skills/community/{library-id}/{skill-id}/`
 4. Stores a **baseline checksum** of each `SKILL.md` locally — this represents "what was originally downloaded"
 5. Skills are immediately available to Claude Code
 
@@ -146,7 +146,7 @@ Direct GitHub API polling from each user's Obsidian instance is constrained by G
 
 ### Server-Side Cache (Preferred)
 
-A lightweight ObsidiBot server mediates all update checks:
+A lightweight BojuBot server mediates all update checks:
 
 - **GitHub webhooks** notify the server instantly when a registered library repo receives a push or release event
 - The server updates its cache: current version, per-skill checksums, file sizes
@@ -165,12 +165,12 @@ Actual `SKILL.md` file fetching on install or update still goes **direct** from 
 
 The local checksum represents the **original downloaded state**, not the current file state. This means:
 
-| Local file state | Repo state | Result |
-|---|---|---|
-| Matches checksum | No change | Clean — nothing to do |
-| Doesn't match checksum | No change | User has customized this skill — "modified" badge shown |
-| Matches checksum | Updated in repo | Straightforward update available |
-| Doesn't match checksum | Updated in repo | Conflict — user modified AND author updated |
+| Local file state       | Repo state      | Result                                                  |
+| ---------------------- | --------------- | ------------------------------------------------------- |
+| Matches checksum       | No change       | Clean — nothing to do                                   |
+| Doesn't match checksum | No change       | User has customized this skill — "modified" badge shown |
+| Matches checksum       | Updated in repo | Straightforward update available                        |
+| Doesn't match checksum | Updated in repo | Conflict — user modified AND author updated             |
 
 ### Update UI Flow
 
@@ -193,7 +193,7 @@ File size of `SKILL.md` is surfaced in the marketplace and update UI as a rough 
 ```
 GitHub (contributor repos)
     ↓ webhooks / periodic poll
-ObsidiBot Server
+BojuBot Server
     ├── Registry cache (versions, checksums, sizes)
     ├── Download counts
     └── Update API → Obsidian plugin (one call per session)
@@ -201,7 +201,7 @@ ObsidiBot Server
 raw.githubusercontent.com
     └── Direct file fetch → Obsidian plugin (install/update only)
 
-ObsidiBot/skills-registry (GitHub repo)
+BojuBot/skills-registry (GitHub repo)
     └── index.json → source of truth for registered libraries
 ```
 

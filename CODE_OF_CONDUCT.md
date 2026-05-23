@@ -38,7 +38,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers responsible for enforcement at:
 
-- GitHub Issues: [Report an issue](https://github.com/ScottKirvan/ObsidiBot/issues)
+- GitHub Issues: [Report an issue](https://github.com/ScottKirvan/BojuBot/issues)
 - LinkedIn: [linkedin.com/in/scottkirvan/](https://www.linkedin.com/in/scottkirvan/)
 - Discord: [discord.gg/TSKHvVFYxB](https://discord.gg/TSKHvVFYxB)
 

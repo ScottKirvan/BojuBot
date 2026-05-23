@@ -1,5 +1,5 @@
 /**
- * SlashMenu — unified command palette for ObsidiBot.
+ * SlashMenu — unified command palette for BojuBot.
  *
  * Two modes:
  *  - 'button'  opened via the / toolbar button; includes a search box
@@ -36,13 +36,13 @@ export class SlashMenu {
     this.mode = mode;
     this.onDismiss = onDismiss;
 
-    this.el = container.createDiv({ cls: 'obsidibot-slash-menu' });
+    this.el = container.createDiv({ cls: 'bojubot-slash-menu' });
     this.el.setAttribute('role', 'listbox');
 
     if (mode === 'button') {
-      const searchWrap = this.el.createDiv({ cls: 'obsidibot-slash-search-wrap' });
+      const searchWrap = this.el.createDiv({ cls: 'bojubot-slash-search-wrap' });
       this.searchEl = searchWrap.createEl('input', {
-        cls: 'obsidibot-slash-search',
+        cls: 'bojubot-slash-search',
         attr: { type: 'text', placeholder: 'Search commands…' },
       });
       this.searchEl.addEventListener('input', () => {
@@ -53,7 +53,7 @@ export class SlashMenu {
       });
     }
 
-    this.listEl = this.el.createDiv({ cls: 'obsidibot-slash-list' });
+    this.listEl = this.el.createDiv({ cls: 'bojubot-slash-list' });
     this.render();
 
     // Close on outside click
@@ -83,10 +83,10 @@ export class SlashMenu {
     const q = query.toLowerCase().trim();
     this.filtered = q
       ? this.commands.filter(c =>
-          c.name.toLowerCase().includes(q) ||
-          c.category.toLowerCase().includes(q) ||
-          (c.description ?? '').toLowerCase().includes(q)
-        )
+        c.name.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        (c.description ?? '').toLowerCase().includes(q)
+      )
       : this.commands;
     this.highlightedIndex = -1;
     this.render();
@@ -153,7 +153,7 @@ export class SlashMenu {
   }
 
   private scrollHighlightedIntoView() {
-    const items = this.listEl.querySelectorAll('.obsidibot-slash-item');
+    const items = this.listEl.querySelectorAll('.bojubot-slash-item');
     const el = items[this.highlightedIndex] as HTMLElement | undefined;
     el?.scrollIntoView({ block: 'nearest' });
   }
@@ -162,7 +162,7 @@ export class SlashMenu {
     this.listEl.empty();
 
     if (this.filtered.length === 0) {
-      this.listEl.createDiv({ cls: 'obsidibot-slash-empty', text: 'No commands found.' });
+      this.listEl.createDiv({ cls: 'bojubot-slash-empty', text: 'No commands found.' });
       return;
     }
 
@@ -176,15 +176,15 @@ export class SlashMenu {
     // Flat index tracks position across all groups for highlight
     let flatIndex = 0;
     for (const [category, cmds] of groups) {
-      this.listEl.createDiv({ cls: 'obsidibot-slash-category', text: category });
+      this.listEl.createDiv({ cls: 'bojubot-slash-category', text: category });
       for (const cmd of cmds) {
-        const item = this.listEl.createDiv({ cls: 'obsidibot-slash-item' });
-        if (flatIndex === this.highlightedIndex) item.addClass('obsidibot-slash-item-highlighted');
+        const item = this.listEl.createDiv({ cls: 'bojubot-slash-item' });
+        if (flatIndex === this.highlightedIndex) item.addClass('bojubot-slash-item-highlighted');
         item.setAttribute('role', 'option');
 
-        item.createSpan({ cls: 'obsidibot-slash-item-name', text: cmd.name });
+        item.createSpan({ cls: 'bojubot-slash-item-name', text: cmd.name });
         if (cmd.description) {
-          item.createSpan({ cls: 'obsidibot-slash-item-desc', text: cmd.description });
+          item.createSpan({ cls: 'bojubot-slash-item-desc', text: cmd.description });
         }
 
         const idx = flatIndex; // capture for closure

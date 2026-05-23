@@ -1,6 +1,6 @@
-# AGENTS.md — ObsidiBot Development Guide
+# AGENTS.md — BojuBot Development Guide
 
-ObsidiBot is an Obsidian plugin that runs a Claude Code CLI subprocess inside a vault,
+BojuBot is an Obsidian plugin that runs a Claude Code CLI subprocess inside a vault,
 providing an agentic chat panel for reading, writing, creating, moving, and organizing
 notes. Desktop only (Windows, Mac, Linux). No mobile support.
 
@@ -9,15 +9,15 @@ notes. Desktop only (Windows, Mac, Linux). No mobile support.
 ## Agent Identity
 
 - GitHub username: `SKVFX-DevBot`
-- Fork URL: `https://github.com/SKVFX-DevBot/ObsidiBot`
-- Upstream URL: `https://github.com/ScottKirvan/ObsidiBot`
-- Local clone: `~/ObsidiBot`
+- Fork URL: `https://github.com/SKVFX-DevBot/BojuBot`
+- Upstream URL: `https://github.com/ScottKirvan/BojuBot`
+- Local clone: `~/BojuBot`
 
 **Recommended invocation:**
 
 ```bash
 claude --allowedTools "Read" "Edit" "Write" "Glob" "Grep" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)" "Bash(gh:*)" "Bash(node:*)" "Bash(cd:*)" \
-  -p "Clone https://github.com/SKVFX-DevBot/ObsidiBot to ~/ObsidiBot if it does not already exist, then read AGENTS.md from that directory and work on the next available issue."
+  -p "Clone https://github.com/SKVFX-DevBot/BojuBot to ~/BojuBot if it does not already exist, then read AGENTS.md from that directory and work on the next available issue."
 ```
 
 **Verify `gh` authentication before doing anything else:**
@@ -32,12 +32,12 @@ If not authenticated, run `gh auth login` and select HTTPS when prompted. If aut
 
 ## Repository Overview
 
-GitHub: `https://github.com/ScottKirvan/ObsidiBot`
+GitHub: `https://github.com/ScottKirvan/BojuBot`
 
 > The tree below may be outdated. The local clone is authoritative. Run `git ls-files` for the canonical file list.
 
 ```
-ObsidiBot/
+BojuBot/
 ├── main.ts                      # Plugin entry point (root-level, compiled from src/)
 ├── main.js                      # Compiled output (gitignored in source control)
 ├── styles.css                   # Plugin stylesheet (gitignored in source control)
@@ -53,7 +53,7 @@ ObsidiBot/
 │   ├── ContextManager.ts        # Vault context injection
 │   ├── FrontmatterGuard.ts      # Prevents accidental frontmatter corruption
 │   ├── QueryHandler.ts          # User input → subprocess routing
-│   ├── UIBridge.ts              # @@CORTEX_ACTION dispatch layer
+│   ├── UIBridge.ts              # @@BOJU_ACTION dispatch layer
 │   ├── constants.ts
 │   ├── settings.ts              # Plugin settings tab and defaults
 │   ├── declarations.d.ts        # Ambient type declarations
@@ -63,7 +63,7 @@ ObsidiBot/
 │   │   └── SessionListModal.ts
 │   └── utils/
 │       ├── fileTree.ts          # Vault file tree generation for context
-│       ├── logger.ts            # [ObsidiBot]-prefixed debug logging
+│       ├── logger.ts            # [BojuBot]-prefixed debug logging
 │       ├── sessionStorage.ts    # Persist/load chat sessions
 │       └── shellEnv.ts         # Shell environment resolution for subprocess
 └── test/
@@ -116,7 +116,7 @@ node --version
 gh auth status
 
 # 3. Verify git remotes are correct
-git remote -v   # origin → SKVFX-DevBot/ObsidiBot, upstream → ScottKirvan/ObsidiBot
+git remote -v   # origin → SKVFX-DevBot/BojuBot, upstream → ScottKirvan/BojuBot
 
 # 4. Verify clean working tree on main
 git status      # must show: On branch main, nothing to commit
@@ -134,22 +134,22 @@ If `gh auth status` fails, run `gh auth login` and select HTTPS. If any other st
 
 ## Fork Workflow
 
-Contributions to ObsidiBot are made via personal forks. Do not push branches directly to
-`ScottKirvan/ObsidiBot`. The upstream repository is `https://github.com/ScottKirvan/ObsidiBot`.
+Contributions to BojuBot are made via personal forks. Do not push branches directly to
+`ScottKirvan/BojuBot`. The upstream repository is `https://github.com/ScottKirvan/BojuBot`.
 
 **Initial setup (once):**
 
 ```bash
-# Fork ScottKirvan/ObsidiBot on GitHub, then:
-git clone git@github.com:<your-account>/ObsidiBot.git
-cd ObsidiBot
-git remote add upstream https://github.com/ScottKirvan/ObsidiBot.git
+# Fork ScottKirvan/BojuBot on GitHub, then:
+git clone git@github.com:<your-account>/BojuBot.git
+cd BojuBot
+git remote add upstream https://github.com/ScottKirvan/BojuBot.git
 ```
 
 **Before starting any issue — mandatory:**
 
 ```bash
-git remote -v   # confirm 'origin' points to fork and 'upstream' points to ScottKirvan/ObsidiBot
+git remote -v   # confirm 'origin' points to fork and 'upstream' points to ScottKirvan/BojuBot
 git fetch upstream
 git checkout main
 git rebase upstream/main
@@ -159,7 +159,7 @@ git push origin main          # keep your fork's main current
 If `upstream` is not set, run:
 
 ```bash
-git remote add upstream https://github.com/ScottKirvan/ObsidiBot.git
+git remote add upstream https://github.com/ScottKirvan/BojuBot.git
 ```
 
 Do not skip this step. PRs submitted against a stale base will be closed.
@@ -178,7 +178,7 @@ Always restore the local repo to `main` after your work is complete. Do not leav
 checked out on a feature branch. The next session (human or agent) should always start from
 a known state.
 
-**Submit PRs** from a branch on your fork targeting `ScottKirvan/ObsidiBot:main`.
+**Submit PRs** from a branch on your fork targeting `ScottKirvan/BojuBot:main`.
 
 -----
 
@@ -187,12 +187,12 @@ a known state.
 - Prefer the `Glob` tool for finding files by pattern and the `Grep` tool for searching file contents over `find | xargs grep` bash patterns — they require no extra permissions and avoid compound command prompts
 - **Never use `cd && <command>` compound patterns** — they trigger a security prompt that blocks autonomous operation. Always use full paths or command-specific flags instead:
 
-  | Instead of                    | Use                              |
-  | ----------------------------- | -------------------------------- |
-  | `cd ~/ObsidiBot && git <cmd>` | `git -C ~/ObsidiBot <cmd>`       |
-  | `cd ~/ObsidiBot && npm <cmd>` | `npm --prefix ~/ObsidiBot <cmd>` |
-  | `cd ~/ObsidiBot && ls <path>` | `ls ~/ObsidiBot/<path>`          |
-  | `cd ~/ObsidiBot && npx <cmd>` | `npx --prefix ~/ObsidiBot <cmd>` |
+  | Instead of                  | Use                            |
+  | --------------------------- | ------------------------------ |
+  | `cd ~/BojuBot && git <cmd>` | `git -C ~/BojuBot <cmd>`       |
+  | `cd ~/BojuBot && npm <cmd>` | `npm --prefix ~/BojuBot <cmd>` |
+  | `cd ~/BojuBot && ls <path>` | `ls ~/BojuBot/<path>`          |
+  | `cd ~/BojuBot && npx <cmd>` | `npx --prefix ~/BojuBot <cmd>` |
 - Branch naming: `feat/short-description`, `fix/short-description`, `docs/short-description`
 - One issue per branch. Branch from your fork’s `main` (after syncing upstream). PR targets upstream `main`.
 - **Commit messages must follow Conventional Commits** — release-please depends on this:
@@ -206,7 +206,7 @@ a known state.
 | `refactor:` | Code change with no behavior change |
 | `chore:`    | Build, deps, config                 |
 
-- Write commit message to temp file (use Write tool or echo): `git -C ~/ObsidiBot commit -F /tmp/commit-msg.txt`
+- Write commit message to temp file (use Write tool or echo): `git -C ~/BojuBot commit -F /tmp/commit-msg.txt`
 - Breaking changes: add `!` after prefix (`feat!:`) and include `BREAKING CHANGE:` in footer.
 - Scope is optional but encouraged: `feat(session):`, `fix(ui):`, `docs(readme):`
 
@@ -238,7 +238,7 @@ Closes #[issue number]
 Be specific: which Obsidian settings to enable, what to type in the chat panel, what the
 expected result is.]
 
-1. Open Obsidian with a test vault that has ObsidiBot enabled.
+1. Open Obsidian with a test vault that has BojuBot enabled.
 2. ...
 3. Expected: ...
 
@@ -289,16 +289,16 @@ Obsidian’s plugin API is not easily headless. Unit tests should:
 - Actual Obsidian UI rendering
 - Live Claude Code CLI subprocess behavior
 
-These are covered by manual testing (see PR `## Testing` section) and eventually by ObsidiBot-driven integration tests.
+These are covered by manual testing (see PR `## Testing` section) and eventually by BojuBot-driven integration tests.
 
 -----
 
 ## Issue Handling
 
-Issues are tracked on the upstream repo. Always use `--repo ScottKirvan/ObsidiBot` with `gh` commands:
+Issues are tracked on the upstream repo. Always use `--repo ScottKirvan/BojuBot` with `gh` commands:
 
 ```bash
-gh issue list --repo ScottKirvan/ObsidiBot
+gh issue list --repo ScottKirvan/BojuBot
 ```
 
 **If no issue is specified, select one as follows:**
@@ -313,7 +313,7 @@ gh issue list --repo ScottKirvan/ObsidiBot
 
 - Read the full issue before starting, including any linked issues or prior comments
 - **Before writing any code**, check whether the fix or feature has already been implemented. If it has, add a clear comment to the issue explaining what was found and where, then set the issue label/status to `Duplicate: Needs Review` — do not open a PR.
-- Assign the issue to yourself (`gh issue edit <number> --repo ScottKirvan/ObsidiBot --add-assignee SKVFX-DevBot`) and set its status to `In Progress` on the project board (project: **ObsidiBot Public Roadmap**, number: **3**, owner: **ScottKirvan**). Use the following to discover field and option IDs at runtime, then update the item:
+- Assign the issue to yourself (`gh issue edit <number> --repo ScottKirvan/BojuBot --add-assignee SKVFX-DevBot`) and set its status to `In Progress` on the project board (project: **BojuBot Public Roadmap**, number: **3**, owner: **ScottKirvan**). Use the following to discover field and option IDs at runtime, then update the item:
 
 ```bash
 # Get project field IDs and option IDs

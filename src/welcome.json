@@ -61,7 +61,7 @@
     "tips": [
       "Type @ in your message to inject any vault note directly into your prompt.",
       "Drag and drop an image or PDF onto the chat panel to attach it to your next message.",
-      "Paste an image from your clipboard straight into chat — ObsidiBot saves it and includes it automatically.",
+      "Paste an image from your clipboard straight into chat — BojuBot saves it and includes it automatically.",
       "Switch to Read-only mode to let Claude browse your vault without making any changes to it.",
       "The ring gauge in the toolbar shows how full Claude's context window is — click it to compact the session and free up space.",
       "Skills are parameterized slash commands stored as Markdown files in your vault — type / to browse them.",
@@ -76,14 +76,14 @@
       "Drag sessions in the session manager to reorder them however you like.",
       "The command allowlist lets you pre-approve specific Obsidian commands so Claude can run them without asking each time.",
       "Attach a URL to your message and Claude will fetch and read the page as part of your prompt.",
-      "ObsidiBot is aware of which notes you have open — Claude can see your active file and split-pane context automatically.",
+      "BojuBot is aware of which notes you have open — Claude can see your active file and split-pane context automatically.",
       "Full access mode lets Claude edit your vault freely. Use it when you want Claude to take the wheel on a writing session.",
       "The autorun field in a skill file fires the skill immediately — no form, straight from the command palette.",
       "Skills support a note parameter type — Claude receives the full content of a vault note as context for that skill.",
       "Run the Reload skills command after adding or editing skill files to pick up changes without restarting Obsidian.",
       "Mid-session permission upgrade: if Claude needs more access, you can grant it without starting a new session.",
-      "Use @@CORTEX_QUERY to let Claude look up backlinks, outlinks, tags, or file lists from your live vault on demand.",
-      "ObsidiBot resumes sessions using Claude's built-in cache — the longer a conversation runs, the cheaper each turn gets."
+      "Use @@BOJU_QUERY to let Claude look up backlinks, outlinks, tags, or file lists from your live vault on demand.",
+      "BojuBot resumes sessions using Claude's built-in cache — the longer a conversation runs, the cheaper each turn gets."
     ]
   }
 }

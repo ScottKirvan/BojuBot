@@ -1,20 +1,20 @@
 import { log, warn } from './logger';
 import { ACTION_PREFIX, QUERY_PREFIX } from '../constants';
 
-export interface ObsidiBotAction {
+export interface BojuBotAction {
   action: string;
   [key: string]: unknown;
 }
 
-export function extractActions(text: string): { clean: string; actions: ObsidiBotAction[] } {
-  const actions: ObsidiBotAction[] = [];
+export function extractActions(text: string): { clean: string; actions: BojuBotAction[] } {
+  const actions: BojuBotAction[] = [];
   const lines = text.split('\n');
   const kept: string[] = [];
 
   for (const line of lines) {
     if (line.startsWith(ACTION_PREFIX)) {
       try {
-        const action = JSON.parse(line.slice(ACTION_PREFIX.length)) as ObsidiBotAction;
+        const action = JSON.parse(line.slice(ACTION_PREFIX.length)) as BojuBotAction;
         actions.push(action);
         log('UIBridge: parsed action:', action.action, action);
       } catch {

@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
-import spriteUrl from '../assets/media/ObsidiBotSprite_800x800.png';
+import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import welcomeData from './welcome.json';
 
@@ -10,7 +10,7 @@ import { openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
-import type ObsidiBotPlugin from '../main';
+import type BojuBotPlugin from '../main';
 import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
@@ -36,7 +36,7 @@ import { AboutModal } from './modals/AboutModal';
 import { TokenGauge } from './TokenGauge';
 import { AttachmentHandler, PendingContext } from './AttachmentHandler';
 
-export const VIEW_TYPE_CLAUDE = 'obsidibot-chat';
+export const VIEW_TYPE_CLAUDE = 'bojubot-chat';
 
 // Maps from lowercase tool name to display values.
 // Claude Code sends PascalCase names (Read, Write, Bash…) so we normalise to lowercase for lookup.
@@ -72,7 +72,7 @@ const TOOL_ICONS: Record<string, string> = {
 
 
 
-/** Escape characters that would break pseudo-XML attribute parsing in obsidibot-context tags. */
+/** Escape characters that would break pseudo-XML attribute parsing in bojubot-context tags. */
 function escapeAttr(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -101,7 +101,7 @@ interface ActiveTurnElements {
 }
 
 export class ClaudeView extends ItemView {
-  plugin: ObsidiBotPlugin;
+  plugin: BojuBotPlugin;
   private coordinator: SessionCoordinator;
   private _activeTurnEls: ActiveTurnElements | null = null;
   private inputEl: HTMLTextAreaElement;
@@ -123,9 +123,9 @@ export class ClaudeView extends ItemView {
   private attachPopoverEl: HTMLElement;
   private permissionIconEl!: HTMLButtonElement;
   private currentUserLabel = 'User';
-  private currentAssistantLabel = 'ObsidiBot';
+  private currentAssistantLabel = 'BojuBot';
 
-  constructor(leaf: WorkspaceLeaf, plugin: ObsidiBotPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
     this.plugin = plugin;
     this.coordinator = new SessionCoordinator({
@@ -177,7 +177,7 @@ export class ClaudeView extends ItemView {
       if (!this.messagesEl) return;
       this.tokenGauge.reset();
       this.currentUserLabel = 'User';
-      this.currentAssistantLabel = 'ObsidiBot';
+      this.currentAssistantLabel = 'BojuBot';
       this.attachmentHandler.reset();
       this.messagesEl.empty();
       this.renderWelcomeScreen();
@@ -214,13 +214,13 @@ export class ClaudeView extends ItemView {
       statusEl.setText(TOOL_STATUS[key] ?? 'Working…');
       this._activeTurnEls.toolCallCount++;
       toolEventsEl.show();
-      const row = toolEventsEl.createDiv({ cls: 'obsidibot-tool-event' });
-      const header = row.createDiv({ cls: 'obsidibot-tool-event-header' });
-      const iconEl = header.createSpan({ cls: 'obsidibot-tool-event-icon' });
+      const row = toolEventsEl.createDiv({ cls: 'bojubot-tool-event' });
+      const header = row.createDiv({ cls: 'bojubot-tool-event-header' });
+      const iconEl = header.createSpan({ cls: 'bojubot-tool-event-icon' });
       setIcon(iconEl, TOOL_ICONS[key] ?? 'zap');
       const detail = extractToolDetail(key, input);
-      header.createSpan({ cls: 'obsidibot-tool-event-label', text: detail ? `${tool}: ${detail}` : tool });
-      const outEl = row.createDiv({ cls: 'obsidibot-tool-event-output obsidibot-tool-output-pending' });
+      header.createSpan({ cls: 'bojubot-tool-event-label', text: detail ? `${tool}: ${detail}` : tool });
+      const outEl = row.createDiv({ cls: 'bojubot-tool-event-output bojubot-tool-output-pending' });
       outEl.setText('…');
       toolRowMap.set(toolUseId, outEl);
       this.scrollToBottom();
@@ -230,7 +230,7 @@ export class ClaudeView extends ItemView {
       if (!this._activeTurnEls) return;
       const outEl = this._activeTurnEls.toolRowMap.get(toolUseId);
       if (!outEl) return;
-      outEl.removeClass('obsidibot-tool-output-pending');
+      outEl.removeClass('bojubot-tool-output-pending');
       const trimmed = content.trim();
       if (!trimmed) { outEl.setText('(No output)'); return; }
       const lines = trimmed.split('\n');
@@ -290,11 +290,11 @@ export class ClaudeView extends ItemView {
 
       // Collapse tool calls into a toggle
       if (toolCallCount > 0) {
-        const rows = Array.from(toolEventsEl.querySelectorAll<HTMLElement>('.obsidibot-tool-event'));
+        const rows = Array.from(toolEventsEl.querySelectorAll<HTMLElement>('.bojubot-tool-event'));
         rows.forEach(r => r.hide());
         const s = toolCallCount === 1 ? '' : 's';
         const toggle = toolEventsEl.createEl('button', {
-          cls: 'obsidibot-tool-toggle',
+          cls: 'bojubot-tool-toggle',
           text: `${toolCallCount} tool call${s} ▶`,
         });
         toolEventsEl.insertBefore(toggle, toolEventsEl.firstChild);
@@ -348,66 +348,66 @@ export class ClaudeView extends ItemView {
   }
 
   getViewType(): string { return VIEW_TYPE_CLAUDE; }
-  getDisplayText(): string { return 'ObsidiBot'; }
+  getDisplayText(): string { return 'BojuBot'; }
   getIcon(): string { return 'brain-circuit'; }
 
   async onOpen() {
     const root = this.containerEl.children[1] as HTMLElement;
     root.empty();
-    root.addClass('obsidibot-view');
+    root.addClass('bojubot-view');
 
-    const toolbar = root.createDiv({ cls: 'obsidibot-toolbar' });
-    this.sessionStatusEl = toolbar.createSpan({ cls: 'obsidibot-session-status', text: 'New session' });
+    const toolbar = root.createDiv({ cls: 'bojubot-toolbar' });
+    this.sessionStatusEl = toolbar.createSpan({ cls: 'bojubot-session-status', text: 'New session' });
     this.sessionStatusEl.addEventListener('click', () => this.showSessionHistory());
     this.sessionStatusEl.title = 'Click to see session history';
 
-    const newSessionBtn = toolbar.createEl('button', { cls: 'obsidibot-icon-btn' });
+    const newSessionBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(newSessionBtn, 'message-square-plus');
     newSessionBtn.title = 'New session';
     newSessionBtn.addEventListener('click', () => this.startNewSession());
 
-    this.exportBtn = toolbar.createEl('button', { cls: 'obsidibot-icon-btn' });
+    this.exportBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(this.exportBtn, 'download');
     this.exportBtn.title = 'Export session to vault';
     this.exportBtn.disabled = true;
     this.exportBtn.addEventListener('click', () => { this.exportToVault(); });
 
     // Spacer pushes help/settings to the right
-    toolbar.createDiv({ cls: 'obsidibot-toolbar-spacer' });
+    toolbar.createDiv({ cls: 'bojubot-toolbar-spacer' });
 
-    const toolbarRight = toolbar.createDiv({ cls: 'obsidibot-toolbar-right' });
+    const toolbarRight = toolbar.createDiv({ cls: 'bojubot-toolbar-right' });
 
-    const helpBtn = toolbarRight.createEl('button', { cls: 'obsidibot-icon-btn' });
+    const helpBtn = toolbarRight.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(helpBtn, 'circle-help');
-    helpBtn.title = 'About ObsidiBot';
+    helpBtn.title = 'About BojuBot';
     helpBtn.addEventListener('click', () => {
       new AboutModal(this.app, this.plugin).open();
     });
 
-    const settingsBtn = toolbarRight.createEl('button', { cls: 'obsidibot-icon-btn' });
+    const settingsBtn = toolbarRight.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(settingsBtn, 'brain-cog');
-    settingsBtn.title = 'Open ObsidiBot settings';
+    settingsBtn.title = 'Open BojuBot settings';
     settingsBtn.addEventListener('click', () => {
       this.appInternal.setting.open();
-      this.appInternal.setting.openTabById('obsidibot');
+      this.appInternal.setting.openTabById('bojubot');
     });
 
-    this.messagesEl = root.createDiv({ cls: 'obsidibot-messages' });
+    this.messagesEl = root.createDiv({ cls: 'bojubot-messages' });
 
-    const inputArea = root.createDiv({ cls: 'obsidibot-input-area' });
+    const inputArea = root.createDiv({ cls: 'bojubot-input-area' });
     this.inputAreaEl = inputArea;
 
-    const atDropdownEl = inputArea.createDiv({ cls: 'obsidibot-at-dropdown' });
+    const atDropdownEl = inputArea.createDiv({ cls: 'bojubot-at-dropdown' });
     atDropdownEl.hide();
     this.atMentionController.build(atDropdownEl);
 
-    this.attachPopoverEl = inputArea.createDiv({ cls: 'obsidibot-attach-popover' });
+    this.attachPopoverEl = inputArea.createDiv({ cls: 'bojubot-attach-popover' });
     this.attachPopoverEl.hide();
-    const attachFileBtn = this.attachPopoverEl.createEl('button', { cls: 'obsidibot-attach-option', text: '📄  Attach file' });
+    const attachFileBtn = this.attachPopoverEl.createEl('button', { cls: 'bojubot-attach-option', text: '📄  Attach file' });
     attachFileBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.closeAttachPopover(); this.attachmentHandler.openFilePicker(); });
-    const attachUrlBtn = this.attachPopoverEl.createEl('button', { cls: 'obsidibot-attach-option', text: '🔗  URL' });
+    const attachUrlBtn = this.attachPopoverEl.createEl('button', { cls: 'bojubot-attach-option', text: '🔗  URL' });
     attachUrlBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.closeAttachPopover(); new AttachUrlModal(this.app, (url) => this.attachmentHandler.attachUrl(url)).open(); });
-    const attachAtBtn = this.attachPopoverEl.createEl('button', { cls: 'obsidibot-attach-option', text: '@ add note' });
+    const attachAtBtn = this.attachPopoverEl.createEl('button', { cls: 'bojubot-attach-option', text: '@ add note' });
     attachAtBtn.addEventListener('mousedown', (e) => {
       e.preventDefault(); this.closeAttachPopover();
       this.inputEl.focus();
@@ -416,37 +416,37 @@ export class ClaudeView extends ItemView {
       this.inputEl.dispatchEvent(new Event('input'));
     });
 
-    this.pendingContextZone = inputArea.createDiv({ cls: 'obsidibot-pending-context' });
+    this.pendingContextZone = inputArea.createDiv({ cls: 'bojubot-pending-context' });
     this.attachmentHandler.build(this.pendingContextZone);
 
     this.inputEl = inputArea.createEl('textarea', {
-      cls: 'obsidibot-input',
-      attr: { placeholder: 'Ask ObsidiBot…', rows: '3' },
+      cls: 'bojubot-input',
+      attr: { placeholder: 'Ask BojuBot…', rows: '3' },
     });
 
-    const inputToolbar = inputArea.createDiv({ cls: 'obsidibot-input-toolbar' });
+    const inputToolbar = inputArea.createDiv({ cls: 'bojubot-input-toolbar' });
 
-    this.attachBtn = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn' });
+    this.attachBtn = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-input-toolbar-btn' });
     setIcon(this.attachBtn, 'paperclip');
     this.attachBtn.title = 'Attach file or URL';
     this.attachBtn.addEventListener('click', () => this.toggleAttachPopover(this.attachBtn));
 
-    const slashBtn = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn' });
+    const slashBtn = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-input-toolbar-btn' });
     setIcon(slashBtn, 'slash');
     slashBtn.title = 'Commands';
     slashBtn.addEventListener('click', () => this.openSlashMenu('button'));
 
-    this.permissionIconEl = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-input-toolbar-btn obsidibot-permission-icon' });
+    this.permissionIconEl = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-input-toolbar-btn bojubot-permission-icon' });
     this.permissionIconEl.addEventListener('click', () => {
       openPermissionPopover(this.plugin, this.permissionIconEl, this.getEffectivePermissionMode());
     });
     this.updatePermissionIcon();
 
-    inputToolbar.createDiv({ cls: 'obsidibot-input-toolbar-spacer' });
+    inputToolbar.createDiv({ cls: 'bojubot-input-toolbar-spacer' });
 
     this.tokenGauge.build(inputToolbar, inputArea);
 
-    this.sendBtn = inputToolbar.createEl('button', { cls: 'obsidibot-icon-btn obsidibot-send' });
+    this.sendBtn = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-send' });
     setIcon(this.sendBtn, 'arrow-up');
     this.sendBtn.title = 'Send message';
 
@@ -523,14 +523,14 @@ export class ClaudeView extends ItemView {
       if (!e.dataTransfer?.types.includes('Files')) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
-      root.classList.add('obsidibot-drag-over');
+      root.classList.add('bojubot-drag-over');
     });
     root.addEventListener('dragleave', (e: DragEvent) => {
       // Only clear highlight when leaving the panel entirely (relatedTarget is outside root)
-      if (!root.contains(e.relatedTarget as Node)) root.classList.remove('obsidibot-drag-over');
+      if (!root.contains(e.relatedTarget as Node)) root.classList.remove('bojubot-drag-over');
     });
     root.addEventListener('drop', (e: DragEvent) => {
-      root.classList.remove('obsidibot-drag-over');
+      root.classList.remove('bojubot-drag-over');
       if (!e.dataTransfer?.files.length) return;
       e.preventDefault();
       void this.attachmentHandler.handleDroppedFiles(e.dataTransfer.files);
@@ -615,27 +615,27 @@ export class ClaudeView extends ItemView {
   private updatePermissionIcon(): void {
     if (!this.permissionIconEl) return;
     const mode = this.coordinator.getEffectivePermissionMode();
-    this.permissionIconEl.removeClass('obsidibot-perm-restricted', 'obsidibot-perm-readonly', 'obsidibot-perm-standard', 'obsidibot-perm-full');
+    this.permissionIconEl.removeClass('bojubot-perm-restricted', 'bojubot-perm-readonly', 'bojubot-perm-standard', 'bojubot-perm-full');
     switch (mode) {
       case 'restricted':
         setIcon(this.permissionIconEl, 'lock');
         this.permissionIconEl.title = 'Permissions: Chat only — web access, no file system. Click to change.';
-        this.permissionIconEl.addClass('obsidibot-perm-restricted');
+        this.permissionIconEl.addClass('bojubot-perm-restricted');
         break;
       case 'readonly':
         setIcon(this.permissionIconEl, 'eye');
         this.permissionIconEl.title = 'Permissions: Read-only — no writes or shell commands. Click to change.';
-        this.permissionIconEl.addClass('obsidibot-perm-readonly');
+        this.permissionIconEl.addClass('bojubot-perm-readonly');
         break;
       case 'full':
         setIcon(this.permissionIconEl, 'triangle-alert');
         this.permissionIconEl.title = 'Permissions: Full access — all tools including bash. Click to change.';
-        this.permissionIconEl.addClass('obsidibot-perm-full');
+        this.permissionIconEl.addClass('bojubot-perm-full');
         break;
       default:
         setIcon(this.permissionIconEl, 'shield');
         this.permissionIconEl.title = 'Permissions: Standard — files + web, no bash. Click to change.';
-        this.permissionIconEl.addClass('obsidibot-perm-standard');
+        this.permissionIconEl.addClass('bojubot-perm-standard');
     }
   }
 
@@ -667,14 +667,14 @@ export class ClaudeView extends ItemView {
   /** Build export markdown from DOM messages (active session). */
   private buildExportMarkdown(title: string, sessionId: string, userLabel: string, assistantLabel: string): string {
     const msgEls = Array.from(
-      this.messagesEl.querySelectorAll<HTMLElement>('.obsidibot-message.obsidibot-user, .obsidibot-message.obsidibot-assistant')
+      this.messagesEl.querySelectorAll<HTMLElement>('.bojubot-message.bojubot-user, .bojubot-message.bojubot-assistant')
     );
     const date = new Date().toISOString().slice(0, 10);
-    let md = `---\nobsidibot_session: true\ndate: ${date}\nsession_id: ${sessionId}\nmessages: ${msgEls.length}\n---\n\n`;
+    let md = `---\nbojubot_session: true\ndate: ${date}\nsession_id: ${sessionId}\nmessages: ${msgEls.length}\n---\n\n`;
     md += `# ${title}\n\n`;
     for (const el of msgEls) {
-      const label = el.classList.contains('obsidibot-user') ? userLabel : assistantLabel;
-      if (el.classList.contains('obsidibot-assistant')) {
+      const label = el.classList.contains('bojubot-user') ? userLabel : assistantLabel;
+      if (el.classList.contains('bojubot-assistant')) {
         const text = (el.dataset.markdown ?? '').trim();
         const queryMd = el.dataset.queries
           ? this.resolveQueriesToMarkdown(JSON.parse(el.dataset.queries) as VaultQuery[])
@@ -716,9 +716,9 @@ export class ClaudeView extends ItemView {
 
   /** Export the currently visible session to a vault note. */
   exportToVault(): void {
-    const messages = this.messagesEl.querySelectorAll('.obsidibot-message');
+    const messages = this.messagesEl.querySelectorAll('.bojubot-message');
     if (messages.length === 0) { new Notice('No conversation to export'); return; }
-    const title = this.coordinator.sessionTitle || 'ObsidiBot Session';
+    const title = this.coordinator.sessionTitle || 'BojuBot Session';
     const sessionId = this.coordinator.sessionId ?? '';
     const date = new Date().toISOString().slice(0, 10);
     const safeName = title.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
@@ -741,10 +741,10 @@ export class ClaudeView extends ItemView {
     const defaultPath = folder ? `${folder}/${safeName} ${date}.md` : `${safeName} ${date}.md`;
     new ExportToVaultModal(this.app, defaultPath, async (notePath, openAfter) => {
       const dateStr = new Date(session.updatedAt).toISOString().slice(0, 10);
-      let md = `---\nobsidibot_session: true\ndate: ${dateStr}\nsession_id: ${session.claudeSessionId}\nmessages: ${messages.length}\n---\n\n`;
+      let md = `---\nbojubot_session: true\ndate: ${dateStr}\nsession_id: ${session.claudeSessionId}\nmessages: ${messages.length}\n---\n\n`;
       md += `# ${session.title}\n\n`;
       for (const msg of messages) {
-        const label = msg.role === 'user' ? (session.userLabel ?? 'User') : (session.assistantLabel ?? 'ObsidiBot');
+        const label = msg.role === 'user' ? (session.userLabel ?? 'User') : (session.assistantLabel ?? 'BojuBot');
         if (msg.role === 'assistant') {
           const text = this.cleanContent(msg.content).trim();
           const queryMd = this.queryResultsAsMarkdown(msg.content);
@@ -768,20 +768,20 @@ export class ClaudeView extends ItemView {
   }
 
   exportConversation() {
-    const messages = this.messagesEl.querySelectorAll('.obsidibot-message');
+    const messages = this.messagesEl.querySelectorAll('.bojubot-message');
     if (messages.length === 0) {
       new Notice('No conversation to export');
       return;
     }
 
-    let markdown = `# ObsidiBot Conversation\n`;
+    let markdown = `# BojuBot Conversation\n`;
     if (this.coordinator.sessionTitle) {
       markdown += `**Session:** ${this.coordinator.sessionTitle}\n\n`;
     }
 
     messages.forEach((msgEl) => {
-      const role = msgEl.classList.contains('obsidibot-user') ? 'User' :
-        msgEl.classList.contains('obsidibot-assistant') ? 'ObsidiBot' : 'System';
+      const role = msgEl.classList.contains('bojubot-user') ? 'User' :
+        msgEl.classList.contains('bojubot-assistant') ? 'BojuBot' : 'System';
       // Use stored raw markdown for assistant messages; textContent for others
       const content = (msgEl as HTMLElement).dataset.markdown ?? msgEl.textContent ?? '';
       markdown += `## ${role}\n\n${content}\n\n`;
@@ -797,7 +797,7 @@ export class ClaudeView extends ItemView {
   }
 
   copyLastResponse() {
-    const messages = this.messagesEl.querySelectorAll('.obsidibot-message.obsidibot-assistant');
+    const messages = this.messagesEl.querySelectorAll('.bojubot-message.bojubot-assistant');
     if (messages.length === 0) {
       new Notice('No assistant responses found');
       return;
@@ -905,7 +905,7 @@ export class ClaudeView extends ItemView {
 
   private async loadSession(session: StoredSession) {
     this.currentUserLabel = session.userLabel ?? 'User';
-    this.currentAssistantLabel = session.assistantLabel ?? 'ObsidiBot';
+    this.currentAssistantLabel = session.assistantLabel ?? 'BojuBot';
 
     // Coordinator updates session state and emits 'session:loaded' — we also
     // need the payload data synchronously for DOM rendering, so capture it here.
@@ -923,7 +923,7 @@ export class ClaudeView extends ItemView {
       if (messages.length > 0) {
         for (const msg of messages) {
           if (msg.role === 'separator') {
-            const divider = this.messagesEl.createDiv({ cls: 'obsidibot-compaction-divider' });
+            const divider = this.messagesEl.createDiv({ cls: 'bojubot-compaction-divider' });
             divider.setText(msg.content);
           } else if (msg.role === 'user') {
             if (msg.contexts && msg.contexts.length > 0) {
@@ -952,7 +952,7 @@ export class ClaudeView extends ItemView {
             }
           }
         }
-        const divider = this.messagesEl.createDiv({ cls: 'obsidibot-history-divider' });
+        const divider = this.messagesEl.createDiv({ cls: 'bojubot-history-divider' });
         divider.setText('─── resuming here ───');
         divider.scrollIntoView({ behavior: 'instant' });
       } else {
@@ -992,7 +992,7 @@ export class ClaudeView extends ItemView {
     if (!prompt) return;
 
     if (!this.plugin.claudeBinaryPath) {
-      this.appendMessage('system', 'Claude binary not found. Check ObsidiBot settings.');
+      this.appendMessage('system', 'Claude binary not found. Check BojuBot settings.');
       return;
     }
 
@@ -1010,12 +1010,12 @@ export class ClaudeView extends ItemView {
     const liveContextBadges: InjectedContext[] = this.attachmentHandler.getContexts()
       .filter((c: PendingContext) => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text')
       .map((c: PendingContext) => {
-        if (c.type === 'url')   return { type: 'url' as const,        url: c.text };
-        if (c.type === 'image') return { type: 'image' as const,      source: c.source, path: c.text };
-        if (c.type === 'pdf')   return { type: 'pdf' as const,        source: c.source, path: c.text };
-        return                         { type: 'attachment' as const,  source: c.source };
+        if (c.type === 'url') return { type: 'url' as const, url: c.text };
+        if (c.type === 'image') return { type: 'image' as const, source: c.source, path: c.text };
+        if (c.type === 'pdf') return { type: 'pdf' as const, source: c.source, path: c.text };
+        return { type: 'attachment' as const, source: c.source };
       });
-    this.messagesEl.querySelector('.obsidibot-welcome')?.remove();
+    this.messagesEl.querySelector('.bojubot-welcome')?.remove();
 
     if (!this.suppressNextUserBubble) {
       if (liveContextBadges.length > 0) {
@@ -1027,15 +1027,15 @@ export class ClaudeView extends ItemView {
     this.suppressNextUserBubble = false;
 
     // Response group: tool events (above) + assistant bubble + token stats (below)
-    const responseGroupEl = this.messagesEl.createDiv({ cls: 'obsidibot-response-group' });
-    const toolEventsEl = responseGroupEl.createDiv({ cls: 'obsidibot-tool-events' });
+    const responseGroupEl = this.messagesEl.createDiv({ cls: 'bojubot-response-group' });
+    const toolEventsEl = responseGroupEl.createDiv({ cls: 'bojubot-tool-events' });
     toolEventsEl.hide();
-    const assistantEl = responseGroupEl.createDiv({ cls: 'obsidibot-message obsidibot-assistant' });
-    const statusEl = assistantEl.createSpan({ cls: 'obsidibot-status', text: 'Thinking…' });
+    const assistantEl = responseGroupEl.createDiv({ cls: 'bojubot-message bojubot-assistant' });
+    const statusEl = assistantEl.createSpan({ cls: 'bojubot-status', text: 'Thinking…' });
     // Separate span for streaming text so statusEl is preserved as a sibling and can be
     // re-appended when tool calls fire after text has already been streamed (fix for #67).
-    const streamingTextEl = assistantEl.createSpan({ cls: 'obsidibot-streaming-text' });
-    const tokenStatsEl = responseGroupEl.createDiv({ cls: 'obsidibot-token-stats' });
+    const streamingTextEl = assistantEl.createSpan({ cls: 'bojubot-streaming-text' });
+    const tokenStatsEl = responseGroupEl.createDiv({ cls: 'bojubot-token-stats' });
     tokenStatsEl.hide();
     this.scrollToBottom();
 
@@ -1050,14 +1050,14 @@ export class ClaudeView extends ItemView {
       if (isSplit && this.plugin.settings.injectSplitPaneFiles) {
         const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter((p): p is string => p !== undefined);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="split-view" paths="${unique.map(p => escapeAttr(p)).join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<bojubot-context type="split-view" paths="${unique.map(p => escapeAttr(p)).join('|')}"></bojubot-context>\n\n`;
       } else if (isStacked && this.plugin.settings.injectStackedTabFiles) {
         const paths = leaves.map(l => (l.view as unknown as { file?: { path: string } }).file?.path).filter((p): p is string => p !== undefined);
         const unique = [...new Set(paths)];
-        activeFileNote = `<obsidibot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p)).join('|')}"></obsidibot-context>\n\n`;
+        activeFileNote = `<bojubot-context type="stacked-tabs" paths="${unique.map(p => escapeAttr(p)).join('|')}"></bojubot-context>\n\n`;
       } else {
         const activeFile = this.app.workspace.getActiveFile();
-        activeFileNote = activeFile ? `<obsidibot-context type="active-note" path="${escapeAttr(activeFile.path)}">Read this file if the user's task relates to its content.</obsidibot-context>\n\n` : '';
+        activeFileNote = activeFile ? `<bojubot-context type="active-note" path="${escapeAttr(activeFile.path)}">Read this file if the user's task relates to its content.</bojubot-context>\n\n` : '';
       }
     }
 
@@ -1066,10 +1066,10 @@ export class ClaudeView extends ItemView {
     if (pendingContexts.length > 0) {
       const contextBlock = pendingContexts
         .map((c: PendingContext) => {
-          if (c.type === 'url') return `<obsidibot-context type="url" url="${escapeAttr(c.text)}"></obsidibot-context>`;
-          if (c.type === 'image') return `<obsidibot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</obsidibot-context>`;
-          if (c.type === 'pdf') return `<obsidibot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</obsidibot-context>`;
-          return `<obsidibot-context type="attachment" source="${c.source}">${neutralizeTriggers(c.text)}</obsidibot-context>`;
+          if (c.type === 'url') return `<bojubot-context type="url" url="${escapeAttr(c.text)}"></bojubot-context>`;
+          if (c.type === 'image') return `<bojubot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</bojubot-context>`;
+          if (c.type === 'pdf') return `<bojubot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</bojubot-context>`;
+          return `<bojubot-context type="attachment" source="${c.source}">${neutralizeTriggers(c.text)}</bojubot-context>`;
         })
         .join('\n\n');
       finalPrompt = `${contextBlock}\n\n${prompt}`;
@@ -1099,7 +1099,7 @@ export class ClaudeView extends ItemView {
     } else {
       const pending = this.coordinator.getPendingSystemMessage();
       if (pending) {
-        finalPrompt = `<obsidibot-context type="system-message">${pending}</obsidibot-context>\n\n${finalPrompt}`;
+        finalPrompt = `<bojubot-context type="system-message">${pending}</bojubot-context>\n\n${finalPrompt}`;
         this.coordinator.clearPendingSystemMessage();
       }
       log(`[CONTINUE SESSION ${this.coordinator.sessionId?.substring(0, 8)}] Prompt: ~${estimateTokens(finalPrompt)} tokens`);
@@ -1123,8 +1123,8 @@ export class ClaudeView extends ItemView {
     const hour = new Date().getHours();
     const bucket = hour >= 5 && hour < 12 ? greetings.morning
       : hour >= 12 && hour < 18 ? greetings.afternoon
-      : hour >= 18 && hour < 22 ? greetings.evening
-      : greetings.night;
+        : hour >= 18 && hour < 22 ? greetings.evening
+          : greetings.night;
 
     // Use name only if the user has consensually introduced themselves via conversation
     const knownName = this.plugin.settings.userLabel?.trim() || '';
@@ -1136,39 +1136,39 @@ export class ClaudeView extends ItemView {
     const tip = tips[Math.floor(Math.random() * tips.length)];
 
     // --- DOM ---
-    const welcome = this.messagesEl.createDiv({ cls: 'obsidibot-welcome' });
+    const welcome = this.messagesEl.createDiv({ cls: 'bojubot-welcome' });
 
     // Header: logo + name + version — pinned to top of panel
-    const header = welcome.createDiv({ cls: 'obsidibot-welcome-header' });
-    const headerLogo = header.createEl('img', { cls: 'obsidibot-welcome-header-logo', attr: { alt: '', src: logoUrl } });
+    const header = welcome.createDiv({ cls: 'bojubot-welcome-header' });
+    const headerLogo = header.createEl('img', { cls: 'bojubot-welcome-header-logo', attr: { alt: '', src: logoUrl } });
     headerLogo.draggable = false;
-    header.createSpan({ cls: 'obsidibot-welcome-header-name', text: 'ObsidiBot' });
-    header.createSpan({ cls: 'obsidibot-welcome-version', text: `v${this.plugin.manifest.version}` });
+    header.createSpan({ cls: 'bojubot-welcome-header-name', text: 'BojuBot' });
+    header.createSpan({ cls: 'bojubot-welcome-version', text: `v${this.plugin.manifest.version}` });
 
     // Centered body: sprite + greeting + tip
-    const body = welcome.createDiv({ cls: 'obsidibot-welcome-body' });
-    const sprite = body.createEl('img', { cls: 'obsidibot-welcome-sprite', attr: { alt: 'ObsidiBot', src: spriteUrl } });
+    const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
+    const sprite = body.createEl('img', { cls: 'bojubot-welcome-sprite', attr: { alt: 'BojuBot', src: spriteUrl } });
     sprite.draggable = false;
-    sprite.title = 'About ObsidiBot';
+    sprite.title = 'About BojuBot';
     sprite.addEventListener('click', () => new AboutModal(this.app, this.plugin).open());
-    body.createEl('p', { cls: 'obsidibot-welcome-greeting', text: greetingText });
-    body.createEl('p', { cls: 'obsidibot-welcome-tip', text: tip });
+    body.createEl('p', { cls: 'bojubot-welcome-greeting', text: greetingText });
+    body.createEl('p', { cls: 'bojubot-welcome-tip', text: tip });
 
     // Recent sessions footer
     const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
       .filter(s => s.id !== this.coordinator.sessionFileId);
     if (sessions.length > 0) {
-      const recent = welcome.createDiv({ cls: 'obsidibot-welcome-recent' });
-      recent.createEl('p', { cls: 'obsidibot-welcome-recent-label', text: 'Recent sessions' });
-      const list = recent.createDiv({ cls: 'obsidibot-welcome-recent-list' });
+      const recent = welcome.createDiv({ cls: 'bojubot-welcome-recent' });
+      recent.createEl('p', { cls: 'bojubot-welcome-recent-label', text: 'Recent sessions' });
+      const list = recent.createDiv({ cls: 'bojubot-welcome-recent-list' });
       sessions.slice(0, 3).forEach(session => {
-        const item = list.createDiv({ cls: 'obsidibot-welcome-recent-item' });
-        item.createSpan({ cls: 'obsidibot-welcome-recent-title', text: session.userLabel || session.title });
-        item.createSpan({ cls: 'obsidibot-welcome-recent-date', text: relativeDate(session.updatedAt) });
+        const item = list.createDiv({ cls: 'bojubot-welcome-recent-item' });
+        item.createSpan({ cls: 'bojubot-welcome-recent-title', text: session.userLabel || session.title });
+        item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeDate(session.updatedAt) });
         item.addEventListener('click', () => void this.loadSession(session));
       });
       if (sessions.length > 3) {
-        const more = recent.createEl('span', { cls: 'obsidibot-welcome-recent-more', text: 'More…' });
+        const more = recent.createEl('span', { cls: 'bojubot-welcome-recent-more', text: 'More…' });
         more.addEventListener('click', () => this.showSessionHistory());
       }
     }
@@ -1180,59 +1180,59 @@ export class ClaudeView extends ItemView {
     this.sendBtn.disabled = true;
 
     const isWin = process.platform === 'win32';
-    const card = this.messagesEl.createDiv({ cls: 'obsidibot-setup-card' });
+    const card = this.messagesEl.createDiv({ cls: 'bojubot-setup-card' });
 
     // eslint-disable-next-line obsidianmd/ui/sentence-case
-    card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'obsidibot-setup-title' });
+    card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'bojubot-setup-title' });
     card.createEl('p', {
-      text: 'ObsidiBot requires the Claude Code CLI (included with Claude Pro/Max). ' +
+      text: 'BojuBot requires the Claude Code CLI (included with Claude Pro/Max). ' +
         'Follow the steps below, then click Check again.',
-      cls: 'obsidibot-setup-intro',
+      cls: 'bojubot-setup-intro',
     });
 
     // Step 1 — Install
-    const step1 = card.createDiv({ cls: 'obsidibot-setup-step' });
+    const step1 = card.createDiv({ cls: 'bojubot-setup-step' });
     // eslint-disable-next-line obsidianmd/ui/sentence-case
-    step1.createEl('p', { text: 'Step 1 — install Claude Code', cls: 'obsidibot-setup-step-title' });
+    step1.createEl('p', { text: 'Step 1 — install Claude Code', cls: 'bojubot-setup-step-title' });
     if (isWin) {
       // eslint-disable-next-line obsidianmd/ui/sentence-case
-      step1.createEl('p', { text: 'Open PowerShell (not WSL, not Command Prompt) and run:', cls: 'obsidibot-setup-note' });
+      step1.createEl('p', { text: 'Open PowerShell (not WSL, not Command Prompt) and run:', cls: 'bojubot-setup-note' });
       this.renderCodeRow(step1, 'irm https://claude.ai/install.ps1 | iex');
     } else {
-      step1.createEl('p', { text: 'Run in your terminal:', cls: 'obsidibot-setup-note' });
+      step1.createEl('p', { text: 'Run in your terminal:', cls: 'bojubot-setup-note' });
       this.renderCodeRow(step1, 'curl -fsSL https://claude.ai/install.sh | bash');
     }
 
     // Step 2 — Verify
-    const step2 = card.createDiv({ cls: 'obsidibot-setup-step' });
+    const step2 = card.createDiv({ cls: 'bojubot-setup-step' });
     step2.createEl('p', {
       text: `Step 2 — Verify (run in ${isWin ? 'PowerShell' : 'terminal'})`,
-      cls: 'obsidibot-setup-step-title',
+      cls: 'bojubot-setup-step-title',
     });
     this.renderCodeRow(step2, 'claude --version');
 
     // Step 3 — Authenticate
-    const step3 = card.createDiv({ cls: 'obsidibot-setup-step' });
-    step3.createEl('p', { text: 'Step 3 — log in', cls: 'obsidibot-setup-step-title' });
+    const step3 = card.createDiv({ cls: 'bojubot-setup-step' });
+    step3.createEl('p', { text: 'Step 3 — log in', cls: 'bojubot-setup-step-title' });
     step3.createEl('p', {
       text: 'This opens a browser window to authenticate with your Claude account (pro or max required):',
-      cls: 'obsidibot-setup-note',
+      cls: 'bojubot-setup-note',
     });
     this.renderCodeRow(step3, 'claude login');
 
     // Already installed? Override path
-    const pathSection = card.createDiv({ cls: 'obsidibot-setup-step' });
+    const pathSection = card.createDiv({ cls: 'bojubot-setup-step' });
     pathSection.createEl('p', {
       text: 'Already installed and still seeing this?',
-      cls: 'obsidibot-setup-step-title',
+      cls: 'bojubot-setup-step-title',
     });
     pathSection.createEl('p', {
       // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude binary below, then click check again.',
-      cls: 'obsidibot-setup-note',
+      cls: 'bojubot-setup-note',
     });
-    const pathRow = pathSection.createDiv({ cls: 'obsidibot-setup-code-row' });
-    const pathInput = pathRow.createEl('input', { cls: 'obsidibot-setup-path-input' });
+    const pathRow = pathSection.createDiv({ cls: 'bojubot-setup-code-row' });
+    const pathInput = pathRow.createEl('input', { cls: 'bojubot-setup-path-input' });
     pathInput.type = 'text';
     pathInput.placeholder = isWin ? 'C:\\Users\\you\\AppData\\Local\\Programs\\claude\\claude.exe' : '/usr/local/bin/claude';
     pathInput.value = this.plugin.settings.binaryPath ?? '';
@@ -1242,18 +1242,18 @@ export class ClaudeView extends ItemView {
     });
 
     // Action buttons
-    const btnRow = card.createDiv({ cls: 'obsidibot-setup-btn-row' });
+    const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
 
     const docsLink = btnRow.createEl('a', {
       // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: 'Claude Code install guide ↗',
       href: 'https://code.claude.com/docs/en/overview#native-install-recommended',
-      cls: 'obsidibot-setup-docs-link',
+      cls: 'bojubot-setup-docs-link',
     });
     docsLink.setAttr('target', '_blank');
     docsLink.setAttr('rel', 'noopener');
 
-    const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta obsidibot-setup-check-btn' });
+    const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
     checkBtn.addEventListener('click', () => {
       this.plugin.claudeBinaryPath = findClaudeBinary(this.plugin.settings.binaryPath);
       if (this.plugin.claudeBinaryPath) {
@@ -1263,7 +1263,7 @@ export class ClaudeView extends ItemView {
           text: isWin
             ? 'Still not found. Ensure you installed in PowerShell (not WSL), then restart Obsidian.'
             : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
-          cls: 'obsidibot-setup-error',
+          cls: 'bojubot-setup-error',
         });
         setTimeout(() => err.remove(), 6000);
       }
@@ -1277,20 +1277,20 @@ export class ClaudeView extends ItemView {
   private renderAuthError(el: HTMLElement) {
     el.empty();
     // eslint-disable-next-line obsidianmd/ui/sentence-case
-    el.createEl('p', { text: 'Error: Claude Code is not authenticated.', cls: 'obsidibot-setup-step-title' });
+    el.createEl('p', { text: 'Error: Claude Code is not authenticated.', cls: 'bojubot-setup-step-title' });
     el.createEl('p', {
       text: 'Click Open terminal below. Claude Code will launch and open a browser window to log in. ' +
         'If the browser does not open automatically, press c in the terminal to copy the login URL.',
-      cls: 'obsidibot-setup-note',
+      cls: 'bojubot-setup-note',
     });
     el.createEl('p', {
       text: 'A Claude pro or max subscription is required.',
-      cls: 'obsidibot-setup-note',
+      cls: 'bojubot-setup-note',
     });
 
-    const btnRow = el.createDiv({ cls: 'obsidibot-setup-btn-row' });
+    const btnRow = el.createDiv({ cls: 'bojubot-setup-btn-row' });
 
-    const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta obsidibot-setup-check-btn' });
+    const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
     loginBtn.addEventListener('click', () => {
       const binaryPath = this.plugin.claudeBinaryPath;
       const isWin = process.platform === 'win32';
@@ -1308,7 +1308,7 @@ export class ClaudeView extends ItemView {
       loginBtn.setText('Opened — log in, then click done');
       loginBtn.disabled = true;
 
-      const doneBtn = btnRow.createEl('button', { text: 'Done', cls: 'obsidibot-setup-check-btn' });
+      const doneBtn = btnRow.createEl('button', { text: 'Done', cls: 'bojubot-setup-check-btn' });
       doneBtn.addEventListener('click', () => {
         doneBtn.setText('Checking…');
         doneBtn.disabled = true;
@@ -1332,10 +1332,10 @@ export class ClaudeView extends ItemView {
   }
 
   private renderPermissionDenials(denials: PermissionDenial[], container: HTMLElement) {
-    const card = container.createDiv({ cls: 'obsidibot-permission-card' });
-    card.createEl('p', { cls: 'obsidibot-permission-title', text: `⚠ ${denials.length} operation${denials.length !== 1 ? 's' : ''} blocked by permission settings` });
+    const card = container.createDiv({ cls: 'bojubot-permission-card' });
+    card.createEl('p', { cls: 'bojubot-permission-title', text: `⚠ ${denials.length} operation${denials.length !== 1 ? 's' : ''} blocked by permission settings` });
 
-    const list = card.createEl('ul', { cls: 'obsidibot-permission-list' });
+    const list = card.createEl('ul', { cls: 'bojubot-permission-list' });
     for (const d of denials) {
       const detail = extractToolDetail(d.tool.toLowerCase(), d.input);
       list.createEl('li', { text: detail ? `${d.tool}: ${detail}` : d.tool });
@@ -1348,7 +1348,7 @@ export class ClaudeView extends ItemView {
       const upgradeMsg = currentMode === 'restricted'
         ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`
         : (toolList: string) => `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
-      const btnRow = card.createDiv({ cls: 'obsidibot-permission-btn-row' });
+      const btnRow = card.createDiv({ cls: 'bojubot-permission-btn-row' });
       const upgradeBtn = btnRow.createEl('button', {
         cls: 'mod-cta',
         text: upgradeLabel,
@@ -1364,16 +1364,16 @@ export class ClaudeView extends ItemView {
         void this.handleSend();
       });
       btnRow.createEl('a', {
-        cls: 'obsidibot-permission-settings-link',
+        cls: 'bojubot-permission-settings-link',
         text: 'Change default in settings',
         href: '#',
       }).addEventListener('click', (e) => {
         e.preventDefault();
         this.appInternal.setting.open();
-        this.appInternal.setting.openTabById('obsidibot');
+        this.appInternal.setting.openTabById('bojubot');
       });
       const dismissBtn = btnRow.createEl('button', {
-        cls: 'obsidibot-permission-dismiss',
+        cls: 'bojubot-permission-dismiss',
         text: 'Dismiss',
       });
       dismissBtn.addEventListener('click', () => card.remove());
@@ -1382,9 +1382,9 @@ export class ClaudeView extends ItemView {
   }
 
   private renderCodeRow(parent: HTMLElement, code: string) {
-    const row = parent.createDiv({ cls: 'obsidibot-setup-code-row' });
-    row.createEl('code', { text: code, cls: 'obsidibot-setup-code' });
-    const copyBtn = row.createEl('button', { text: 'Copy', cls: 'obsidibot-setup-copy-btn' });
+    const row = parent.createDiv({ cls: 'bojubot-setup-code-row' });
+    row.createEl('code', { text: code, cls: 'bojubot-setup-code' });
+    const copyBtn = row.createEl('button', { text: 'Copy', cls: 'bojubot-setup-copy-btn' });
     copyBtn.addEventListener('click', () => {
       void navigator.clipboard.writeText(code).then(() => {
         copyBtn.setText('Copied!');
@@ -1415,8 +1415,8 @@ export class ClaudeView extends ItemView {
 
   private closeAttachPopover() {
     this.attachPopoverEl.hide();
-    this.attachPopoverEl.closest('.obsidibot-input-area')
-      ?.querySelector('.obsidibot-icon-btn.is-active')
+    this.attachPopoverEl.closest('.bojubot-input-area')
+      ?.querySelector('.bojubot-icon-btn.is-active')
       ?.classList.remove('is-active');
     if (this.attachClickOutside) {
       document.removeEventListener('click', this.attachClickOutside);
@@ -1426,15 +1426,15 @@ export class ClaudeView extends ItemView {
 
   /** Render a vault query result card inside a response group (mode: show). */
   private renderQueryResultCard(containerEl: HTMLElement, result: VaultQueryResult) {
-    const card = containerEl.createDiv({ cls: 'obsidibot-vault-query-card' });
-    const header = card.createDiv({ cls: 'obsidibot-vault-query-header' });
-    const iconEl = header.createSpan({ cls: 'obsidibot-vault-query-icon' });
+    const card = containerEl.createDiv({ cls: 'bojubot-vault-query-card' });
+    const header = card.createDiv({ cls: 'bojubot-vault-query-header' });
+    const iconEl = header.createSpan({ cls: 'bojubot-vault-query-icon' });
     setIcon(iconEl, 'git-branch');
-    header.createSpan({ cls: 'obsidibot-vault-query-label', text: queryLabel(result.query) });
+    header.createSpan({ cls: 'bojubot-vault-query-label', text: queryLabel(result.query) });
 
-    const body = card.createDiv({ cls: 'obsidibot-vault-query-body' });
+    const body = card.createDiv({ cls: 'bojubot-vault-query-body' });
     if (result.error) {
-      body.createSpan({ cls: 'obsidibot-vault-query-error', text: `Error: ${result.error}` });
+      body.createSpan({ cls: 'bojubot-vault-query-error', text: `Error: ${result.error}` });
       return;
     }
 
@@ -1447,9 +1447,9 @@ export class ClaudeView extends ItemView {
             : [];
 
     if (items.length === 0) {
-      body.createSpan({ cls: 'obsidibot-vault-query-empty', text: 'No results.' });
+      body.createSpan({ cls: 'bojubot-vault-query-empty', text: 'No results.' });
     } else {
-      const list = body.createEl('ul', { cls: 'obsidibot-vault-query-list' });
+      const list = body.createEl('ul', { cls: 'bojubot-vault-query-list' });
       for (const item of items) {
         const li = list.createEl('li');
         if (isTags) {
@@ -1478,13 +1478,13 @@ export class ClaudeView extends ItemView {
     const injectPrompt = buildInjectMessage(results);
 
     // New response group for Claude's continuation (no user message bubble)
-    const responseGroupEl = this.messagesEl.createDiv({ cls: 'obsidibot-response-group' });
-    const toolEventsEl = responseGroupEl.createDiv({ cls: 'obsidibot-tool-events' });
+    const responseGroupEl = this.messagesEl.createDiv({ cls: 'bojubot-response-group' });
+    const toolEventsEl = responseGroupEl.createDiv({ cls: 'bojubot-tool-events' });
     toolEventsEl.hide();
-    const assistantEl = responseGroupEl.createDiv({ cls: 'obsidibot-message obsidibot-assistant' });
-    const statusEl = assistantEl.createSpan({ cls: 'obsidibot-status', text: 'Processing vault data…' });
-    const streamingTextEl = assistantEl.createSpan({ cls: 'obsidibot-streaming-text' });
-    const tokenStatsEl = responseGroupEl.createDiv({ cls: 'obsidibot-token-stats' });
+    const assistantEl = responseGroupEl.createDiv({ cls: 'bojubot-message bojubot-assistant' });
+    const statusEl = assistantEl.createSpan({ cls: 'bojubot-status', text: 'Processing vault data…' });
+    const streamingTextEl = assistantEl.createSpan({ cls: 'bojubot-streaming-text' });
+    const tokenStatsEl = responseGroupEl.createDiv({ cls: 'bojubot-token-stats' });
     tokenStatsEl.hide();
     this.setSendState(true);
     this.scrollToBottom();
@@ -1499,7 +1499,7 @@ export class ClaudeView extends ItemView {
   }
 
   /**
-   * Strip all protocol lines (@@CORTEX_ACTION, @@CORTEX_QUERY, etc.) from raw
+   * Strip all protocol lines (@@BOJU_ACTION, @@BOJU_QUERY, etc.) from raw
    * assistant content before display or export. This is the single canonical
    * cleaning step — add new protocol prefixes to extractActions() and they are
    * automatically handled everywhere that calls cleanContent().
@@ -1580,7 +1580,7 @@ export class ClaudeView extends ItemView {
     return blocks.join('\n\n');
   }
 
-  /** Parse @@CORTEX_QUERY lines from raw content and resolve them to markdown. */
+  /** Parse @@BOJU_QUERY lines from raw content and resolve them to markdown. */
   private queryResultsAsMarkdown(content: string): string {
     const queries: VaultQuery[] = [];
     for (const line of content.split('\n')) {
@@ -1593,7 +1593,7 @@ export class ClaudeView extends ItemView {
   }
 
   private appendMessage(role: 'user' | 'assistant' | 'system', text: string): HTMLElement {
-    const el = this.messagesEl.createDiv({ cls: `obsidibot-message obsidibot-${role}` });
+    const el = this.messagesEl.createDiv({ cls: `bojubot-message bojubot-${role}` });
     el.setText(text);
     this.scrollToBottom();
     this.updateExportBtn();
@@ -1605,18 +1605,18 @@ export class ClaudeView extends ItemView {
    *  (active-note, split-view, stacked-tabs, system-message) are silent
    *  in the live UI and should stay silent on replay. */
   private appendUserMessageWithContexts(text: string, contexts: InjectedContext[]): HTMLElement {
-    const el = this.messagesEl.createDiv({ cls: 'obsidibot-message obsidibot-user' });
+    const el = this.messagesEl.createDiv({ cls: 'bojubot-message bojubot-user' });
 
     const manualContexts = contexts.filter(ctx =>
       (ctx.type === 'attachment' || ctx.type === 'url' || ctx.type === 'image' || ctx.type === 'pdf')
     );
     if (manualContexts.length > 0) {
-      const badgeStrip = el.createDiv({ cls: 'obsidibot-replay-context-strip' });
+      const badgeStrip = el.createDiv({ cls: 'bojubot-replay-context-strip' });
       for (const ctx of manualContexts) {
-        const badge = badgeStrip.createSpan({ cls: 'obsidibot-replay-context-badge' });
-        const iconEl = badge.createSpan({ cls: 'obsidibot-replay-context-icon' });
+        const badge = badgeStrip.createSpan({ cls: 'bojubot-replay-context-badge' });
+        const iconEl = badge.createSpan({ cls: 'bojubot-replay-context-icon' });
         setIcon(iconEl, this.iconForContextType(ctx.type));
-        badge.createSpan({ cls: 'obsidibot-replay-context-label', text: this.labelForContext(ctx) });
+        badge.createSpan({ cls: 'bojubot-replay-context-label', text: this.labelForContext(ctx) });
       }
     }
 
@@ -1628,34 +1628,34 @@ export class ClaudeView extends ItemView {
 
   private iconForContextType(type: InjectedContextType): string {
     switch (type) {
-      case 'image':        return 'image';
-      case 'pdf':          return 'file-text';
-      case 'url':          return 'link';
+      case 'image': return 'image';
+      case 'pdf': return 'file-text';
+      case 'url': return 'link';
       case 'system-message': return 'refresh-cw';
       case 'split-view':
       case 'stacked-tabs': return 'layout';
-      default:             return 'paperclip';
+      default: return 'paperclip';
     }
   }
 
   private labelForContext(ctx: InjectedContext): string {
     switch (ctx.type) {
-      case 'active-note':   return ctx.path ?? 'active note';
-      case 'split-view':    return `Split: ${ctx.paths?.replace(/\|/g, ', ') ?? ''}`;
-      case 'stacked-tabs':  return `Stacked: ${ctx.paths?.replace(/\|/g, ', ') ?? ''}`;
-      case 'attachment':    return ctx.source ?? 'attachment';
-      case 'url':           return ctx.url ?? 'url';
-      case 'image':         return ctx.source ?? 'image';
-      case 'pdf':           return ctx.source ?? 'pdf';
+      case 'active-note': return ctx.path ?? 'active note';
+      case 'split-view': return `Split: ${ctx.paths?.replace(/\|/g, ', ') ?? ''}`;
+      case 'stacked-tabs': return `Stacked: ${ctx.paths?.replace(/\|/g, ', ') ?? ''}`;
+      case 'attachment': return ctx.source ?? 'attachment';
+      case 'url': return ctx.url ?? 'url';
+      case 'image': return ctx.source ?? 'image';
+      case 'pdf': return ctx.source ?? 'pdf';
       case 'system-message': return 'context refresh';
-      default:              return ctx.type;
+      default: return ctx.type;
     }
   }
 
   /** Enable or disable the export button based on whether the session has any messages. */
   private updateExportBtn() {
     if (!this.exportBtn) return;
-    const hasMessages = this.messagesEl.querySelectorAll('.obsidibot-message').length > 0;
+    const hasMessages = this.messagesEl.querySelectorAll('.bojubot-message').length > 0;
     this.exportBtn.disabled = !hasMessages;
   }
 
@@ -1812,10 +1812,10 @@ export class ClaudeView extends ItemView {
       {
         category: 'Context',
         name: 'Open settings',
-        description: 'Open ObsidiBot settings',
+        description: 'Open BojuBot settings',
         action: () => {
           this.appInternal.setting.open();
-          this.appInternal.setting.openTabById('obsidibot');
+          this.appInternal.setting.openTabById('bojubot');
         },
       },
       {
@@ -1840,7 +1840,7 @@ class AttachUrlModal extends Modal {
   onOpen() {
     this.titleEl.setText('Attach URL');
     const input = this.contentEl.createEl('input', {
-      cls: 'obsidibot-attach-url-input',
+      cls: 'bojubot-attach-url-input',
       attr: { type: 'text', placeholder: 'HTTPS://…', style: 'width:100%;box-sizing:border-box;' },
     });
     input.addEventListener('keydown', (e) => {

@@ -1,21 +1,21 @@
 # Permissions
 
-ObsidiBot runs Claude Code as a subprocess and controls what it's allowed to do via Claude Code's permission flags. The permission mode is set **per session** before any message is sent — it cannot change mid-response.
+BojuBot runs Claude Code as a subprocess and controls what it's allowed to do via Claude Code's permission flags. The permission mode is set **per session** before any message is sent — it cannot change mid-response.
 
 ## Modes
 
-| Mode                         | Icon        | What Claude can do                                                                        |
-| ---------------------------- | ----------- | ----------------------------------------------------------------------------------------- |
-| **Chat only**                | 🔵 lock     | Web search/fetch only — no file system access. Works with attached context and @-mentions |
-| **Standard** *(recommended)* | 🟡 shield   | Read and write files, use web search/fetch — Bash/shell commands blocked                  |
-| **Read only**                | 🟢 eye      | Read files, search, fetch web — no writes or shell commands                               |
-| **Full access**              | 🔴 warning  | Everything, including shell commands (Bash, git, etc.)                                    |
+| Mode                         | Icon      | What Claude can do                                                                        |
+| ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
+| **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access. Works with attached context and @-mentions |
+| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch — Bash/shell commands blocked                  |
+| **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes or shell commands                               |
+| **Full access**              | 🔴 warning | Everything, including shell commands (Bash, git, etc.)                                    |
 
 **Change the mode any time** by clicking the colored permission icon in the input toolbar — a picker appears above it with all four options. The current mode is highlighted. Use arrow keys + Enter or click to select; Escape or click outside to cancel.
 
-The same picker is available from the Command Palette: **ObsidiBot: Change permission mode**.
+The same picker is available from the Command Palette: **BojuBot: Change permission mode**.
 
-The default for new sessions is set in **Settings → ObsidiBot → Permission mode**.
+The default for new sessions is set in **Settings → BojuBot → Permission mode**.
 
 ### Chat only
 

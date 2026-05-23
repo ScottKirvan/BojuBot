@@ -31,7 +31,7 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 let tmpDir: string;
 
 before(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'obsidibot-test-'));
+  tmpDir = mkdtempSync(join(tmpdir(), 'bojubot-test-'));
 });
 
 after(() => {
@@ -291,10 +291,10 @@ describe('permission picker mode table', () => {
     description: string;
   }
   const EXPECTED_MODES: ModeOption[] = [
-    { mode: 'restricted', icon: 'lock',           colorClass: 'obsidibot-perm-restricted', label: 'Chat only',   description: 'web only, no vault access' },
-    { mode: 'readonly',   icon: 'eye',            colorClass: 'obsidibot-perm-readonly',   label: 'Read only',   description: 'read vault, no writes' },
-    { mode: 'standard',   icon: 'shield',         colorClass: 'obsidibot-perm-standard',   label: 'Standard',    description: 'read+write vault, no bash' },
-    { mode: 'full',       icon: 'triangle-alert', colorClass: 'obsidibot-perm-full',       label: 'Full access', description: 'unrestricted, including bash' },
+    { mode: 'restricted', icon: 'lock', colorClass: 'bojubot-perm-restricted', label: 'Chat only', description: 'web only, no vault access' },
+    { mode: 'readonly', icon: 'eye', colorClass: 'bojubot-perm-readonly', label: 'Read only', description: 'read vault, no writes' },
+    { mode: 'standard', icon: 'shield', colorClass: 'bojubot-perm-standard', label: 'Standard', description: 'read+write vault, no bash' },
+    { mode: 'full', icon: 'triangle-alert', colorClass: 'bojubot-perm-full', label: 'Full access', description: 'unrestricted, including bash' },
   ];
 
   const ALL_MODES: PermissionMode[] = ['restricted', 'readonly', 'standard', 'full'];
@@ -309,16 +309,16 @@ describe('permission picker mode table', () => {
 
   test('each mode entry has a non-empty icon, colorClass, label, and description', () => {
     for (const entry of EXPECTED_MODES) {
-      assert.ok(entry.icon.length > 0,       `${entry.mode}: icon is empty`);
+      assert.ok(entry.icon.length > 0, `${entry.mode}: icon is empty`);
       assert.ok(entry.colorClass.length > 0, `${entry.mode}: colorClass is empty`);
-      assert.ok(entry.label.length > 0,      `${entry.mode}: label is empty`);
+      assert.ok(entry.label.length > 0, `${entry.mode}: label is empty`);
       assert.ok(entry.description.length > 0, `${entry.mode}: description is empty`);
     }
   });
 
-  test('color classes use the obsidibot-perm- prefix', () => {
+  test('color classes use the bojubot-perm- prefix', () => {
     for (const entry of EXPECTED_MODES) {
-      assert.ok(entry.colorClass.startsWith('obsidibot-perm-'), `${entry.mode}: colorClass must start with obsidibot-perm-`);
+      assert.ok(entry.colorClass.startsWith('bojubot-perm-'), `${entry.mode}: colorClass must start with bojubot-perm-`);
     }
   });
 
@@ -498,11 +498,11 @@ describe('parseStreamOutput', () => {
   // UI bridge action routing — needed for #76 fix
   // -------------------------------------------------------------------------
 
-  test('routes @@CORTEX_ACTION lines to onAction, not onText', async () => {
+  test('routes @@BOJU_ACTION lines to onAction, not onText', async () => {
     const proc = mockProc();
     const actions: string[] = [];
     const texts: string[] = [];
-    const ACTION_LINE = '@@CORTEX_ACTION {"action":"open-file","path":"notes/test.md"}';
+    const ACTION_LINE = '@@BOJU_ACTION {"action":"open-file","path":"notes/test.md"}';
     const chunks = [
       JSON.stringify({
         type: 'assistant',
@@ -524,13 +524,13 @@ describe('parseStreamOutput', () => {
       proc.emit('close', 0);
     });
     assert.equal(actions.length, 1, 'onAction should fire once');
-    assert.ok(actions[0].startsWith('@@CORTEX_ACTION'), 'action line should be passed verbatim');
+    assert.ok(actions[0].startsWith('@@BOJU_ACTION'), 'action line should be passed verbatim');
     assert.equal(texts.length, 0, 'onText should not receive action lines');
   });
 
   test('action-only response still delivers sessionId in onDone', async () => {
     const proc = mockProc();
-    const ACTION_LINE = '@@CORTEX_ACTION {"action":"show-notice","message":"Done"}';
+    const ACTION_LINE = '@@BOJU_ACTION {"action":"show-notice","message":"Done"}';
     const chunks = [
       JSON.stringify({ type: 'system', session_id: 'sess-action-only' }) + '\n',
       JSON.stringify({
@@ -684,7 +684,7 @@ describe('export button disabled state', () => {
   }
 
   function updateExportBtn(ctx: ReturnType<typeof makeContext>) {
-    const hasMessages = ctx.messagesEl.querySelectorAll('.obsidibot-message').length > 0;
+    const hasMessages = ctx.messagesEl.querySelectorAll('.bojubot-message').length > 0;
     ctx.exportBtn.disabled = !hasMessages;
   }
 
@@ -831,15 +831,15 @@ describe('extractActions', () => {
   });
 
   test('parses a valid action line and removes it from clean output', () => {
-    const line = '@@CORTEX_ACTION {"action":"show-notice","message":"hi"}';
+    const line = '@@BOJU_ACTION {"action":"show-notice","message":"hi"}';
     const { clean, actions } = extractActions(`before\n${line}\nafter`);
     assert.equal(actions.length, 1);
     assert.equal(actions[0].action, 'show-notice');
-    assert.ok(!clean.includes('@@CORTEX_ACTION'), 'action line must not appear in clean output');
+    assert.ok(!clean.includes('@@BOJU_ACTION'), 'action line must not appear in clean output');
   });
 
   test('silently skips malformed JSON — no throw, no action pushed, bad line not in clean', () => {
-    const bad = '@@CORTEX_ACTION {not valid json}';
+    const bad = '@@BOJU_ACTION {not valid json}';
     let threw = false;
     let result: ReturnType<typeof extractActions> | undefined;
     try {
@@ -849,19 +849,19 @@ describe('extractActions', () => {
     }
     assert.equal(threw, false, 'must not throw on malformed JSON');
     assert.deepEqual(result!.actions, [], 'malformed action must not be pushed');
-    assert.ok(!result!.clean.includes('@@CORTEX_ACTION'), 'malformed line must not appear in clean output');
+    assert.ok(!result!.clean.includes('@@BOJU_ACTION'), 'malformed line must not appear in clean output');
   });
 
-  test('strips @@CORTEX_QUERY lines from clean output', () => {
-    const { clean, actions } = extractActions('before\n@@CORTEX_QUERY {"query":"test"}\nafter');
-    assert.ok(!clean.includes('@@CORTEX_QUERY'), 'query lines must be stripped from clean');
+  test('strips @@BOJU_QUERY lines from clean output', () => {
+    const { clean, actions } = extractActions('before\n@@BOJU_QUERY {"query":"test"}\nafter');
+    assert.ok(!clean.includes('@@BOJU_QUERY'), 'query lines must be stripped from clean');
     assert.deepEqual(actions, []);
   });
 
   test('handles multiple actions in one text block', () => {
     const text = [
-      '@@CORTEX_ACTION {"action":"open-file","path":"a.md"}',
-      '@@CORTEX_ACTION {"action":"show-notice","message":"done"}',
+      '@@BOJU_ACTION {"action":"open-file","path":"a.md"}',
+      '@@BOJU_ACTION {"action":"show-notice","message":"done"}',
     ].join('\n');
     const { actions, clean } = extractActions(text);
     assert.equal(actions.length, 2);
@@ -927,7 +927,7 @@ describe('saveSessionAtTop sort order', () => {
 // ---------------------------------------------------------------------------
 
 describe('resolveSessionsDir', () => {
-  const CONFIG = '.obsidian/plugins/obsidibot';
+  const CONFIG = '.obsidian/plugins/bojubot';
 
   test('undefined customPath → default sessions dir', () => {
     const result = resolveSessionsDir('/vault', undefined, CONFIG);

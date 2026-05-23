@@ -1,10 +1,10 @@
 # Slash Command Params — Feature Design Spec
 
-**Status: IMPLEMENTED** — fully implemented as the ObsidiBot skills system (`SlashParamModal.ts`, `SkillLoader.ts`). The `note` type is resolved as full content attachment; `checkboxes` produces comma-separated string. Claude Code format (`arguments:`, `$ARGUMENTS`) also supported.
+**Status: IMPLEMENTED** — fully implemented as the BojuBot skills system (`SlashParamModal.ts`, `SkillLoader.ts`). The `note` type is resolved as full content attachment; `checkboxes` produces comma-separated string. Claude Code format (`arguments:`, `$ARGUMENTS`) also supported.
 
 ## Overview
 
-Extend the slash command template system to support **parameterized prompts**: when a command template defines input fields in its frontmatter, ObsidiBot presents a modal form before executing, collects user input, interpolates the values into the prompt body, and either inserts the result into the chat input or fires it directly.
+Extend the slash command template system to support **parameterized prompts**: when a command template defines input fields in its frontmatter, BojuBot presents a modal form before executing, collects user input, interpolates the values into the prompt body, and either inserts the result into the chat input or fires it directly.
 
 This turns static prompt templates into reusable **skills** — structured, repeatable agentic workflows that don't require the user to manually edit the template each time.
 
@@ -16,38 +16,38 @@ Templates define their form fields via a `params` key in YAML frontmatter — a 
 
 ### Reference: GitHub Issue Forms
 
-The schema design is intentionally aligned with [GitHub's issue forms syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema). Where field names overlap (`label`, `placeholder`, `options`, `validations`), use GitHub's conventions. ObsidiBot-specific extensions (`autorun`, `type: note`) are additive and clearly differentiated.
+The schema design is intentionally aligned with [GitHub's issue forms syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema). Where field names overlap (`label`, `placeholder`, `options`, `validations`), use GitHub's conventions. BojuBot-specific extensions (`autorun`, `type: note`) are additive and clearly differentiated.
 
 ### Supported Field Types (v1)
 
-| Type | Description |
-|------|-------------|
-| `input` | Single-line text field |
-| `textarea` | Multi-line text field |
-| `dropdown` | Select from a fixed list of options |
-| `checkboxes` | One or more boolean toggles |
-| `note` | Obsidian-native vault note picker (resolves to note title or path) |
+| Type         | Description                                                        |
+| ------------ | ------------------------------------------------------------------ |
+| `input`      | Single-line text field                                             |
+| `textarea`   | Multi-line text field                                              |
+| `dropdown`   | Select from a fixed list of options                                |
+| `checkboxes` | One or more boolean toggles                                        |
+| `note`       | Obsidian-native vault note picker (resolves to note title or path) |
 
 ### Field Properties
 
-| Property | Required | Description |
-|----------|----------|-------------|
-| `id` | Yes | Variable name used in `{{interpolation}}` |
-| `type` | Yes | One of the supported types above |
-| `label` | Yes | Human-readable field label shown in the form |
-| `description` | No | Helper text shown below the label |
-| `placeholder` | No | Placeholder text for `input` / `textarea` |
-| `options` | Yes (dropdown) | Array of string values |
-| `default` | No | Pre-filled value |
-| `validations.required` | No | If `true`, blocks submission when empty |
+| Property               | Required       | Description                                  |
+| ---------------------- | -------------- | -------------------------------------------- |
+| `id`                   | Yes            | Variable name used in `{{interpolation}}`    |
+| `type`                 | Yes            | One of the supported types above             |
+| `label`                | Yes            | Human-readable field label shown in the form |
+| `description`          | No             | Helper text shown below the label            |
+| `placeholder`          | No             | Placeholder text for `input` / `textarea`    |
+| `options`              | Yes (dropdown) | Array of string values                       |
+| `default`              | No             | Pre-filled value                             |
+| `validations.required` | No             | If `true`, blocks submission when empty      |
 
 ### Additional Frontmatter Keys
 
-| Key | Description |
-|-----|-------------|
-| `autorun` | If `true`, executes immediately after form submit (or immediately if no `params`). If absent or `false`, inserts into chat input for review. |
-| `category` | Groups the command under a named heading in the `/` menu |
-| `description` | Short subtitle shown below the command name in the menu |
+| Key           | Description                                                                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autorun`     | If `true`, executes immediately after form submit (or immediately if no `params`). If absent or `false`, inserts into chat input for review. |
+| `category`    | Groups the command under a named heading in the `/` menu                                                                                     |
+| `description` | Short subtitle shown below the command name in the menu                                                                                      |
 
 ---
 

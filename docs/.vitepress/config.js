@@ -1,15 +1,15 @@
 export default {
-  base: '/ObsidiBot/',
-  title: 'ObsidiBot',
+  base: '/BojuBot/',
+  title: 'BojuBot',
   description: 'A Claude Code agent inside your Obsidian vault',
 
   head: [
-    ['link', { rel: 'icon', href: '/ObsidiBot/favicon.ico' }],
+    ['link', { rel: 'icon', href: '/BojuBot/favicon.ico' }],
   ],
 
   themeConfig: {
     logo: '/logo.png',
-    siteTitle: 'ObsidiBot',
+    siteTitle: 'BojuBot',
 
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
@@ -17,9 +17,9 @@ export default {
       {
         text: 'Community',
         items: [
-          { text: 'GitHub', link: 'https://github.com/ScottKirvan/ObsidiBot' },
+          { text: 'GitHub', link: 'https://github.com/ScottKirvan/BojuBot' },
           { text: 'Discord', link: 'https://discord.gg/TN6XJSNK5Y' },
-          { text: 'Releases', link: 'https://github.com/ScottKirvan/ObsidiBot/releases' },
+          { text: 'Releases', link: 'https://github.com/ScottKirvan/BojuBot/releases' },
         ]
       }
     ],
@@ -33,7 +33,7 @@ export default {
         ]
       },
       {
-        text: 'Using ObsidiBot',
+        text: 'Using BojuBot',
         items: [
           { text: 'Chat Panel', link: '/guide/chat-panel' },
           { text: 'Slash Commands', link: '/guide/slash-commands' },
@@ -60,7 +60,7 @@ export default {
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ScottKirvan/ObsidiBot' },
+      { icon: 'github', link: 'https://github.com/ScottKirvan/BojuBot' },
       { icon: 'discord', link: 'https://discord.gg/TN6XJSNK5Y' },
     ],
 
@@ -70,7 +70,7 @@ export default {
     },
 
     editLink: {
-      pattern: 'https://github.com/ScottKirvan/ObsidiBot/edit/main/docs/:path',
+      pattern: 'https://github.com/ScottKirvan/BojuBot/edit/main/docs/:path',
       text: 'Edit this page on GitHub'
     },
 

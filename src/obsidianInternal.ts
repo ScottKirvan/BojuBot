@@ -1,5 +1,5 @@
 /**
- * Minimal shape of Obsidian's private App APIs used across ObsidiBot.
+ * Minimal shape of Obsidian's private App APIs used across BojuBot.
  * Cast via: `(this.app as unknown as AppInternal)`
  */
 export interface AppInternal {

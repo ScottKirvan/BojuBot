@@ -1,21 +1,23 @@
-/* ObsidiBot plugin styles */
+/* BojuBot plugin styles */
 
-.obsidibot-hidden { display: none; }
+.bojubot-hidden {
+  display: none;
+}
 
 /* ── Layout ── */
-.obsidibot-view {
+.bojubot-view {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
 
-.obsidibot-view.obsidibot-drag-over {
+.bojubot-view.bojubot-drag-over {
   outline: 2px dashed var(--interactive-accent);
   outline-offset: -3px;
 }
 
-.obsidibot-toolbar {
+.bojubot-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -24,13 +26,13 @@
   flex-shrink: 0;
 }
 
-.obsidibot-session-status {
+.bojubot-session-status {
   font-size: 0.8em;
   color: var(--text-muted);
   flex: 1;
 }
 
-.obsidibot-messages {
+.bojubot-messages {
   flex: 1;
   overflow-y: auto;
   padding: 12px 10px;
@@ -39,7 +41,7 @@
   gap: 12px;
 }
 
-.obsidibot-input-area {
+.bojubot-input-area {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--background-modifier-border);
@@ -47,7 +49,7 @@
   position: relative;
 }
 
-.obsidibot-input {
+.bojubot-input {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
@@ -61,12 +63,12 @@
   padding: 8px 10px;
 }
 
-.obsidibot-input:focus {
+.bojubot-input:focus {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--interactive-accent);
 }
 
-.obsidibot-input-toolbar {
+.bojubot-input-toolbar {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -74,24 +76,24 @@
   background: var(--background-secondary);
 }
 
-.obsidibot-input-toolbar-spacer {
+.bojubot-input-toolbar-spacer {
   flex: 1;
 }
 
-.obsidibot-token-gauge {
+.bojubot-token-gauge {
   flex-shrink: 0;
   margin: 0 4px;
   opacity: 0.7;
   cursor: pointer;
 }
 
-.obsidibot-gauge-track {
+.bojubot-gauge-track {
   fill: none;
   stroke: var(--text-faint);
   stroke-width: 2.5;
 }
 
-.obsidibot-gauge-arc {
+.bojubot-gauge-arc {
   fill: none;
   stroke-width: 2.5;
   stroke-linecap: round;
@@ -100,36 +102,36 @@
   transition: stroke-dashoffset 0.4s ease, stroke 0.4s ease;
 }
 
-.obsidibot-gauge-low {
+.bojubot-gauge-low {
   stroke: var(--color-green);
 }
 
-.obsidibot-gauge-mid {
+.bojubot-gauge-mid {
   stroke: var(--color-yellow);
 }
 
-.obsidibot-gauge-high {
+.bojubot-gauge-high {
   stroke: var(--color-orange);
 }
 
-.obsidibot-gauge-full {
+.bojubot-gauge-full {
   stroke: var(--color-red);
 }
 
-.obsidibot-input-toolbar-btn {
+.bojubot-input-toolbar-btn {
   opacity: 0.65;
 }
 
-.obsidibot-permission-icon {
+.bojubot-permission-icon {
   opacity: 1;
 }
 
-.obsidibot-input-toolbar-btn:disabled {
+.bojubot-input-toolbar-btn:disabled {
   cursor: not-allowed;
   opacity: 0.2;
 }
 
-.obsidibot-attach-popover {
+.bojubot-attach-popover {
   position: absolute;
   bottom: calc(100% + 4px);
   left: 0;
@@ -145,7 +147,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.obsidibot-attach-option {
+.bojubot-attach-option {
   background: none;
   border: none;
   border-radius: 4px;
@@ -156,12 +158,12 @@
   font-size: var(--font-ui-small);
 }
 
-.obsidibot-attach-option:hover {
+.bojubot-attach-option:hover {
   background: var(--background-modifier-hover);
 }
 
 /* ── Icon buttons ── */
-.obsidibot-icon-btn {
+.bojubot-icon-btn {
   display: flex !important;
   align-items: center;
   justify-content: center;
@@ -177,49 +179,49 @@
   flex-shrink: 0;
 }
 
-.obsidibot-icon-btn svg {
+.bojubot-icon-btn svg {
   width: 14px;
   height: 14px;
 }
 
-.obsidibot-icon-btn:hover:not(:disabled) {
+.bojubot-icon-btn:hover:not(:disabled) {
   background: var(--background-modifier-hover) !important;
   color: var(--text-normal);
 }
 
-.obsidibot-toolbar-spacer {
+.bojubot-toolbar-spacer {
   width: 12px;
   flex-shrink: 0;
 }
 
-.obsidibot-toolbar-right {
+.bojubot-toolbar-right {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-.obsidibot-send {
+.bojubot-send {
   color: var(--interactive-accent);
 }
 
-.obsidibot-send:hover:not(:disabled) {
+.bojubot-send:hover:not(:disabled) {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
 }
 
 /* ── About modal ── */
-.obsidibot-about-modal {
+.bojubot-about-modal {
   padding: 8px 4px 4px;
 }
 
-.obsidibot-about-header {
+.bojubot-about-header {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 16px 0 20px;
 }
 
-.obsidibot-about-logo {
+.bojubot-about-logo {
   width: 144px;
   height: 144px;
   border-radius: 28px;
@@ -227,33 +229,33 @@
   margin-bottom: 14px;
 }
 
-.obsidibot-about-name {
+.bojubot-about-name {
   font-size: 1.5em;
   font-weight: 700;
   color: var(--text-normal);
   margin-bottom: 4px;
 }
 
-.obsidibot-about-version {
+.bojubot-about-version {
   color: var(--text-muted);
   font-size: 0.82em;
 }
 
-.obsidibot-about-list {
+.bojubot-about-list {
   margin-top: 16px;
   background: var(--background-secondary);
   border-radius: var(--radius-m, 8px);
   overflow: hidden;
 }
 
-.obsidibot-about-item {
+.bojubot-about-item {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
 }
 
-.obsidibot-about-item-icon {
+.bojubot-about-item-icon {
   flex-shrink: 0;
   width: 64px;
   height: 64px;
@@ -263,30 +265,30 @@
   color: var(--text-muted);
 }
 
-.obsidibot-about-item-icon svg {
+.bojubot-about-item-icon svg {
   width: 44px;
   height: 44px;
 }
 
-.obsidibot-about-item-text {
+.bojubot-about-item-text {
   flex: 1;
   min-width: 0;
 }
 
-.obsidibot-about-item-title {
+.bojubot-about-item-title {
   font-size: 0.95em;
   font-weight: 500;
   color: var(--text-normal);
   margin-bottom: 2px;
 }
 
-.obsidibot-about-item-desc {
+.bojubot-about-item-desc {
   font-size: 0.8em;
   color: var(--text-muted);
   line-height: 1.4;
 }
 
-.obsidibot-about-item-btn {
+.bojubot-about-item-btn {
   flex-shrink: 0;
   padding: 5px 14px;
   border-radius: var(--radius-s, 4px);
@@ -299,18 +301,18 @@
   white-space: nowrap;
 }
 
-.obsidibot-about-item-btn.mod-cta {
+.bojubot-about-item-btn.mod-cta {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   border-color: transparent;
 }
 
-.obsidibot-about-item-btn:hover {
+.bojubot-about-item-btn:hover {
   opacity: 0.85;
 }
 
 /* ── Messages ── */
-.obsidibot-message {
+.bojubot-message {
   padding: 8px 12px;
   border-radius: 6px;
   line-height: 1.5;
@@ -319,7 +321,7 @@
   -webkit-user-select: text;
 }
 
-.obsidibot-user {
+.bojubot-user {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   align-self: flex-end;
@@ -328,14 +330,14 @@
   /* preserve newlines from Shift+Enter */
 }
 
-.obsidibot-assistant {
+.bojubot-assistant {
   background: var(--background-primary-alt);
   align-self: flex-start;
   max-width: 95%;
   width: 100%;
 }
 
-.obsidibot-system {
+.bojubot-system {
   color: var(--text-muted);
   font-size: 0.85em;
   align-self: center;
@@ -343,13 +345,13 @@
 }
 
 /* Thinking / status indicator */
-.obsidibot-status {
+.bojubot-status {
   font-style: italic;
   opacity: 0.6;
-  animation: obsidibot-blink 1s step-end infinite;
+  animation: bojubot-blink 1s step-end infinite;
 }
 
-@keyframes obsidibot-blink {
+@keyframes bojubot-blink {
 
   0%,
   100% {
@@ -362,7 +364,7 @@
 }
 
 /* ── Session history modal ── */
-.obsidibot-session-list {
+.bojubot-session-list {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -371,7 +373,7 @@
   gap: 4px;
 }
 
-.obsidibot-session-item {
+.bojubot-session-item {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -382,21 +384,21 @@
   border: 1px solid var(--background-modifier-border);
 }
 
-.obsidibot-session-item:hover {
+.bojubot-session-item:hover {
   background: var(--background-secondary);
 }
 
-.obsidibot-session-item.obsidibot-session-active {
+.bojubot-session-item.bojubot-session-active {
   border-left: 3px solid var(--color-blue);
   padding-left: 9px;
   /* compensate for the wider border */
 }
 
-.obsidibot-session-item.obsidibot-session-active .obsidibot-session-title {
+.bojubot-session-item.bojubot-session-active .bojubot-session-title {
   font-weight: 600;
 }
 
-.obsidibot-session-drag-handle {
+.bojubot-session-drag-handle {
   display: flex;
   align-items: center;
   color: var(--text-faint);
@@ -405,41 +407,41 @@
   margin-right: 4px;
 }
 
-.obsidibot-session-item.obsidibot-session-dragging {
+.bojubot-session-item.bojubot-session-dragging {
   opacity: 0.4;
 }
 
-.obsidibot-session-item.obsidibot-session-dragover-above {
+.bojubot-session-item.bojubot-session-dragover-above {
   border-top: 2px solid var(--color-accent);
 }
 
-.obsidibot-session-item.obsidibot-session-dragover-below {
+.bojubot-session-item.bojubot-session-dragover-below {
   border-bottom: 2px solid var(--color-accent);
 }
 
-.obsidibot-session-title {
+.bojubot-session-title {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.obsidibot-session-date {
+.bojubot-session-date {
   font-size: 0.8em;
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
-.obsidibot-modal-empty {
+.bojubot-modal-empty {
   color: var(--text-muted);
   font-style: italic;
 }
 
-.obsidibot-session-remote {
+.bojubot-session-remote {
   opacity: 0.5;
 }
 
-.obsidibot-session-remote-badge {
+.bojubot-session-remote-badge {
   font-size: 0.7em;
   color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
@@ -448,8 +450,8 @@
   flex-shrink: 0;
 }
 
-.obsidibot-export-btn,
-.obsidibot-rename-btn {
+.bojubot-export-btn,
+.bojubot-rename-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -458,25 +460,25 @@
   flex-shrink: 0;
 }
 
-.obsidibot-session-item:hover .obsidibot-export-btn,
-.obsidibot-session-item:hover .obsidibot-rename-btn {
+.bojubot-session-item:hover .bojubot-export-btn,
+.bojubot-session-item:hover .bojubot-rename-btn {
   opacity: 1;
 }
 
 /* ── Export to vault modal ── */
-.obsidibot-export-hint {
+.bojubot-export-hint {
   color: var(--text-muted);
   font-size: 0.9em;
   margin-bottom: 8px;
 }
 
-.obsidibot-export-path-input {
+.bojubot-export-path-input {
   width: 100%;
   box-sizing: border-box;
   margin-bottom: 12px;
 }
 
-.obsidibot-export-checkbox-row {
+.bojubot-export-checkbox-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -485,18 +487,18 @@
   color: var(--text-normal);
 }
 
-.obsidibot-export-checkbox-row label {
+.bojubot-export-checkbox-row label {
   cursor: pointer;
   user-select: none;
 }
 
-.obsidibot-export-btn-row {
+.bojubot-export-btn-row {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.obsidibot-rename-input {
+.bojubot-rename-input {
   flex: 1;
   font-size: inherit;
   padding: 1px 4px;
@@ -507,7 +509,7 @@
 }
 
 /* ── Session history divider ── */
-.obsidibot-history-divider {
+.bojubot-history-divider {
   text-align: center;
   font-size: 0.75em;
   color: var(--text-faint);
@@ -516,7 +518,7 @@
 }
 
 /* ── Compaction divider (shown when a session was compacted) ── */
-.obsidibot-compaction-divider {
+.bojubot-compaction-divider {
   align-self: center;
   text-align: center;
   font-size: 0.75em;
@@ -527,14 +529,14 @@
 }
 
 /* ── Replay context badge strip (inside replayed user message bubbles) ── */
-.obsidibot-replay-context-strip {
+.bojubot-replay-context-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 5px;
 }
 
-.obsidibot-replay-context-badge {
+.bojubot-replay-context-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -542,40 +544,40 @@
   opacity: 0.8;
 }
 
-.obsidibot-replay-context-icon {
+.bojubot-replay-context-icon {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   color: var(--interactive-accent);
 }
 
-.obsidibot-replay-context-icon svg {
+.bojubot-replay-context-icon svg {
   width: 11px;
   height: 11px;
 }
 
-.obsidibot-replay-context-label {
+.bojubot-replay-context-label {
   color: var(--interactive-accent);
   font-weight: 500;
 }
 
 /* Markdown content inside assistant messages */
-.obsidibot-assistant p:last-child {
+.bojubot-assistant p:last-child {
   margin-bottom: 0;
 }
 
-.obsidibot-assistant pre {
+.bojubot-assistant pre {
   overflow-x: auto;
 }
 
 /* Obsidian hides pre>code until async syntax highlighting adds .is-loaded;
    that callback may never fire in a custom panel, so force visibility here. */
-.obsidibot-assistant pre code {
+.bojubot-assistant pre code {
   display: block !important;
 }
 
 /* ── Setup / onboarding card ── */
-.obsidibot-welcome {
+.bojubot-welcome {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -584,13 +586,13 @@
   user-select: none;
 }
 
-.obsidibot-welcome-header {
+.bojubot-welcome-header {
   display: flex;
   align-items: baseline;
   gap: 7px;
 }
 
-.obsidibot-welcome-header-logo {
+.bojubot-welcome-header-logo {
   width: 20px;
   height: 20px;
   object-fit: contain;
@@ -599,18 +601,18 @@
   top: 2px;
 }
 
-.obsidibot-welcome-header-name {
+.bojubot-welcome-header-name {
   font-size: 1.1em;
   font-weight: 600;
   color: var(--text-normal);
 }
 
-.obsidibot-welcome-version {
+.bojubot-welcome-version {
   font-size: 0.72em;
   color: var(--text-faint);
 }
 
-.obsidibot-welcome-body {
+.bojubot-welcome-body {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -619,20 +621,20 @@
   gap: 14px;
 }
 
-.obsidibot-welcome-sprite {
+.bojubot-welcome-sprite {
   width: 96px;
   height: 96px;
   image-rendering: pixelated;
   cursor: pointer;
 }
 
-.obsidibot-welcome-greeting {
+.bojubot-welcome-greeting {
   margin: 0;
   font-size: 1em;
   color: var(--text-normal);
 }
 
-.obsidibot-welcome-tip {
+.bojubot-welcome-tip {
   margin: 0;
   font-size: 0.82em;
   color: var(--text-muted);
@@ -642,7 +644,7 @@
   line-height: 1.5;
 }
 
-.obsidibot-welcome-recent {
+.bojubot-welcome-recent {
   width: 100%;
   padding-top: 8px;
   margin-top: auto;
@@ -651,7 +653,7 @@
   gap: 2px;
 }
 
-.obsidibot-welcome-recent-label {
+.bojubot-welcome-recent-label {
   margin: 0 0 2px;
   font-size: 0.75em;
   font-weight: 600;
@@ -660,12 +662,12 @@
   letter-spacing: 0.05em;
 }
 
-.obsidibot-welcome-recent-list {
+.bojubot-welcome-recent-list {
   display: flex;
   flex-direction: column;
 }
 
-.obsidibot-welcome-recent-item {
+.bojubot-welcome-recent-item {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -675,11 +677,11 @@
   cursor: pointer;
 }
 
-.obsidibot-welcome-recent-item:hover {
+.bojubot-welcome-recent-item:hover {
   background: var(--background-modifier-hover);
 }
 
-.obsidibot-welcome-recent-title {
+.bojubot-welcome-recent-title {
   font-size: 0.88em;
   color: var(--text-normal);
   white-space: nowrap;
@@ -689,13 +691,13 @@
   min-width: 0;
 }
 
-.obsidibot-welcome-recent-date {
+.bojubot-welcome-recent-date {
   font-size: 0.75em;
   color: var(--text-faint);
   flex-shrink: 0;
 }
 
-.obsidibot-welcome-recent-more {
+.bojubot-welcome-recent-more {
   align-self: flex-end;
   background: none;
   border: none;
@@ -706,12 +708,12 @@
   cursor: pointer;
 }
 
-.obsidibot-welcome-recent-more:hover {
+.bojubot-welcome-recent-more:hover {
   color: var(--text-accent);
   text-decoration: underline;
 }
 
-.obsidibot-setup-card {
+.bojubot-setup-card {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -721,19 +723,19 @@
   gap: 16px;
 }
 
-.obsidibot-setup-title {
+.bojubot-setup-title {
   margin: 0;
   font-size: 1em;
   color: var(--text-warning);
 }
 
-.obsidibot-setup-intro {
+.bojubot-setup-intro {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9em;
 }
 
-.obsidibot-setup-step {
+.bojubot-setup-step {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -741,26 +743,26 @@
   border-left: 2px solid var(--background-modifier-border);
 }
 
-.obsidibot-setup-step-title {
+.bojubot-setup-step-title {
   margin: 0;
   font-weight: 600;
   font-size: 0.9em;
 }
 
-.obsidibot-setup-note {
+.bojubot-setup-note {
   margin: 0;
   font-size: 0.85em;
   color: var(--text-muted);
 }
 
 
-.obsidibot-setup-code-row {
+.bojubot-setup-code-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.obsidibot-setup-code {
+.bojubot-setup-code {
   flex: 1;
   font-family: var(--font-monospace);
   font-size: 0.85em;
@@ -773,7 +775,7 @@
   overflow-x: auto;
 }
 
-.obsidibot-setup-copy-btn {
+.bojubot-setup-copy-btn {
   font-size: 0.75em;
   padding: 3px 8px;
   flex-shrink: 0;
@@ -784,11 +786,11 @@
   color: var(--text-muted);
 }
 
-.obsidibot-setup-copy-btn:hover {
+.bojubot-setup-copy-btn:hover {
   color: var(--text-normal);
 }
 
-.obsidibot-setup-path-input {
+.bojubot-setup-path-input {
   flex: 1;
   font-family: var(--font-monospace);
   font-size: 0.85em;
@@ -799,41 +801,41 @@
   color: var(--text-normal);
 }
 
-.obsidibot-setup-path-input:focus {
+.bojubot-setup-path-input:focus {
   outline: none;
   border-color: var(--interactive-accent);
 }
 
-.obsidibot-setup-btn-row {
+.bojubot-setup-btn-row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding-top: 4px;
 }
 
-.obsidibot-setup-docs-link {
+.bojubot-setup-docs-link {
   font-size: 0.85em;
   color: var(--text-accent);
   text-decoration: none;
   flex: 1;
 }
 
-.obsidibot-setup-docs-link:hover {
+.bojubot-setup-docs-link:hover {
   text-decoration: underline;
 }
 
-.obsidibot-setup-check-btn {
+.bojubot-setup-check-btn {
   flex-shrink: 0;
 }
 
-.obsidibot-setup-error {
+.bojubot-setup-error {
   margin: 4px 0 0;
   font-size: 0.85em;
   color: var(--text-error);
 }
 
 /* ── Response group (tool events + assistant bubble) ── */
-.obsidibot-response-group {
+.bojubot-response-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -841,7 +843,7 @@
   width: 100%;
 }
 
-.obsidibot-token-stats {
+.bojubot-token-stats {
   font-size: 0.72em;
   color: var(--text-faint);
   padding: 0 2px 4px 2px;
@@ -849,7 +851,7 @@
 }
 
 /* ── Tool call events ── */
-.obsidibot-tool-events {
+.bojubot-tool-events {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -861,20 +863,20 @@
   color: var(--text-muted);
 }
 
-.obsidibot-tool-event {
+.bojubot-tool-event {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 4px 0;
 }
 
-.obsidibot-tool-event-header {
+.bojubot-tool-event-header {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.obsidibot-tool-event-output {
+.bojubot-tool-event-output {
   font-family: var(--font-monospace);
   font-size: 0.9em;
   white-space: pre-wrap;
@@ -884,34 +886,34 @@
   line-height: 1.4;
 }
 
-.obsidibot-tool-output-pending {
+.bojubot-tool-output-pending {
   opacity: 0.4;
 }
 
-.obsidibot-tool-event+.obsidibot-tool-event {
+.bojubot-tool-event+.bojubot-tool-event {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.obsidibot-tool-event-icon {
+.bojubot-tool-event-icon {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   opacity: 0.7;
 }
 
-.obsidibot-tool-event-icon svg {
+.bojubot-tool-event-icon svg {
   width: 12px;
   height: 12px;
 }
 
-.obsidibot-tool-event-label {
+.bojubot-tool-event-label {
   font-family: var(--font-monospace);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.obsidibot-tool-toggle {
+.bojubot-tool-toggle {
   background: none;
   border: none;
   cursor: pointer;
@@ -922,12 +924,12 @@
   width: 100%;
 }
 
-.obsidibot-tool-toggle:hover {
+.bojubot-tool-toggle:hover {
   color: var(--text-muted);
 }
 
 /* ── Permission denial card ── */
-.obsidibot-permission-card {
+.bojubot-permission-card {
   background: var(--background-secondary);
   border: 1px solid var(--color-orange);
   border-radius: 6px;
@@ -938,13 +940,13 @@
   font-size: 0.88em;
 }
 
-.obsidibot-permission-title {
+.bojubot-permission-title {
   margin: 0;
   font-weight: 600;
   color: var(--color-orange);
 }
 
-.obsidibot-permission-list {
+.bojubot-permission-list {
   margin: 0;
   padding-left: 18px;
   color: var(--text-muted);
@@ -952,29 +954,29 @@
   font-size: 0.9em;
 }
 
-.obsidibot-permission-btn-row {
+.bojubot-permission-btn-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.obsidibot-permission-settings-link {
+.bojubot-permission-settings-link {
   font-size: 0.85em;
   color: var(--text-accent);
   text-decoration: none;
 }
 
-.obsidibot-permission-settings-link:hover {
+.bojubot-permission-settings-link:hover {
   text-decoration: underline;
 }
 
-.obsidibot-permission-reason {
+.bojubot-permission-reason {
   font-style: italic;
   color: var(--text-muted);
   margin: 4px 0 12px;
 }
 
-.obsidibot-permission-dismiss {
+.bojubot-permission-dismiss {
   margin-left: auto;
   font-size: 0.85em;
   color: var(--text-muted);
@@ -985,18 +987,18 @@
   cursor: pointer;
 }
 
-.obsidibot-permission-dismiss:hover {
+.bojubot-permission-dismiss:hover {
   color: var(--text-normal);
   border-color: var(--text-muted);
 }
 
 /* ── UI Bridge confirmation modal ── */
-.obsidibot-confirm-desc {
+.bojubot-confirm-desc {
   margin: 0 0 16px;
   color: var(--text-normal);
 }
 
-.obsidibot-confirm-check-row {
+.bojubot-confirm-check-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1006,14 +1008,14 @@
   cursor: pointer;
 }
 
-.obsidibot-confirm-btn-row {
+.bojubot-confirm-btn-row {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
 }
 
 /* ── Command allowlist browser (settings) ── */
-.obsidibot-command-list {
+.bojubot-command-list {
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--background-modifier-border);
@@ -1021,7 +1023,7 @@
   margin: 4px 0 4px;
 }
 
-.obsidibot-command-row {
+.bojubot-command-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1030,49 +1032,49 @@
   cursor: pointer;
 }
 
-.obsidibot-command-row:last-child {
+.bojubot-command-row:last-child {
   border-bottom: none;
 }
 
-.obsidibot-command-row:hover {
+.bojubot-command-row:hover {
   background: var(--background-modifier-hover);
 }
 
-.obsidibot-command-name {
+.bojubot-command-name {
   font-size: var(--font-ui-small);
   color: var(--text-normal);
   cursor: pointer;
 }
 
-.obsidibot-command-empty {
+.bojubot-command-empty {
   color: var(--text-muted);
   font-style: italic;
   padding: 10px;
   margin: 0;
 }
 
-.obsidibot-command-count {
+.bojubot-command-count {
   font-size: var(--font-ui-small);
   color: var(--text-muted);
   margin: 0 0 16px;
 }
 
-.obsidibot-command-row--orphaned {
+.bojubot-command-row--orphaned {
   background: var(--background-modifier-error-rgb, rgba(255, 80, 80, 0.05));
 }
 
-.obsidibot-command-orphan-badge {
+.bojubot-command-orphan-badge {
   font-size: var(--font-ui-smaller);
   color: var(--text-error);
   margin-left: 4px;
 }
 
 /* ── @-mention autocomplete dropdown ── */
-.obsidibot-input-area {
+.bojubot-input-area {
   position: relative;
 }
 
-.obsidibot-at-dropdown {
+.bojubot-at-dropdown {
   position: absolute;
   bottom: 100%;
   left: 0;
@@ -1086,7 +1088,7 @@
   z-index: 100;
 }
 
-.obsidibot-at-item {
+.bojubot-at-item {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -1094,24 +1096,24 @@
   cursor: pointer;
 }
 
-.obsidibot-at-item:hover,
-.obsidibot-at-item-active {
+.bojubot-at-item:hover,
+.bojubot-at-item-active {
   background: var(--background-modifier-hover);
 }
 
-.obsidibot-at-item-name {
+.bojubot-at-item-name {
   flex-shrink: 0;
   font-weight: 500;
 }
 
-.obsidibot-at-item-ext {
+.bojubot-at-item-ext {
   font-size: 0.75em;
   font-weight: 400;
   color: var(--text-muted);
   margin-left: 2px;
 }
 
-.obsidibot-at-item-path {
+.bojubot-at-item-path {
   font-size: 0.75em;
   color: var(--text-faint);
   overflow: hidden;
@@ -1120,7 +1122,7 @@
 }
 
 /* ── Pending selection context bar (above textarea) ── */
-.obsidibot-pending-context {
+.bojubot-pending-context {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1130,32 +1132,32 @@
   font-size: 0.82em;
 }
 
-.obsidibot-pending-context-row {
+.bojubot-pending-context-row {
   display: flex;
   align-items: center;
   gap: 6px;
   overflow: hidden;
 }
 
-.obsidibot-pending-context-icon {
+.bojubot-pending-context-icon {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   color: var(--interactive-accent);
 }
 
-.obsidibot-pending-context-icon svg {
+.bojubot-pending-context-icon svg {
   width: 12px;
   height: 12px;
 }
 
-.obsidibot-pending-context-label {
+.bojubot-pending-context-label {
   color: var(--interactive-accent);
   font-weight: 500;
   flex-shrink: 0;
 }
 
-.obsidibot-pending-context-preview {
+.bojubot-pending-context-preview {
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1163,7 +1165,7 @@
   flex: 1;
 }
 
-.obsidibot-context-pin {
+.bojubot-context-pin {
   background: none;
   border: none;
   cursor: pointer;
@@ -1175,20 +1177,20 @@
   align-items: center;
 }
 
-.obsidibot-context-pin:hover {
+.bojubot-context-pin:hover {
   color: var(--color-accent);
 }
 
-.obsidibot-context-pinned .obsidibot-context-pin {
+.bojubot-context-pinned .bojubot-context-pin {
   color: var(--color-accent);
 }
 
-.obsidibot-context-pinned {
+.bojubot-context-pinned {
   border-left: 2px solid var(--color-accent);
   padding-left: 4px;
 }
 
-.obsidibot-context-clear {
+.bojubot-context-clear {
   background: none;
   border: none;
   cursor: pointer;
@@ -1199,12 +1201,12 @@
   flex-shrink: 0;
 }
 
-.obsidibot-context-clear:hover {
+.bojubot-context-clear:hover {
   color: var(--text-normal);
 }
 
 /* Vault query result card (show + inject modes) */
-.obsidibot-vault-query-card {
+.bojubot-vault-query-card {
   margin: 4px 0 2px 0;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
@@ -1212,7 +1214,7 @@
   font-size: 0.85em;
 }
 
-.obsidibot-vault-query-header {
+.bojubot-vault-query-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1222,43 +1224,43 @@
   font-size: 0.9em;
 }
 
-.obsidibot-vault-query-icon {
+.bojubot-vault-query-icon {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
   color: var(--color-accent);
 }
 
-.obsidibot-vault-query-label {
+.bojubot-vault-query-label {
   font-weight: 500;
   color: var(--text-normal);
 }
 
-.obsidibot-vault-query-body {
+.bojubot-vault-query-body {
   padding: 6px 10px;
   background: var(--background-primary);
 }
 
-.obsidibot-vault-query-list {
+.bojubot-vault-query-list {
   margin: 0;
   padding-left: 16px;
   color: var(--text-muted);
   line-height: 1.6;
 }
 
-.obsidibot-vault-query-list li {
+.bojubot-vault-query-list li {
   font-family: var(--font-monospace);
   font-size: 0.9em;
 }
 
-.obsidibot-vault-query-empty,
-.obsidibot-vault-query-error {
+.bojubot-vault-query-empty,
+.bojubot-vault-query-error {
   color: var(--text-faint);
   font-style: italic;
 }
 
 /* ── Compact-session confirmation panel ── */
-.obsidibot-compact-confirm {
+.bojubot-compact-confirm {
   position: absolute;
   right: 0;
   bottom: 100%;
@@ -1273,30 +1275,30 @@
   transition: transform 220ms ease;
 }
 
-.obsidibot-compact-confirm.is-visible {
+.bojubot-compact-confirm.is-visible {
   transform: translateX(0);
 }
 
-.obsidibot-compact-confirm-msg {
+.bojubot-compact-confirm-msg {
   margin: 0 0 10px;
   font-size: 0.88em;
   color: var(--text-normal);
   line-height: 1.4;
 }
 
-.obsidibot-compact-confirm-btns {
+.bojubot-compact-confirm-btns {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.obsidibot-compact-confirm-btn {
+.bojubot-compact-confirm-btn {
   font-size: 0.85em;
   padding: 4px 10px;
 }
 
 /* ── Slash command menu ── */
-.obsidibot-slash-menu {
+.bojubot-slash-menu {
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
@@ -1304,7 +1306,7 @@
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   z-index: 100;
   max-height: 340px;
   display: flex;
@@ -1312,13 +1314,13 @@
   overflow: hidden;
 }
 
-.obsidibot-slash-search-wrap {
+.bojubot-slash-search-wrap {
   padding: 8px 8px 4px;
   border-bottom: 1px solid var(--background-modifier-border);
   flex-shrink: 0;
 }
 
-.obsidibot-slash-search {
+.bojubot-slash-search {
   width: 100%;
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
@@ -1330,12 +1332,12 @@
   box-sizing: border-box;
 }
 
-.obsidibot-slash-list {
+.bojubot-slash-list {
   overflow-y: auto;
   padding: 4px 0;
 }
 
-.obsidibot-slash-category {
+.bojubot-slash-category {
   padding: 4px 12px 2px;
   font-size: 0.72em;
   font-weight: 600;
@@ -1345,7 +1347,7 @@
   user-select: none;
 }
 
-.obsidibot-slash-item {
+.bojubot-slash-item {
   display: flex;
   flex-direction: column;
   padding: 5px 14px;
@@ -1354,32 +1356,32 @@
   margin: 0 4px;
 }
 
-.obsidibot-slash-item-highlighted {
+.bojubot-slash-item-highlighted {
   background: var(--background-modifier-hover);
 }
 
-.obsidibot-slash-item-name {
+.bojubot-slash-item-name {
   font-size: 0.9em;
   color: var(--text-normal);
 }
 
-.obsidibot-slash-item-desc {
+.bojubot-slash-item-desc {
   font-size: 0.78em;
   color: var(--text-muted);
 }
 
-.obsidibot-slash-empty {
+.bojubot-slash-empty {
   padding: 10px 14px;
   font-size: 0.88em;
   color: var(--text-muted);
 }
 
 /* ── Slash command param modal ── */
-.obsidibot-param-modal .obsidibot-param-field {
+.bojubot-param-modal .bojubot-param-field {
   margin-bottom: 16px;
 }
 
-.obsidibot-param-modal .obsidibot-param-label {
+.bojubot-param-modal .bojubot-param-label {
   display: block;
   font-size: 0.88em;
   font-weight: 600;
@@ -1387,15 +1389,15 @@
   color: var(--text-normal);
 }
 
-.obsidibot-param-modal .obsidibot-param-desc {
+.bojubot-param-modal .bojubot-param-desc {
   font-size: 0.8em;
   color: var(--text-muted);
   margin-bottom: 6px;
 }
 
-.obsidibot-param-modal .obsidibot-param-input,
-.obsidibot-param-modal .obsidibot-param-textarea,
-.obsidibot-param-modal .obsidibot-param-select {
+.bojubot-param-modal .bojubot-param-input,
+.bojubot-param-modal .bojubot-param-textarea,
+.bojubot-param-modal .bojubot-param-select {
   width: 100%;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
@@ -1406,17 +1408,17 @@
   box-sizing: border-box;
 }
 
-.obsidibot-param-modal .obsidibot-param-textarea {
+.bojubot-param-modal .bojubot-param-textarea {
   min-height: 80px;
   resize: vertical;
   font-family: inherit;
 }
 
-.obsidibot-param-modal .obsidibot-param-note-input {
+.bojubot-param-modal .bojubot-param-note-input {
   cursor: pointer;
 }
 
-.obsidibot-param-modal .obsidibot-param-checkbox-row {
+.bojubot-param-modal .bojubot-param-checkbox-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1425,20 +1427,20 @@
   cursor: pointer;
 }
 
-.obsidibot-param-modal .obsidibot-param-error {
+.bojubot-param-modal .bojubot-param-error {
   font-size: 0.8em;
   color: var(--color-red);
   margin-top: 4px;
 }
 
-.obsidibot-param-modal .obsidibot-param-btn-row {
+.bojubot-param-modal .bojubot-param-btn-row {
   display: flex;
   justify-content: flex-end;
   margin-top: 20px;
 }
 
 /* ── User intro modal (context file generation) ── */
-.obsidibot-intro-modal .obsidibot-intro-textarea {
+.bojubot-intro-modal .bojubot-intro-textarea {
   width: 100%;
   min-height: 80px;
   resize: vertical;
@@ -1453,13 +1455,13 @@
   margin-bottom: 12px;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-files-section {
+.bojubot-intro-modal .bojubot-intro-files-section {
   border-top: 1px solid var(--background-modifier-border);
   padding-top: 12px;
   margin-bottom: 12px;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-files-label {
+.bojubot-intro-modal .bojubot-intro-files-label {
   font-size: 0.82em;
   font-weight: 600;
   color: var(--text-muted);
@@ -1468,20 +1470,20 @@
   letter-spacing: 0.04em;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-files-desc {
+.bojubot-intro-modal .bojubot-intro-files-desc {
   font-size: 0.8em;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-chips {
+.bojubot-intro-modal .bojubot-intro-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-chip {
+.bojubot-intro-modal .bojubot-intro-chip {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1492,7 +1494,7 @@
   color: var(--text-normal);
 }
 
-.obsidibot-intro-modal .obsidibot-intro-chip-remove {
+.bojubot-intro-modal .bojubot-intro-chip-remove {
   cursor: pointer;
   color: var(--text-muted);
   font-size: 1em;
@@ -1500,11 +1502,11 @@
   padding-left: 2px;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-chip-remove:hover {
+.bojubot-intro-modal .bojubot-intro-chip-remove:hover {
   color: var(--color-red);
 }
 
-.obsidibot-intro-modal .obsidibot-intro-add-btn {
+.bojubot-intro-modal .bojubot-intro-add-btn {
   font-size: 0.82em;
   padding: 3px 10px;
   background: transparent;
@@ -1514,29 +1516,48 @@
   cursor: pointer;
 }
 
-.obsidibot-intro-modal .obsidibot-intro-add-btn:hover {
+.bojubot-intro-modal .bojubot-intro-add-btn:hover {
   border-color: var(--interactive-accent);
   color: var(--interactive-accent);
 }
+
 /* ── Permission mode icon (input toolbar) ── */
 /* Hard-coded colors so theme variables can't override them. */
 /* Restricted (planned): blue padlock */
-.obsidibot-perm-restricted .svg-icon { color: #60a5fa !important; stroke: #60a5fa !important; }
+.bojubot-perm-restricted .svg-icon {
+  color: #60a5fa !important;
+  stroke: #60a5fa !important;
+}
+
 /* Read-only: green eye */
-.obsidibot-perm-readonly .svg-icon { color: #4ade80 !important; stroke: #4ade80 !important; }
+.bojubot-perm-readonly .svg-icon {
+  color: #4ade80 !important;
+  stroke: #4ade80 !important;
+}
+
 /* Standard: yellow shield */
-.obsidibot-perm-standard .svg-icon { color: #facc15 !important; stroke: #facc15 !important; }
+.bojubot-perm-standard .svg-icon {
+  color: #facc15 !important;
+  stroke: #facc15 !important;
+}
+
 /* Full: red triangle */
-.obsidibot-perm-full .svg-icon { color: #ef4444 !important; stroke: #ef4444 !important; }
+.bojubot-perm-full .svg-icon {
+  color: #ef4444 !important;
+  stroke: #ef4444 !important;
+}
+
 /* Thicker strokes so the icon reads clearly at 14 px */
-.obsidibot-permission-icon .svg-icon path,
-.obsidibot-permission-icon .svg-icon polyline,
-.obsidibot-permission-icon .svg-icon line,
-.obsidibot-permission-icon .svg-icon circle,
-.obsidibot-permission-icon .svg-icon rect { stroke-width: 2.5 !important; }
+.bojubot-permission-icon .svg-icon path,
+.bojubot-permission-icon .svg-icon polyline,
+.bojubot-permission-icon .svg-icon line,
+.bojubot-permission-icon .svg-icon circle,
+.bojubot-permission-icon .svg-icon rect {
+  stroke-width: 2.5 !important;
+}
 
 /* ── Permission picker — shared row layout (popover + modal) ── */
-.obsidibot-perm-row {
+.bojubot-perm-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1545,7 +1566,7 @@
   cursor: pointer;
 }
 
-.obsidibot-perm-row-icon {
+.bojubot-perm-row-icon {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
@@ -1554,32 +1575,32 @@
   justify-content: center;
 }
 
-.obsidibot-perm-row-text {
+.bojubot-perm-row-text {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
 }
 
-.obsidibot-perm-row-label {
+.bojubot-perm-row-label {
   font-size: var(--font-ui-small);
   font-weight: 500;
   color: var(--text-normal);
   white-space: nowrap;
 }
 
-.obsidibot-perm-row-desc {
+.bojubot-perm-row-desc {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   white-space: nowrap;
 }
 
-.obsidibot-perm-row--active .obsidibot-perm-row-label {
+.bojubot-perm-row--active .bojubot-perm-row-label {
   color: var(--interactive-accent);
 }
 
 /* ── Permission picker popover (icon click) ── */
-.obsidibot-perm-popover {
+.bojubot-perm-popover {
   position: fixed;
   z-index: 9999;
   background: var(--background-secondary);
@@ -1593,27 +1614,27 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.obsidibot-perm-popover-row:hover,
-.obsidibot-perm-popover-row--focused {
+.bojubot-perm-popover-row:hover,
+.bojubot-perm-popover-row--focused {
   background: var(--background-modifier-hover);
 }
 
 /* ── Permission picker modal (Ctrl+P) ── */
-.obsidibot-permission-picker-modal .suggestion-item.obsidibot-perm-row {
+.bojubot-permission-picker-modal .suggestion-item.bojubot-perm-row {
   padding: 6px 10px;
 }
 
-.obsidibot-permission-picker-modal .suggestion-item.is-selected .obsidibot-perm-row-label {
+.bojubot-permission-picker-modal .suggestion-item.is-selected .bojubot-perm-row-label {
   color: var(--text-on-accent);
 }
 
-.obsidibot-permission-picker-modal .suggestion-item.is-selected .obsidibot-perm-row-desc {
+.bojubot-permission-picker-modal .suggestion-item.is-selected .bojubot-perm-row-desc {
   color: var(--text-on-accent-muted, var(--text-on-accent));
   opacity: 0.8;
 }
 
 /* ── Memory audit modal ── */
-.obsidibot-audit-btn-row {
+.bojubot-audit-btn-row {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -1621,11 +1642,13 @@
 }
 
 /* ── Notice link (memory update, etc.) ── */
-.obsidibot-notice-link {
+.bojubot-notice-link {
   color: var(--text-accent);
   text-decoration: underline;
   cursor: pointer;
 }
 
 /* ── Utility ── */
-.obsidibot-invisible { visibility: hidden; }
+.bojubot-invisible {
+  visibility: hidden;
+}

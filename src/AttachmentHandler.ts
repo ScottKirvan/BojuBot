@@ -36,7 +36,7 @@ export class AttachmentHandler {
   private contexts: PendingContext[] = [];
   private zoneEl: HTMLElement | null = null;
 
-  constructor(private readonly host: AttachmentHandlerHost) {}
+  constructor(private readonly host: AttachmentHandlerHost) { }
 
   /** Attach to the pending-context zone element created in onOpen(). */
   build(zone: HTMLElement): void {
@@ -184,7 +184,7 @@ export class AttachmentHandler {
     const tmpDir = join(
       this.host.getVaultRoot(),
       this.host.getConfigDir(),
-      'plugins', 'obsidibot', 'tmp',
+      'plugins', 'bojubot', 'tmp',
     );
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
     const filePath = join(tmpDir, filename);
@@ -200,24 +200,24 @@ export class AttachmentHandler {
     zone.show();
     for (const entry of this.contexts) {
       const row = zone.createDiv({
-        cls: 'obsidibot-pending-context-row' + (entry.pinned ? ' obsidibot-context-pinned' : ''),
+        cls: 'bojubot-pending-context-row' + (entry.pinned ? ' bojubot-context-pinned' : ''),
       });
       const preview = entry.text.length > 80 ? entry.text.substring(0, 80) + '…' : entry.text;
       const iconName = entry.type === 'image' ? 'image'
         : entry.type === 'pdf' ? 'file-text'
-        : entry.type === 'url' ? 'link'
-        : 'paperclip';
-      const iconEl = row.createSpan({ cls: 'obsidibot-pending-context-icon' });
+          : entry.type === 'url' ? 'link'
+            : 'paperclip';
+      const iconEl = row.createSpan({ cls: 'bojubot-pending-context-icon' });
       setIcon(iconEl, iconName);
-      row.createSpan({ cls: 'obsidibot-pending-context-label', text: `${entry.source}: ` });
+      row.createSpan({ cls: 'bojubot-pending-context-label', text: `${entry.source}: ` });
       if (entry.type !== 'image' && entry.type !== 'pdf') {
-        row.createSpan({ cls: 'obsidibot-pending-context-preview', text: preview });
+        row.createSpan({ cls: 'bojubot-pending-context-preview', text: preview });
       }
-      const pinBtn = row.createEl('button', { cls: 'obsidibot-context-pin' });
+      const pinBtn = row.createEl('button', { cls: 'bojubot-context-pin' });
       setIcon(pinBtn, entry.pinned ? 'pin-off' : 'pin');
       pinBtn.title = entry.pinned ? 'Unpin (remove after send)' : 'Pin (keep after send)';
       pinBtn.addEventListener('click', () => { entry.pinned = !entry.pinned; this.render(); });
-      const clearBtn = row.createEl('button', { cls: 'obsidibot-context-clear', text: '×' });
+      const clearBtn = row.createEl('button', { cls: 'bojubot-context-clear', text: '×' });
       clearBtn.title = 'Remove';
       clearBtn.addEventListener('click', () => {
         this.contexts.splice(this.contexts.indexOf(entry), 1);

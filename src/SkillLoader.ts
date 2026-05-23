@@ -18,7 +18,7 @@ export function resolveSkillsFolder(vaultRoot: string, custom: string): string {
     const p = custom.trim();
     return isAbsolute(p) ? p : join(vaultRoot, p);
   }
-  return join(vaultRoot, '_ObsidiBot Skills');
+  return join(vaultRoot, '_BojuBot Skills');
 }
 
 export function nameFromPath(filePath: string): string {

@@ -4,7 +4,7 @@
 
 **Setup panel appears instead of the chat panel**
 
-ObsidiBot couldn't find your Claude Code installation. Follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
+BojuBot couldn't find your Claude Code installation. Follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
 
 ---
 
@@ -16,7 +16,7 @@ Claude Code is installed but not logged in. Click **Open terminal** in the error
 
 **Plugin doesn't appear in Obsidian after installing**
 
-Ensure Safe Mode is disabled (**Settings → Community Plugins**) and that the `obsidibot/` folder contains both `main.js` and `manifest.json`. Restart Obsidian after installing.
+Ensure Safe Mode is disabled (**Settings → Community Plugins**) and that the `bojubot/` folder contains both `main.js` and `manifest.json`. Restart Obsidian after installing.
 
 ---
 
@@ -40,15 +40,15 @@ If the status indicator has been showing for a long time with no output, Claude 
 
 **Something unexpected happened and I want to investigate**
 
-Check `.obsidian/plugins/obsidibot/obsidibot-debug.log` (or the path configured in settings). Each session is separated by a `--- ObsidiBot log started ---` line. For more detail, switch **Log verbosity** to **Verbose** in settings — it takes effect immediately.
+Check `.obsidian/plugins/bojubot/bojubot-debug.log` (or the path configured in settings). Each session is separated by a `--- BojuBot log started ---` line. For more detail, switch **Log verbosity** to **Verbose** in settings — it takes effect immediately.
 
 ---
 
 ## Logging
 
-ObsidiBot writes a debug log by default to `.obsidian/plugins/obsidibot/obsidibot-debug.log` — inside the plugin folder, not your vault, so it won't appear in Obsidian's file browser or your git history.
+BojuBot writes a debug log by default to `.obsidian/plugins/bojubot/bojubot-debug.log` — inside the plugin folder, not your vault, so it won't appear in Obsidian's file browser or your git history.
 
-Each Obsidian launch appends a `--- ObsidiBot log started ---` marker so you can find session boundaries. Delete the file manually to clear it.
+Each Obsidian launch appends a `--- BojuBot log started ---` marker so you can find session boundaries. Delete the file manually to clear it.
 
 **Verbosity levels:**
 
@@ -71,8 +71,8 @@ The log file is not visible in Obsidian's file browser — no `.gitignore` entry
 - **Claude Code must be installed via a terminal** — on Windows use PowerShell; on Mac/Linux use Terminal
 - **One active session at a time** — concurrent sessions are not supported
 - Claude operates with full vault access — no per-file infrastructure enforcement (see [Per-note Frontmatter](./context-system#5-per-note-frontmatter-context) for convention-based protection)
-- Sessions are stored in `.obsidian/obsidibot/sessions/` which is typically gitignored; sessions do not sync across devices
+- Sessions are stored in `.obsidian/bojubot/sessions/` which is typically gitignored; sessions do not sync across devices
 
 ---
 
-Still stuck? Ask in the [Discord community](https://discord.gg/TN6XJSNK5Y) or [open an issue](https://github.com/ScottKirvan/ObsidiBot/issues) on GitHub.
+Still stuck? Ask in the [Discord community](https://discord.gg/TN6XJSNK5Y) or [open an issue](https://github.com/ScottKirvan/BojuBot/issues) on GitHub.
