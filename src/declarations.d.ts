@@ -9,3 +9,9 @@ declare module '*.png' {
   export default dataUrl;
 }
 
+// Tell TypeScript that .md imports are strings (handled by esbuild's text loader)
+declare module '*.md' {
+  const content: string;
+  export default content;
+}
+
