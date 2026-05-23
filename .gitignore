@@ -18,6 +18,7 @@ data.json
 # ObsidiBot runtime data written when plugin runs from symlinked dev folder
 # In production vaults this lives at .obsidian/plugins/obsidibot/.claude/sessions/
 .claude/sessions/
+.claude/worktrees/
 
 # User slash command templates (local to each install)
 commands/
