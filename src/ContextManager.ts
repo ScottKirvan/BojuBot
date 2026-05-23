@@ -61,7 +61,7 @@ export class ContextManager {
       orientation +=
         `\n\n## Allowed Obsidian commands\n` +
         `You can run specific Obsidian commands using:\n` +
-        `@@BOJU_ACTION {"action": "run-command", "commandId": "<id>"}\n\n` +
+        `@@BOJU {"action": "run-command", "commandId": "<id>"}\n\n` +
         `These commands run immediately. For any other command the user asks for, attempt it — the user will be prompted to approve or deny:\n\n` +
         `| Command | ID |\n|---|---|\n${rows}`;
     }

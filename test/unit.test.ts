@@ -498,11 +498,11 @@ describe('parseStreamOutput', () => {
   // UI bridge action routing — needed for #76 fix
   // -------------------------------------------------------------------------
 
-  test('routes @@BOJU_ACTION lines to onAction, not onText', async () => {
+  test('routes @@BOJU action lines to onAction, not onText', async () => {
     const proc = mockProc();
     const actions: string[] = [];
     const texts: string[] = [];
-    const ACTION_LINE = '@@BOJU_ACTION {"action":"open-file","path":"notes/test.md"}';
+    const ACTION_LINE = '@@BOJU {"action":"open-file","path":"notes/test.md"}';
     const chunks = [
       JSON.stringify({
         type: 'assistant',
@@ -524,13 +524,13 @@ describe('parseStreamOutput', () => {
       proc.emit('close', 0);
     });
     assert.equal(actions.length, 1, 'onAction should fire once');
-    assert.ok(actions[0].startsWith('@@BOJU_ACTION'), 'action line should be passed verbatim');
+    assert.ok(actions[0].startsWith('@@BOJU '), 'action line should be passed verbatim');
     assert.equal(texts.length, 0, 'onText should not receive action lines');
   });
 
   test('action-only response still delivers sessionId in onDone', async () => {
     const proc = mockProc();
-    const ACTION_LINE = '@@BOJU_ACTION {"action":"show-notice","message":"Done"}';
+    const ACTION_LINE = '@@BOJU {"action":"show-notice","message":"Done"}';
     const chunks = [
       JSON.stringify({ type: 'system', session_id: 'sess-action-only' }) + '\n',
       JSON.stringify({
@@ -831,15 +831,15 @@ describe('extractActions', () => {
   });
 
   test('parses a valid action line and removes it from clean output', () => {
-    const line = '@@BOJU_ACTION {"action":"show-notice","message":"hi"}';
+    const line = '@@BOJU {"action":"show-notice","message":"hi"}';
     const { clean, actions } = extractActions(`before\n${line}\nafter`);
     assert.equal(actions.length, 1);
     assert.equal(actions[0].action, 'show-notice');
-    assert.ok(!clean.includes('@@BOJU_ACTION'), 'action line must not appear in clean output');
+    assert.ok(!clean.includes('@@BOJU'), 'action line must not appear in clean output');
   });
 
   test('silently skips malformed JSON — no throw, no action pushed, bad line not in clean', () => {
-    const bad = '@@BOJU_ACTION {not valid json}';
+    const bad = '@@BOJU {not valid json}';
     let threw = false;
     let result: ReturnType<typeof extractActions> | undefined;
     try {
@@ -849,19 +849,19 @@ describe('extractActions', () => {
     }
     assert.equal(threw, false, 'must not throw on malformed JSON');
     assert.deepEqual(result!.actions, [], 'malformed action must not be pushed');
-    assert.ok(!result!.clean.includes('@@BOJU_ACTION'), 'malformed line must not appear in clean output');
+    assert.ok(!result!.clean.includes('@@BOJU'), 'malformed line must not appear in clean output');
   });
 
-  test('strips @@BOJU_QUERY lines from clean output', () => {
-    const { clean, actions } = extractActions('before\n@@BOJU_QUERY {"query":"test"}\nafter');
-    assert.ok(!clean.includes('@@BOJU_QUERY'), 'query lines must be stripped from clean');
+  test('strips @@BOJU query lines from clean output', () => {
+    const { clean, actions } = extractActions('before\n@@BOJU {"query":"test"}\nafter');
+    assert.ok(!clean.includes('@@BOJU'), 'query lines must be stripped from clean');
     assert.deepEqual(actions, []);
   });
 
   test('handles multiple actions in one text block', () => {
     const text = [
-      '@@BOJU_ACTION {"action":"open-file","path":"a.md"}',
-      '@@BOJU_ACTION {"action":"show-notice","message":"done"}',
+      '@@BOJU {"action":"open-file","path":"a.md"}',
+      '@@BOJU {"action":"show-notice","message":"done"}',
     ].join('\n');
     const { actions, clean } = extractActions(text);
     assert.equal(actions.length, 2);

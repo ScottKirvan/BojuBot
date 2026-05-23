@@ -1,5 +1,5 @@
 import { existsSync } from 'fs';
-import { ACTION_PREFIX, QUERY_PREFIX } from './constants';
+import { BOJU_PREFIX } from './constants';
 import { join } from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
@@ -259,13 +259,18 @@ function handleMessage(
         for (const block of content) {
           if (block.type === 'text') {
             const raw = (block.text as string) ?? '';
-            // Route @@BOJU_ACTION / @@BOJU_QUERY lines; pass the rest to onText
+            // Route @@BOJU lines; dispatch on JSON key ("action" vs "query")
             const textLines: string[] = [];
             for (const line of raw.split('\n')) {
-              if (line.startsWith(ACTION_PREFIX)) {
-                cb.onAction(line);
-              } else if (line.startsWith(QUERY_PREFIX)) {
-                cb.onQuery?.(line);
+              if (line.startsWith(BOJU_PREFIX)) {
+                try {
+                  const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
+                  if ('action' in parsed) {
+                    cb.onAction(line);
+                  } else if ('query' in parsed) {
+                    cb.onQuery?.(line);
+                  }
+                } catch { /* malformed — treat as text */ textLines.push(line); }
               } else {
                 textLines.push(line);
               }

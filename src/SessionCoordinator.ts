@@ -9,7 +9,7 @@ import {
   TokenUsage,
 } from './ClaudeProcess';
 import { VaultQuery } from './QueryHandler';
-import { QUERY_PREFIX } from './constants';
+import { BOJU_PREFIX } from './constants';
 import { extractActions, BojuBotAction } from './UIBridge';
 import {
   StoredSession,
@@ -280,7 +280,7 @@ export class SessionCoordinator {
       },
       onQuery: (line) => {
         try {
-          const q = JSON.parse(line.slice(QUERY_PREFIX.length)) as VaultQuery;
+          const q = JSON.parse(line.slice(BOJU_PREFIX.length)) as VaultQuery;
           pendingQueries.push(q);
           this.emit('turn:query', q);
           log('turn:query — queued:', q.query, q.mode, q.path ?? '');
