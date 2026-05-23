@@ -1,16 +1,15 @@
-# Obsidian Claude Plugin — Design Document
+# ObsidiBot — Architecture Reference
 
-**Version:** 0.1 (Initial)  
-**Status:** Pre-development  
-**Author:** Scott  
+**Status:** As-built (reflects v2.16.x, May 2026)  
+**Replaces:** Pre-development design doc (v0.1, "Pre-development")
 
 ---
 
-## Overview
+## What It Is
 
-An Obsidian plugin that brings Claude Code's agentic file management capabilities into the Obsidian environment. The entire vault serves as the project context, with Claude able to read, write, create, move, and organize notes — while the user retains precise control over what Claude can see, touch, and remember.
+ObsidiBot is an Obsidian plugin that embeds the Claude Code CLI as a managed subprocess. It provides a chat panel inside Obsidian where Claude can read, write, and organize vault notes — with the user in control of what Claude can access and what it can do. No API key is required; it rides a Claude Pro/Max subscription via the CLI.
 
-The plugin is designed to be shareable: any user with Claude Code installed and authenticated (Pro or Max subscription) can use it with no additional API keys or billing setup.
+Desktop only (Electron/Node). No mobile support.
 
 ---
 
@@ -19,374 +18,267 @@ The plugin is designed to be shareable: any user with Claude Code installed and 
 - Replicate the Claude Code / VS Code panel experience inside Obsidian
 - Make the full vault available as Claude's working context
 - Provide intelligent, user-controlled context injection rather than brute-force full-vault loading
-- Store all session data inside the vault for portability and version control
-- Support the kind of writing, planning, organizing, and scripting workflows that Obsidian users actually do — not just code
+- Support writing, planning, organizing, and scripting workflows that Obsidian users actually do
+- Be distributable to anyone with Claude Code installed — no additional billing
 
 ---
 
-## Non-Goals (v1)
+## Non-Goals
 
-- Mobile support (desktop only, Electron/Node requirement)
+- Mobile support (desktop/Electron requirement)
 - Multi-vault support
-- Direct Anthropic API integration (this plugin uses the Claude Code CLI subprocess exclusively)
+- Direct Anthropic API integration (subprocess only — no API key)
 - Real-time collaboration
 
 ---
 
 ## Architecture
 
-### Integration Approach
-
-The plugin communicates with Claude exclusively via the **Claude Code CLI binary** (`claude`), spawned as a child process using Node.js `child_process`. This approach:
-
-- Requires no API key — rides the user's existing Pro/Max subscription
-- Is distributable to anyone with Claude Code installed
-- Gives Claude full OS-level file access to the vault
-- Is the same approach used by Cline and Zed
-
-The plugin does **not** use the Anthropic Messages API directly, and does **not** use the Claude Agent SDK (which requires an API key and explicitly prohibits subscription-based third-party auth).
-
 ### Process Model
 
 ```
 Obsidian (Electron renderer)
-  └── child_process.spawn('claude', args, { cwd: vaultRoot, env: resolvedEnv })
+  └── child_process.spawn(
+        'powershell.exe',
+        ['-NonInteractive', '-Command', "& 'claude.exe' ...args"],
+        { cwd: vaultRoot }
+      )
         └── claude CLI process
               ├── reads/writes vault files directly
-              ├── executes bash commands
-              └── streams output back via stream-json format
+              ├── executes bash/PowerShell commands
+              └── streams output via --output-format stream-json
 ```
 
-The plugin:
-1. Resolves the user's full shell environment at startup (via `bash -l -c env`) to ensure PATH is correct
-2. Detects the `claude` binary location across OS/install variations
-3. Spawns claude with `--output-format stream-json` and `--print` for non-interactive use
-4. Manages conversation turns by building and passing message history
-5. Intercepts tool calls before execution when frontmatter protection rules apply
+Key decisions (locked — don't revisit without discussion):
+
+- **PowerShell wrapper on Windows**: `powershell.exe -NonInteractive -Command "& 'claude.exe' ..."` — direct spawn and cmd.exe both silently swallow stdout in Electron.
+- **Prompt via stdin, not CLI arg**: `proc.stdin.write(prompt); proc.stdin.end()`. Avoids all Windows shell-quoting issues (smart quotes, special chars). `proc.stdin.end()` is required or Claude hangs.
+- **Flags**: `--output-format stream-json --verbose --print` + permission-mode args. `--verbose` is required with `stream-json + --print`.
+- **Session resume**: `--resume <sessionId>` on every turn after the first. Uses `cache_read_input_tokens` (~10x cheaper than re-sending history). Do NOT manually prepend history.
+- **Env**: `CLAUDECODE` var deleted from spawn env or Claude refuses nested launch.
+- **cwd**: vault root for all spawns.
 
 ### Session Storage
 
-All session data lives inside the vault under `.obsidian/claude/`:
+Session metadata lives in `.obsidian/obsidibot/sessions/<id>.json`. Actual conversation history stays in `~/.claude/projects/` (managed by the Claude CLI). Session files contain:
 
-```
-.obsidian/
-  claude/
-    sessions/
-      2025-02-27T14-32-00_initial-vault-setup.json
-      2025-02-27T16-45-00_blog-post-draft.json
-      ...
-    current-session.json   ← symlink or pointer to active session
-```
-
-Each session file contains:
 - Session ID, title, created/updated timestamps
-- Full conversation turn history (role, content, tool calls, tool results)
-- Active pinned context file list for that session
-- Model/settings snapshot
+- Sort order (for drag-and-drop reorder in session manager)
+- Active permission mode
 
-This makes sessions vault-portable, version-controllable, and independent of the global `~/.claude/` store.
+Sessions are not vault-portable — the `.jsonl` history files live in the global Claude projects directory, not the vault. Session metadata is small and tracks state only.
 
-### Context File (Replaces CLAUDE.md)
+### Context Injection Stack
 
-Claude Code's native `CLAUDE.md` convention is **not used**. Instead, the plugin manages its own context file at a user-configurable path (default: `_claude-context.md` at vault root, or any path set in plugin settings).
+What gets injected at session start (new session, first turn):
 
-On each session start, the plugin:
-1. Reads the configured context file (if it exists)
-2. Reads the vault folder tree (collapsed to configurable depth)
-3. Reads any always-pinned notes
-4. Assembles a system prompt and injects it when spawning claude
+| Layer | Source | Tokens (approx) | Always? |
+|---|---|---|---|
+| Orientation | `src/orientation.md` compiled into `main.js` | ~2,000–2,500 | Yes |
+| Permission summary | Injected into orientation placeholders | ~50 | Yes |
+| Vault tree | `src/utils/fileTree.ts` | 0 (default off) | If depth > 0 |
+| Context file | `_claude-context.md` (configurable) | Variable | If file exists |
+| Per-note frontmatter `instructions` | Vault metadata scan | Variable | If notes have it |
+| Autonomous memory directive | Short instruction block | ~100 | If setting enabled |
 
-This keeps the vault root clean and gives the user full control over naming and location.
+After session start, context is cached by the Claude API as `cache_read_input_tokens` at ~10x cost reduction. A 5-minute inactivity gap expires the cache (server-side TTL) — next turn pays 1.25x to re-prime it.
 
----
+The orientation block (`src/orientation.md`) is compiled into `main.js` via esbuild's text loader — it is NOT a user-accessible vault file. The `@@CORTEX_ACTION` and `@@CORTEX_QUERY` strings in it are an attack surface; they must never be written to user-readable vault files.
 
-## Features
+### Skills System
 
-### 1. Chat Panel
+Skills are the primary way users extend ObsidiBot with custom workflows. A skill is a `.md` file in the configured skills folder (default: `_ObsidiBot Skills/`) or a `<name>/SKILL.md` subdirectory (Claude Code convention).
 
-A sidebar or split panel (user preference) that provides the conversation interface.
+**Frontmatter fields:**
 
-**UI elements:**
-- Message thread (user and Claude turns, rendered markdown)
-- Streaming text display — Claude's responses render incrementally as tokens arrive
-- Tool execution visibility — shows when Claude is reading/writing files, running commands
-- Input area with send button and keyboard shortcut
-- Session title (editable)
-- `+` button for new conversation
-- Session history access (list of past sessions)
+| Field | Description |
+|---|---|
+| `params:` | Array of typed form fields (ObsidiBot format) |
+| `arguments:` | Simple string argument hint (Claude Code format) |
+| `argument-hint:` | Placeholder text for the argument input |
+| `autorun: true` | Execute immediately without showing the form |
+| `category:` | Group heading in the slash menu |
+| `description:` | Subtitle in the slash menu |
 
-**User stories:**
-- *As a user, I want to type a message and see Claude's response stream in real time, like in the Claude.ai interface.*
-- *As a user, I want to see when Claude is performing file operations so I know what it's doing.*
-- *As a user, I want to start a new conversation without losing my history of past conversations.*
+**Execution:**
+1. User selects skill from `/` slash menu or Ctrl+P command palette
+2. If skill has `params:` or `arguments:`, `SlashParamModal` shows a form
+3. User fills fields and submits
+4. Values interpolated into prompt body: `{{id}}`, `$ARGUMENTS`, `$name`, `$0`
+5. If `autorun: true`, prompt fires directly; otherwise it's inserted into chat input
 
----
+**Param types (ObsidiBot):** `input`, `textarea`, `dropdown`, `checkboxes`, `obsidianmd_note` (alias: `note`)
 
-### 2. Session Management
+The `obsidianmd_note` type opens a fuzzy vault picker; the selected note's full content is injected as a file attachment. This type is named `obsidianmd_note` (not `note`) so Claude Code and other tools can gracefully degrade when reading ObsidiBot skills.
 
-**Behavior:**
-- On plugin load, the last active session is automatically resumed (no re-briefing required)
-- `+` starts a new session; the previous session is saved to `.obsidian/claude/sessions/`
-- Session titles are auto-generated from the first user prompt (first ~60 chars) or manually editable
-- A session picker (accessible from the panel header) lists past sessions with title and timestamp
+**Claude Code compatibility:** ObsidiBot skills are a strict superset of Claude Code skill format. Skills authored for Claude Code/Cursor/Gemini CLI work in ObsidiBot as-is.
 
-**User stories:**
-- *As a user, I want to reopen Obsidian and continue exactly where I left off without any setup.*
-- *As a user, I want to find and resume a conversation I had last week about a specific topic.*
-- *As a user, I want to give my sessions meaningful names so I can find them later.*
+**Key module:** `src/SkillLoader.ts` owns all skill file-system logic: `resolveSkillsFolder()`, `scanSkillFolder()`, `nameFromPath()`, `parseSkillFile()`, `loadSkills()`.
 
----
+### UIBridge Protocol (@@CORTEX_ACTION)
 
-### 3. Context Management
+Claude triggers Obsidian UI actions by emitting `@@CORTEX_ACTION {"action": "...", ...params}` on its own line in a response. These are intercepted by `src/UIBridge.ts` and never shown to the user.
 
-Context is the information injected into Claude's awareness at session start and/or on each turn. There are four layers:
+**Actions (no confirmation required):**
+- `open-file` — opens a vault note
+- `open-file-split` — opens in split pane
+- `navigate-heading` — scrolls to a heading
+- `show-notice` — shows a toast notification
+- `set-label` — writes the user's name to `settings.userLabel` (consent-based greeting)
+- `request-permission` — requests permission mode upgrade
 
-#### 3a. Vault Structure (Always Injected)
+**Actions (require user confirmation):**
+- `open-settings` — opens Obsidian settings
+- `focus-search` — focuses the search panel
+- `run-command` — executes an Obsidian command by ID
 
-A folder tree of the vault, collapsed to a configurable depth (default: 2-3 levels). Gives Claude navigational awareness without content cost. Injected once at session start.
+UIBridge enforces a command allowlist and denylist (configurable in settings). Allowlisted commands are executed without confirmation. Denylisted commands are always blocked. Mid-session allowlist injection is supported.
 
-#### 3b. Vault Context File (Persistent Project Memory)
+Vault content is scanned for `@@CORTEX_` strings and neutralized via `neutralizeTriggers()` before being shown to the user or passed to Claude. This prevents prompt injection via crafted vault notes.
 
-A single markdown file (path configurable in settings) that serves as Claude's persistent orientation doc — vault structure, conventions, ongoing threads, current focus areas. Claude is instructed to maintain this file as the project evolves.
+### Vault Query Protocol (@@CORTEX_QUERY)
 
-**User workflow:** On a new project, the user gives Claude a few orientation notes, Claude generates the context file, and maintains it autonomously going forward. Survives across sessions as the stable memory layer.
+Claude queries live vault state by emitting `@@CORTEX_QUERY {"query": "...", ...params, "mode": "show"|"inject"}`.
 
-#### 3c. Pinned Context (Session or Permanent)
+- **show mode**: renders a result card in the chat panel for the user to see
+- **inject mode**: auto-fires a `--resume` turn injecting the result into Claude's context, so Claude can continue reasoning without a user turn
 
-Individual notes can be added to Claude's context explicitly:
+**Query types:** `backlinks`, `outlinks`, `tags`, `file-list` (supports optional `depth` and `startFolder` params)
 
-- **Permanent pins** — always injected, every session. Set via plugin settings or via note frontmatter (`claude.context: always`). Good for reference docs, style guides, taxonomies.
-- **Session pins** — added for the current conversation only, cleared on `+`. Good for "read this meeting transcript while we discuss this project."
+Handled by `src/QueryHandler.ts`.
 
-**UI:** A context panel or drawer in the chat UI showing currently active context files. Notes can be added via:
-- Right-click context menu in Obsidian file explorer → "Pin to Claude context"
-- Drag into context panel
-- Inline command from within a note
+### Frontmatter Schema (Partially Implemented)
 
-#### 3d. Inline Selection Context
+Notes can carry a `claude:` key in YAML frontmatter. The plugin reads this via `app.metadataCache`.
 
-Highlight text in any note → command/right-click → "Send to Claude as context." Injects the selected text into the current session without leaving the note. Distinct from sending it as a prompt.
+| Field | Implemented? | Behavior |
+|---|---|---|
+| `context: always` | Yes | Note injected into every session at session start |
+| `readonly: true` / `protect: true` | Partial | Shown in settings; write-protection not enforced (FrontmatterGuard blocked — see Known Limitations) |
+| `instructions: "..."` | Yes | Injected as context when note is read or pinned |
+| `context: never` | No | Planned: block Claude from reading the file. Not enforced. |
+| `context: session` | No | Reserved; no behavior defined |
+| `priority: high|normal|low` | No | Reserved for future context ordering |
 
-**User stories:**
-- *As a user, I want Claude to always know my vault's organizational conventions without me explaining them every session.*
-- *As a user, I want to temporarily add a reference document to a conversation without it persisting forever.*
-- *As a user, I want to highlight a paragraph and add it to Claude's context without copy-pasting.*
-- *As a user, I want to see exactly what context Claude currently has access to.*
+### Welcome Screen
 
----
+Shows on plugin load when no session is active. Includes: sprite, greeting, tip of the day, recent sessions list.
 
-### 4. Per-Note Frontmatter Instructions
-
-Notes can carry Claude-specific metadata in their YAML frontmatter. The plugin reads this metadata before executing any tool call involving the file.
-
-**Supported frontmatter schema:**
-
-```yaml
----
-claude:
-  readonly: true
-  protect: true
-  instructions: "This is the canonical taxonomy. Suggest changes but never apply them directly."
-  context: always
----
-```
-
-**Field definitions:**
-
-| Field | Type | Behavior |
-|-------|------|----------|
-| `readonly` | boolean | Claude cannot write to this file. Any write attempt is blocked and the user is notified. |
-| `protect` | boolean | Alias for `readonly`. Plugin intercepts write tool calls before execution. |
-| `instructions` | string | Injected as context whenever this file is read or referenced in a session. |
-| `context: always` | string | This note is permanently pinned to every session automatically. |
-| `context: never` | string | This note is never read by Claude, even if asked. |
-
-**User stories:**
-- *As a user, I want to mark my master index note as read-only so Claude can never accidentally overwrite it.*
-- *As a user, I want to attach instructions to a note so Claude knows how to handle it without me explaining every time.*
-- *As a user, I want certain reference notes to always be in Claude's context automatically.*
-- *As a user, I want to exclude sensitive notes from Claude's access entirely.*
+Greeting is consent-based: reads `settings.userLabel`. This value is written only when the user introduces themselves via conversation and Claude fires `@@CORTEX_ACTION {"action": "set-label", "name": "..."}`. The plugin never reads the OS username.
 
 ---
 
-### 5. Vault-Aware Tool Execution
+## Features (Current)
 
-When Claude executes file operations, the plugin mediates through the Obsidian vault API rather than raw filesystem calls where possible. This ensures:
-
-- Obsidian's metadata cache stays updated (backlinks, tags, etc.)
-- File events propagate correctly within Obsidian
-- Frontmatter protection rules are enforced before writes execute
-
-For bash/shell execution, commands run in the OS environment with the vault root as working directory.
+- Chat panel (sidebar or split pane) with streaming markdown rendering
+- Session persistence and history UI
+- Session resume (`--resume`) — cheap cache-read pricing on subsequent turns
+- Session manager: list, rename, drag-and-drop reorder, active session indicator
+- Session export: YAML frontmatter + screenplay-style markdown transcript (active session via command palette; any past session via download icon in session manager)
+- Context injection: vault tree (depth configurable, default off), context file, per-note frontmatter
+- Per-turn token stats display: `out · in · cached`
+- Token logging and context injection breakdown in debug log
+- Configurable vault tree depth (0=off, 1–10=N levels, -1=unlimited)
+- @-mention note injection
+- File/URL attachment
+- Image/PDF attachment (file picker + clipboard paste + drag-and-drop)
+- Split-pane context awareness
+- Permission modes: Standard / Read-only / Full access
+  - Denial card shown when Claude attempts a blocked action
+  - Mid-session upgrade path
+- Tool call visibility (collapsible)
+- Context gauge (SVG ring, click to compact)
+- UIBridge (@@CORTEX_ACTION protocol)
+- Command allowlist + denylist with settings browser + confirmation modal
+- Mid-session allowlist injection
+- Session context refresh command
+- Command reference file (`.obsidian/plugins/obsidibot/obsidian-commands.md` — generated on layout ready)
+- Log file in plugin dir (`.obsidian/plugins/obsidibot/obsidibot-debug.log`)
+- Orphaned allowlist entry detection in settings UI
+- Vault query protocol (@@CORTEX_QUERY)
+- Skills: parameterized slash command files, typed form fields, Claude Code format compatibility
+- Skills registered as Ctrl+P commands (default on)
+- Welcome screen (sprite + greeting + tip of the day + recent sessions)
+- About modal (matches Obsidian native layout)
+- Interrupted session detection (`is_error` on result message)
+- Autonomous memory setting
+- Remote session detection
 
 ---
 
-### 6. Plugin Settings
-
-Accessible via Obsidian's standard Settings → Community Plugins → Claude panel.
+## Settings Reference
 
 | Setting | Default | Description |
-|---------|---------|-------------|
-| Claude binary path | Auto-detected | Override if auto-detection fails |
-| Context file path | `_claude-context.md` | Vault-relative path to the persistent context file |
-| Vault tree depth | `3` | How many folder levels to include in initial tree injection |
-| Panel position | Sidebar | Sidebar or split pane |
-| Session storage location | `.obsidian/claude/sessions/` | Where session files are written |
-| Always-pinned notes | (empty list) | Notes permanently injected into every session |
-| Inject context on every turn | `false` | Re-inject pinned context each turn (more reliable, more tokens) vs. once at session start |
-| Shell for env resolution | `bash` | Shell used to resolve PATH at startup |
+|---|---|---|
+| Claude binary path | (auto-detect) | Override if detection fails |
+| Context file path | `_claude-context.md` | Persistent vault briefing doc for Claude |
+| Vault tree depth | 0 (off) | 0=off, 1–10=N levels, -1=unlimited |
+| Skills folder | `_ObsidiBot Skills/` | Where skill .md files live |
+| Register skills as Ctrl+P | ON | Skills appear in Obsidian command palette |
+| Autonomous memory | OFF | Claude proactively maintains the context file |
+| Session export folder | `Claude Exports/` | Where exported transcripts are written |
+| Permission mode | Standard | Standard / Read-only / Full access |
+| Command allowlist | (empty) | Commands Claude can run without confirmation |
+| Command denylist | (empty) | Commands Claude can never run |
+| User label | (empty) | Consent-based name shown on welcome screen |
 
 ---
 
-## Technical Specifications
+## Key Files
 
-### Prerequisites (User)
-
-- Obsidian desktop (not mobile)
-- Node.js accessible in environment (for child_process)
-- Claude Code CLI installed and authenticated (`claude login` completed)
-- Pro or Max Claude subscription
-
-### Build Stack
-
-- TypeScript
-- esbuild (bundler, standard for Obsidian plugins)
-- Obsidian Plugin API
-- Node.js built-ins: `child_process`, `path`, `os`, `fs`
-- No external npm runtime dependencies (everything bundled)
-
-### Binary Detection
-
-At plugin startup, the following locations are checked in order:
-
-1. User-configured path (settings override)
-2. `which claude` via shell resolution
-3. `~/.local/bin/claude` (Linux/Mac default native install)
-4. `~/.npm-global/bin/claude` (npm install fallback)
-5. Windows: `%USERPROFILE%\.local\bin\claude.exe`
-
-If not found, the plugin displays a setup prompt with installation instructions.
-
-### Environment Resolution
-
-To ensure correct PATH inheritance:
-
-```typescript
-const env = await resolveShellEnv(); // spawns bash -l -c env, parses output
-// used for all subsequent claude process spawns
-```
-
-Cached at startup, not re-resolved per spawn.
-
-### Stream-JSON Parsing
-
-Claude is spawned with `--output-format stream-json`. Output is parsed incrementally:
-
-- Text delta blocks → appended to current message display in real time
-- Tool use blocks → displayed as tool call indicators in the UI
-- Tool result blocks → shown as execution feedback
-- End turn signals → mark message complete
-
-### Frontmatter Interception
-
-Before Claude executes a write tool call, the plugin:
-1. Identifies the target file path
-2. Reads frontmatter via `app.metadataCache`
-3. Checks `claude.readonly` and `claude.protect` fields
-4. If protected: blocks the call, injects a message to Claude explaining the restriction
-5. If not protected: allows the call to proceed
+| File | Purpose |
+|---|---|
+| `main.ts` | Plugin entry, 16 commands, `activateView`, `notifyAllowlistChanged`, `generateCommandsFile` |
+| `src/ClaudeView.ts` | Chat UI, session state, context injection, history modal, `bridgeOptions`, `refreshSessionContext` |
+| `src/ClaudeProcess.ts` | Binary detection, spawn (PowerShell on Win), stream-json parsing |
+| `src/ContextManager.ts` | Orientation + vault tree + context file + allowlist assembly; all session-start context layers |
+| `src/UIBridge.ts` | `@@CORTEX_ACTION` parsing + execution; `ConfirmCommandModal`; allowlist/denylist enforcement |
+| `src/QueryHandler.ts` | `@@CORTEX_QUERY` resolution; `resolveQuery()`, `queryLabel()`, `buildInjectMessage()` |
+| `src/SkillLoader.ts` | All skill file-system logic: resolve folder, scan, parse, load |
+| `src/settings.ts` | Settings schema + tab UI; command browser (searchable checklist) |
+| `src/orientation.md` | Orientation template (compiled into `main.js` via esbuild text loader) |
+| `src/utils/sessionStorage.ts` | Session CRUD, `.jsonl` parse, `canResumeLocally` |
+| `src/utils/logger.ts` | File + console logging, `estimateTokens` |
+| `src/utils/fileTree.ts` | Vault folder tree builder |
+| `src/modals/SlashParamModal.ts` | Param form modal for skills; `SlashParam` + `SlashParamAttachment` types |
+| `test/spawn-test.mjs` | Standalone spawn test (Node.js, no Obsidian) |
+| `docs/` | VitePress user-facing guide |
+| `docs/guide/skills.md` | Skills reference (field types, examples, Ctrl+P API) |
 
 ---
 
-## Session File Format
+## Known Limitations / Blocked Work
 
-```json
-{
-  "id": "2025-02-27T14-32-00",
-  "title": "Reorganize Projects folder structure",
-  "created": "2025-02-27T14:32:00Z",
-  "updated": "2025-02-27T15:14:22Z",
-  "contextFile": "_claude-context.md",
-  "pinnedNotes": ["Reference/Style-Guide.md"],
-  "turns": [
-    {
-      "role": "user",
-      "content": "Let's reorganize the Projects folder...",
-      "timestamp": "2025-02-27T14:32:01Z"
-    },
-    {
-      "role": "assistant",
-      "content": "I'll start by reading the current structure...",
-      "toolCalls": [...],
-      "timestamp": "2025-02-27T14:32:08Z"
-    }
-  ]
-}
-```
+**FrontmatterGuard write-protection** — Claude Code's `--print` mode does not support per-tool-call approval. There is no hook to intercept a write before it executes. `FrontmatterGuard.ts` exists but write-protection is not enforced. `context: never` enforcement has the same blocker. Resolving this requires either: (a) a future Claude Code CLI feature, or (b) the persistent process architecture where ObsidiBot mediates tool calls directly.
+
+**Inline diff preview** — same constraint as FrontmatterGuard.
+
+**"Interrupted." message (#76)** — when Claude fires only UIBridge actions with no text, the UI shows a misleading "Interrupted." status.
+
+**Export button missing from chat panel toolbar (#56)** — export is available via command palette only.
+
+**Pinned context files UI** — backburned; no UI to manage per-session pinned notes yet.
 
 ---
 
-## Open Questions / Decisions Deferred to Implementation
+## Future Directions
 
-1. **Context injection strategy** — inject pinned notes once at session start, or re-inject on every turn? Tradeoff: reliability vs. token cost. Consider making this a setting.
+These are designed but not yet built. See `notes/dev/specs/` for individual specs.
 
-2. **Compaction handling** — when Claude's context window fills, it compacts automatically. The plugin should detect compaction events in the stream and possibly notify the user, since early-conversation instructions can get summarized away.
+### Plugin Ecosystem
 
-3. **Concurrent sessions** — should the plugin support multiple active sessions in different panels? Probably not v1, but worth noting.
+The vision is a layered plugin architecture where ObsidiBot core exposes a stable API (`core.api`) that first- and third-party plugins consume:
 
-4. **Vault context file auto-generation** — should the plugin prompt the user to create a context file on first launch if none exists? Or let Claude generate one from an onboarding prompt?
+- **`obsidibot-watchers`** — filesystem event triggers that spawn Claude sessions on vault changes
+- **`obsidibot-supervisor`** — session queuing, concurrency control, multi-agent fleet orchestration
+- **`obsidibot-mcp`** — exposes vault skills as MCP tools over localhost HTTP/SSE for external clients (Claude Desktop, n8n, mobile via Tailscale)
 
-5. **`.obsidian/` gitignore** — sessions in `.obsidian/` are typically gitignored. Is this the right behavior? Some users may want session history under version control. Consider making storage location configurable to enable this.
+Core Plugin API spec: `notes/dev/specs/obsidibot-core-api-spec.md`
 
-6. **Permission prompts** — Claude Code sometimes pauses to ask permission mid-task. The plugin needs a UI pattern for surfacing and responding to these prompts inline.
+### Other Planned Features
 
-7. **`context: never` enforcement** — how does the plugin prevent Claude from reading a protected file if the user asks Claude to read it directly? Needs a clear UX decision.
-
----
-
-## Future Directions (Post-v1)
-
-- **Dataview / metadata awareness** — give Claude access to query the vault's metadata graph, not just file contents
-- **Template integration** — Claude generates new notes using the user's existing Templater templates
-- **Git integration** — commit messages, branch summaries, change review
-- **Multi-context profiles** — saved sets of pinned notes for different workflow modes (writing mode, planning mode, research mode)
-- **Slash commands** — custom `.obsidian/claude/commands/` directory, mirroring Claude Code's command pattern
-- **Canvas integration** — read and generate Obsidian Canvas files
-
----
-
-## Appendix: Frontmatter Examples
-
-**Protected reference document:**
-```yaml
----
-claude:
-  readonly: true
-  context: always
-  instructions: "This is the canonical project taxonomy. Reference it when organizing notes. Never modify it."
----
-```
-
-**Meeting note (session context only):**
-```yaml
----
-claude:
-  instructions: "This is a raw meeting transcript. Extract action items and decisions but don't reformat the note itself."
----
-```
-
-**Sensitive note (excluded from Claude):**
-```yaml
----
-claude:
-  context: never
----
-```
-
-**Style guide (always present):**
-```yaml
----
-claude:
-  context: always
----
-```
+- **Inline content generation (#10)** — `<% obsidibot: {"prompt": "..."} %>` tags in notes trigger headless Claude calls; output replaces the tag. Spec: `notes/dev/specs/inline-content-generation-spec.md`
+- **Persistent process architecture** — keep `claude.exe` alive between turns (no per-turn spawn overhead). Requires dropping `--print` and handling turn-boundary detection from the stream. Significant performance win on Windows.
+- **Vault watch/event system (#62)** — Obsidian pushing vault state changes to Claude proactively (second half of the two-way bridge; `@@CORTEX_QUERY` is the first half).
+- **Two-way bridge improvements** — `help` topic injection for on-demand reference docs, unified `@@CORTEX` prefix, selection-aware context injection.
+- **Obsidian community plugin submission** — pending lint fixes tracked in `notes/dev/obsidian-plugin-submission-feedback.md`.

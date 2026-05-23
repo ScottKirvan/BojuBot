@@ -82,6 +82,8 @@ npm run dev                    # watch mode
 
 **Lint and TypeScript violations are `fix:` not `chore:`** — they block Obsidian community plugin acceptance and must appear in a release.
 
+**`feat:` is for genuinely new user-facing capabilities only.** Bug fixes (even GitHub-tracked bugs), privacy/consent fixes, default value changes, internal improvements, and enabling behavior that was always designed but not yet on by default all use `fix:`, `chore:`, or `refactor:`. Mislabeling fixes as features inflates minor version numbers unnecessarily — release-please uses commit types directly to determine version bumps.
+
 After submitting a PR, always switch back to `main`: `git checkout main`.
 
 ## Release process (post-merge checklist)
