@@ -15,7 +15,7 @@ import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProc
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { QUERY_PREFIX, neutralizeTriggers } from './constants';
+import { BOJU_PREFIX, neutralizeTriggers } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
 import { extractToolDetail } from './utils/toolFormatting';
@@ -940,9 +940,11 @@ export class ClaudeView extends ItemView {
             // Re-render vault query result cards and store queries for export
             const replayQueries: VaultQuery[] = [];
             for (const line of msg.content.split('\n')) {
-              if (!line.startsWith(QUERY_PREFIX)) continue;
+              if (!line.startsWith(BOJU_PREFIX)) continue;
               try {
-                const q = JSON.parse(line.slice(QUERY_PREFIX.length)) as VaultQuery;
+                const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
+                if (!('query' in parsed)) continue;
+                const q = parsed as unknown as VaultQuery;
                 replayQueries.push(q);
                 this.renderQueryResultCard(this.messagesEl, resolveQuery(this.app, q));
               } catch { /* skip malformed query lines */ }
@@ -1584,9 +1586,11 @@ export class ClaudeView extends ItemView {
   private queryResultsAsMarkdown(content: string): string {
     const queries: VaultQuery[] = [];
     for (const line of content.split('\n')) {
-      if (!line.startsWith(QUERY_PREFIX)) continue;
+      if (!line.startsWith(BOJU_PREFIX)) continue;
       try {
-        queries.push(JSON.parse(line.slice(QUERY_PREFIX.length)) as VaultQuery);
+        const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
+        if (!('query' in parsed)) continue;
+        queries.push(parsed as unknown as VaultQuery);
       } catch { /* skip malformed */ }
     }
     return this.resolveQueriesToMarkdown(queries);

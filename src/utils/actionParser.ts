@@ -1,5 +1,5 @@
 import { log, warn } from './logger';
-import { ACTION_PREFIX, QUERY_PREFIX } from '../constants';
+import { BOJU_PREFIX } from '../constants';
 
 export interface BojuBotAction {
   action: string;
@@ -12,16 +12,18 @@ export function extractActions(text: string): { clean: string; actions: BojuBotA
   const kept: string[] = [];
 
   for (const line of lines) {
-    if (line.startsWith(ACTION_PREFIX)) {
+    if (line.startsWith(BOJU_PREFIX)) {
       try {
-        const action = JSON.parse(line.slice(ACTION_PREFIX.length)) as BojuBotAction;
-        actions.push(action);
-        log('UIBridge: parsed action:', action.action, action);
+        const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
+        if ('action' in parsed) {
+          const action = parsed as unknown as BojuBotAction;
+          actions.push(action);
+          log('UIBridge: parsed action:', action.action, action);
+        }
+        // query lines are silently stripped — intercepted at stream time, must never appear in the UI
       } catch {
-        warn('UIBridge: malformed action line:', line);
+        warn('UIBridge: malformed BOJU line:', line);
       }
-    } else if (line.startsWith(QUERY_PREFIX)) {
-      // Strip query lines — intercepted at stream time and must never appear in the UI
     } else {
       kept.push(line);
     }

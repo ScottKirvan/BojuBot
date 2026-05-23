@@ -1,7 +1,6 @@
 import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
-import { ACTION_PREFIX } from './constants';
-export { ACTION_PREFIX } from './constants';
+export { BOJU_PREFIX } from './constants';
 export { BojuBotAction, extractActions } from './utils/actionParser';
 import type { BojuBotAction } from './utils/actionParser';
 
