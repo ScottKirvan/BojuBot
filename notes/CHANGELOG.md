@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.1.0](https://github.com/ScottKirvan/BojuBot/compare/3.0.0...3.1.0) (2026-05-23)
+
+
+### Features
+
+* add configurable memory file size cap ([94c864c](https://github.com/ScottKirvan/BojuBot/commit/94c864c9ee3f04c551c4142f28c41afab31fe26a))
+
 ## [3.0.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.16.1...3.0.0) (2026-05-23)
 
 
