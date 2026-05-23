@@ -7,6 +7,26 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.0.0](https://github.com/ScottKirvan/ObsidiBot/compare/2.16.1...3.0.0) (2026-05-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* plugin folder and session storage path change from obsidibot/ to bojubot/. Existing sessions are migrated automatically on first load; plugin settings require a one-time manual copy (see notes/dev/session-migration-guide.md).
+
+### Features
+
+* add folder suggest dropdown to folder-path settings ([fb63cfa](https://github.com/ScottKirvan/ObsidiBot/commit/fb63cfa91bbea293dc0def0969aee770e6b774ee)), closes [#225](https://github.com/ScottKirvan/ObsidiBot/issues/225)
+
+
+### Bug Fixes
+
+* add depth param to file-list query for on-demand vault tree ([0d4a223](https://github.com/ScottKirvan/ObsidiBot/commit/0d4a223dd5c25c83faa0b52ea863c005e713070c))
+* change vault tree depth default from 3 levels to off ([542a21a](https://github.com/ScottKirvan/ObsidiBot/commit/542a21ab07a4f8c12694fd85f0942baa965fd95f))
+* extract orientation block into compiled markdown file ([a44da4b](https://github.com/ScottKirvan/ObsidiBot/commit/a44da4baacb70c8806c79605b1f1def49b51ed2d))
+* remove internal protocol string from welcome screen tip ([dbda690](https://github.com/ScottKirvan/ObsidiBot/commit/dbda69026a57fc483e282b203fe4cce927c63f89)), closes [#231](https://github.com/ScottKirvan/ObsidiBot/issues/231)
+* rename plugin from ObsidiBot to BojuBot ([b116d51](https://github.com/ScottKirvan/ObsidiBot/commit/b116d5179c5a7a772740160d4428f454c34df838))
+
 ## [2.16.1](https://github.com/ScottKirvan/BojuBot/compare/2.16.0...2.16.1) (2026-05-14)
 
 
