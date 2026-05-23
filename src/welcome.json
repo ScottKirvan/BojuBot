@@ -82,7 +82,7 @@
       "Skills support a note parameter type — Claude receives the full content of a vault note as context for that skill.",
       "Run the Reload skills command after adding or editing skill files to pick up changes without restarting Obsidian.",
       "Mid-session permission upgrade: if Claude needs more access, you can grant it without starting a new session.",
-      "Use @@BOJU_QUERY to let Claude look up backlinks, outlinks, tags, or file lists from your live vault on demand.",
+      "Claude can look up backlinks, outlinks, tags, or file lists from your live vault on demand — just ask.",
       "BojuBot resumes sessions using Claude's built-in cache — the longer a conversation runs, the cheaper each turn gets."
     ]
   }
