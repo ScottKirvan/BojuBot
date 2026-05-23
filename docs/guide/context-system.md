@@ -18,13 +18,13 @@ Configure depth in **Settings → ObsidiBot → Vault tree depth**:
 
 | Setting              | What Claude sees                  |
 | -------------------- | --------------------------------- |
-| Off                  | No vault tree                     |
+| Off *(default)*      | No vault tree — Claude discovers structure on demand |
 | 1 level              | Root-level folders and files only |
 | 2 levels             | Root + one sublevel               |
-| 3 levels *(default)* | Root + two sublevels              |
+| 3 levels             | Root + two sublevels              |
 | Unlimited            | Full tree at any depth            |
 
-Deeper trees give Claude better spatial awareness of large vaults but cost more tokens per session start. For most vaults, **3 levels** is a good balance.
+With **Off**, Claude uses the vault query protocol to list files when it needs them, so nothing is paid upfront. Enable a depth if you find Claude frequently needs to browse the vault and you'd prefer it to have that awareness from the start of the session.
 
 ---
 

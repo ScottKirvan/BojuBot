@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   sendOnEnter: true,
   resumeLastSession: true,
   autonomousMemory: true,
-  vaultTreeDepth: 3,
+  vaultTreeDepth: 0,
   skipContextFilePrompt: false,
   uiBridgeEnabled: true,
   commandAllowlist: ['switcher:open', 'editor:open-search'],
@@ -198,10 +198,10 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       )
       .addDropdown((drop) =>
         drop
-          .addOption('0', 'Off')
+          .addOption('0', 'Off (default)')
           .addOption('1', '1 Level (root only)')
           .addOption('2', '2 Levels')
-          .addOption('3', '3 Levels (default)')
+          .addOption('3', '3 Levels')
           .addOption('4', '4 Levels')
           .addOption('5', '5 Levels')
           .addOption('6', '6 Levels')
