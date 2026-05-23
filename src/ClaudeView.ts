@@ -945,6 +945,7 @@ export class ClaudeView extends ItemView {
                 const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
                 if (!('query' in parsed)) continue;
                 const q = parsed as unknown as VaultQuery;
+                if (q.query === 'help') continue; // reference injections have no replay card
                 replayQueries.push(q);
                 this.renderQueryResultCard(this.messagesEl, resolveQuery(this.app, q));
               } catch { /* skip malformed query lines */ }
