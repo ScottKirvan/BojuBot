@@ -14,9 +14,10 @@ import { TFolder, TFile, Vault } from 'obsidian';
  * Only names are listed — file/folder names only, no file contents.
  * Hidden entries (names starting with '.') are skipped at every level.
  */
-export function buildVaultTree(vault: Vault, depth: number): string {
+export function buildVaultTree(vault: Vault, depth: number, startFolder?: TFolder): string {
   if (depth === 0) return '';
 
+  const root = startFolder ?? vault.getRoot();
   const limit = depth < 0 ? Infinity : depth;
   const lines: string[] = [];
 
@@ -24,14 +25,12 @@ export function buildVaultTree(vault: Vault, depth: number): string {
     if (currentDepth >= limit) return;
     const indent = '  '.repeat(currentDepth);
 
-    // Folders first (skip hidden)
     for (const child of folder.children) {
       if (child instanceof TFolder && !child.name.startsWith('.')) {
         lines.push(`${indent}${child.name}/`);
         walk(child, currentDepth + 1);
       }
     }
-    // Then files (skip hidden)
     for (const child of folder.children) {
       if (child instanceof TFile && !child.name.startsWith('.')) {
         lines.push(`${indent}${child.name}`);
@@ -39,6 +38,6 @@ export function buildVaultTree(vault: Vault, depth: number): string {
     }
   }
 
-  walk(vault.getRoot(), 0);
+  walk(root, 0);
   return lines.join('\n');
 }
