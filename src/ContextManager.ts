@@ -31,6 +31,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; 
 };
 
 export class ContextManager {
+  needsCompaction = false;
+
   constructor(
     private app: App,
     private contextFilePath: string,
@@ -38,6 +40,7 @@ export class ContextManager {
     private vaultTreeDepth: number = 0,
     private commandAllowlist: string[] = [],
     private permissionMode: PermissionMode = 'standard',
+    private contextFileSizeCapTokens: number = 0,
   ) { }
 
   async buildSessionContext(): Promise<string> {
@@ -91,6 +94,16 @@ export class ContextManager {
     if (contextFile) {
       contextFileContent = neutralizeTriggers(await this.app.vault.read(contextFile));
       if (contextFileContent.trim()) {
+        const cap = this.contextFileSizeCapTokens;
+        const contentTokens = estimateTokens(contextFileContent);
+        if (cap > 0 && contentTokens > cap) {
+          this.needsCompaction = true;
+          contextFileContent +=
+            `\n\n[Your memory file is ~${contentTokens} tokens, over your ${cap}-token cap. ` +
+            `Before this session ends, compact it: summarize redundant entries, drop outdated observations, ` +
+            `keep high-signal facts. Write the result back to \`${this.contextFilePath}\`.]`;
+          log(`Context file exceeded cap (${cap} tokens, actual ~${contentTokens}) — compaction instruction injected.`);
+        }
         const ctxBlock = `## Vault context\n${contextFileContent.trim()}`;
         parts.push(ctxBlock);
         layerBreakdown['context-file'] = {

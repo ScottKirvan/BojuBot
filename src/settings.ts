@@ -62,6 +62,8 @@ export interface BojuBotSettings {
   persistFullAccess: boolean;
   /** Max characters of canvas text injected as context. 0 = no limit. */
   canvasMaxChars: number;
+  /** Max tokens of context file content injected at session start. 0 = no limit. */
+  contextFileSizeCapTokens: number;
   /** User's preferred name, set via conversation (set-label action). Empty = unknown. */
   userLabel: string;
 }
@@ -92,6 +94,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   registerSkillsAsCommands: true,
   persistFullAccess: false,
   canvasMaxChars: 50000,
+  contextFileSizeCapTokens: 0,
   userLabel: '',
 };
 
@@ -225,6 +228,28 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.autonomousMemory)
           .onChange(async (value) => {
             this.plugin.settings.autonomousMemory = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Memory file size limit (tokens)')
+      .setDesc(
+        'When your context file exceeds this token count, Claude is instructed to compact it before the session ends — ' +
+        'summarizing redundant entries and dropping outdated observations. ' +
+        'Set to 0 to disable. Typical context files stay well under 4 000 tokens; set a limit if yours grows large over time.'
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('0 (no limit)')
+          .setValue(
+            this.plugin.settings.contextFileSizeCapTokens === 0
+              ? ''
+              : String(this.plugin.settings.contextFileSizeCapTokens)
+          )
+          .onChange(async (value) => {
+            const n = parseInt(value, 10);
+            this.plugin.settings.contextFileSizeCapTokens = isNaN(n) || n < 0 ? 0 : n;
             await this.plugin.saveSettings();
           })
       );

@@ -897,6 +897,7 @@ export class ClaudeView extends ItemView {
       effectiveMode === 'restricted' ? 0 : this.plugin.settings.vaultTreeDepth,
       this.plugin.settings.commandAllowlist,
       effectiveMode,
+      this.plugin.settings.contextFileSizeCapTokens,
     );
     const context = await ctx.buildSessionContext();
     this.coordinator.setPendingSystemMessage(`[System: Session context refreshed at user request.]\n\n${context}`);
@@ -1088,8 +1089,10 @@ export class ClaudeView extends ItemView {
         sessionMode === 'restricted' ? 0 : this.plugin.settings.vaultTreeDepth,
         this.plugin.settings.commandAllowlist,
         sessionMode,
+        this.plugin.settings.contextFileSizeCapTokens,
       );
       const context = await ctx.buildSessionContext();
+      if (ctx.needsCompaction) statusEl.textContent = 'Compacting memory…';
       const promptTokens = estimateTokens(finalPrompt);
       finalPrompt = ctx.injectContext(context, finalPrompt);
       if (context) {
