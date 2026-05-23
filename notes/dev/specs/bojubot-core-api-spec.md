@@ -1,28 +1,28 @@
-# ObsidiBot — Core Plugin API Spec (DRAFT)
+# BojuBot — Core Plugin API Spec (DRAFT)
 
 **Status: PROPOSED** — not yet implemented. Prerequisite for the Watchers, Supervisor, and MCP server plugins.
 
-> Living document. This spec defines the internal API that ObsidiBot core exposes to first- and third-party plugins. It is the foundational contract that all other ObsidiBot plugin specs depend on.
+> Living document. This spec defines the internal API that BojuBot core exposes to first- and third-party plugins. It is the foundational contract that all other BojuBot plugin specs depend on.
 
 ---
 
 ## Architecture Overview
 
-ObsidiBot is structured in two layers:
+BojuBot is structured in two layers:
 
-**Core** (`obsidibot` Obsidian plugin) manages the Claude Code subprocess, session lifecycle, context injection, permission enforcement, and the chat UI. Core is the only component that touches the `claude` CLI directly.
+**Core** (`bojubot` Obsidian plugin) manages the Claude Code subprocess, session lifecycle, context injection, permission enforcement, and the chat UI. Core is the only component that touches the `claude` CLI directly.
 
 **Plugins** are separate Obsidian plugins that consume Core's API to add capabilities. Plugins are lazy-loaded — they only activate if installed. First-party plugins include:
-- `obsidibot-watchers` — filesystem event automation
-- `obsidibot-supervisor` — multi-agent orchestration
-- `obsidibot-mcp` — MCP server exposing skills as external tools
+- `bojubot-watchers` — filesystem event automation
+- `bojubot-supervisor` — multi-agent orchestration
+- `bojubot-mcp` — MCP server exposing skills as external tools
 
 Third parties can build additional plugins against the same API.
 
 **Access pattern:** Any Obsidian plugin reaches Core via:
 
 ```typescript
-const core = app.plugins.getPlugin('obsidibot') as ObsidiBotCore;
+const core = app.plugins.getPlugin('bojubot') as BojuBotCore;
 ```
 
 Core exposes a stable `api` property on its plugin instance. All interaction goes through `core.api`.
@@ -34,7 +34,7 @@ Core exposes a stable `api` property on its plugin instance. All interaction goe
 ### Top-Level Interface
 
 ```typescript
-interface ObsidiBotCoreAPI {
+interface BojuBotCoreAPI {
   sessions: SessionAPI;
   skills: SkillAPI;
   permissions: PermissionAPI;
@@ -216,17 +216,17 @@ interface PermissionAPI {
 
 ### EventBusAPI
 
-Publish/subscribe bus for ObsidiBot lifecycle events.
+Publish/subscribe bus for BojuBot lifecycle events.
 
 ```typescript
 interface EventBusAPI {
-  on(event: ObsidiBotEventType, handler: EventHandler): Unsubscribe;
-  emit(event: ObsidiBotEventType, payload?: unknown): void;
+  on(event: BojuBotEventType, handler: EventHandler): Unsubscribe;
+  emit(event: BojuBotEventType, payload?: unknown): void;
 }
 
 type Unsubscribe = () => void;
 
-type ObsidiBotEventType =
+type BojuBotEventType =
   | 'session:spawned'
   | 'session:complete'
   | 'session:error'
@@ -275,7 +275,7 @@ interface PluginRegistryAPI {
   /**
    * Register a plugin. Core tracks registered plugins for UI attribution and lifecycle management.
    */
-  register(plugin: ObsidiBotPluginManifest): void;
+  register(plugin: BojuBotPluginManifest): void;
 
   /**
    * Unregister a plugin. Called on plugin unload.
@@ -295,7 +295,7 @@ interface PluginRegistryAPI {
   getSessionRouter(): SessionRouter | null;
 }
 
-interface ObsidiBotPluginManifest {
+interface BojuBotPluginManifest {
   id: string;
   name: string;
   version: string;
@@ -328,10 +328,10 @@ interface SessionRouter {
 
 ## Decided
 
-| Decision | Resolution |
-|---|---|
-| Sub-process ownership | Core only. No plugin touches the `claude` CLI directly. |
-| Session routing | Routed through registered SessionRouter if present; dispatched directly if not. |
-| Headless session context | No standard startup stack injected unless explicitly passed in `context`. |
-| Permission inheritance | Headless sessions must declare permissions explicitly. No ambient inheritance. |
-| Plugin access pattern | `app.plugins.getPlugin('obsidibot').api` |
+| Decision                 | Resolution                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| Sub-process ownership    | Core only. No plugin touches the `claude` CLI directly.                         |
+| Session routing          | Routed through registered SessionRouter if present; dispatched directly if not. |
+| Headless session context | No standard startup stack injected unless explicitly passed in `context`.       |
+| Permission inheritance   | Headless sessions must declare permissions explicitly. No ambient inheritance.  |
+| Plugin access pattern    | `app.plugins.getPlugin('bojubot').api`                                          |

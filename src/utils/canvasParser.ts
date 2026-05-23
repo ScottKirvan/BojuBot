@@ -37,11 +37,11 @@ interface CanvasData {
 
 function nodeLabel(node: CanvasNode): string {
   switch (node.type) {
-    case 'text':  return node.text ? `"${node.text.replace(/\n/g, ' ').slice(0, 80)}${node.text.length > 80 ? '…' : ''}"` : '(empty text card)';
-    case 'file':  return node.file ?? '(unknown file)';
+    case 'text': return node.text ? `"${node.text.replace(/\n/g, ' ').slice(0, 80)}${node.text.length > 80 ? '…' : ''}"` : '(empty text card)';
+    case 'file': return node.file ?? '(unknown file)';
     case 'group': return node.label ? `[Group: ${node.label}]` : '[Unnamed group]';
-    case 'link':  return node.url ?? '(unknown link)';
-    default:      return '(unknown node)';
+    case 'link': return node.url ?? '(unknown link)';
+    default: return '(unknown node)';
   }
 }
 
@@ -119,7 +119,7 @@ export function canvasToText(filename: string, json: string, maxChars = 0): stri
 
   const result = lines.join('\n');
   if (maxChars > 0 && result.length > maxChars) {
-    return result.substring(0, maxChars) + `\n\n[Canvas truncated — ${nodes.length} nodes exceeded the ${maxChars}-character limit. Adjust "Max canvas size" in ObsidiBot settings to see more.]`;
+    return result.substring(0, maxChars) + `\n\n[Canvas truncated — ${nodes.length} nodes exceeded the ${maxChars}-character limit. Adjust "Max canvas size" in BojuBot settings to see more.]`;
   }
   return result;
 }

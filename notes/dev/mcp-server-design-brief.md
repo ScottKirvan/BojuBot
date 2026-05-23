@@ -1,4 +1,4 @@
-# ObsidiBot MCP Server — New Session Briefing
+# BojuBot MCP Server — New Session Briefing
 
 > Paste this entire document as the opening message of a new Claude Code session.
 > The task is **design only** — no code should be written until Scott reviews the output.
@@ -7,7 +7,7 @@
 
 ## Orientation
 
-You are working on **ObsidiBot**, an Obsidian plugin that wraps the Claude Code CLI as a subprocess. Read `CLAUDE.md` (at the repo root) and `src/CLAUDE.md` before doing anything else — they contain the locked architecture decisions and Scott's preferences.
+You are working on **BojuBot**, an Obsidian plugin that wraps the Claude Code CLI as a subprocess. Read `CLAUDE.md` (at the repo root) and `src/CLAUDE.md` before doing anything else — they contain the locked architecture decisions and Scott's preferences.
 
 The repo is at `e:\1\GitRepos\ScottKirvan\Vaults\sk\07_GitRepos\ScottKirvan\Cortex`.
 
@@ -20,13 +20,13 @@ The repo is at `e:\1\GitRepos\ScottKirvan\Vaults\sk\07_GitRepos\ScottKirvan\Cort
 - **`src/ClaudeProcess.ts`** — `spawnClaude()` spawns the Claude CLI subprocess. This is how skills are actually executed — Claude reads the interpolated prompt from stdin. The MCP server will need to invoke Claude the same way, without a UI.
 - **`src/ClaudeView.ts`** — `_executeSkillDef()` is the UI execution path (drives the Obsidian chat panel). The MCP server needs a **non-UI execution path** — same logic, no DOM.
 - **`docs/guide/skills.md`** — user-facing skills reference. Read this to understand the full field spec.
-- **`notes/dev/obsidibot-skills-library-spec.md`** — community skills library design spec. The MCP server is the "external invocation surface" that gives skills their second dimension: not just slash-menu shortcuts but callable API endpoints.
+- **`notes/dev/bojubot-skills-library-spec.md`** — community skills library design spec. The MCP server is the "external invocation surface" that gives skills their second dimension: not just slash-menu shortcuts but callable API endpoints.
 
 ---
 
 ## The Feature: Issue #153
 
-Add an optional MCP server to ObsidiBot that exposes the vault's Skills folder as callable MCP tools.
+Add an optional MCP server to BojuBot that exposes the vault's Skills folder as callable MCP tools.
 
 Key decisions already made in the issue:
 
@@ -77,15 +77,15 @@ Where does the Claude session ID live for headless runs — ephemeral per-call, 
 
 ### Q4 — Params Mapping to MCP Tool Schema
 
-Skills with `params:` frontmatter have typed form fields. MCP tool definitions use JSON Schema for arguments. How do ObsidiBot param types map?
+Skills with `params:` frontmatter have typed form fields. MCP tool definitions use JSON Schema for arguments. How do BojuBot param types map?
 
-| ObsidiBot type | JSON Schema equivalent |
-|---|---|
-| `input` | `string` |
-| `textarea` | `string` |
-| `dropdown` | `string` with `enum` |
-| `checkboxes` | `array` of `string` |
-| `obsidianmd_note` | ??? |
+| BojuBot type      | JSON Schema equivalent |
+| ----------------- | ---------------------- |
+| `input`           | `string`               |
+| `textarea`        | `string`               |
+| `dropdown`        | `string` with `enum`   |
+| `checkboxes`      | `array` of `string`    |
+| `obsidianmd_note` | ???                    |
 
 The `obsidianmd_note` type is the hard case — in the UI it opens a fuzzy vault picker and injects the file content as an attachment. For an external caller, what do they pass? A vault-relative file path? The file content directly? Is this type simply unsupported in MCP invocations (MCP callers must use skills without `obsidianmd_note` params, or the server returns an error)?
 
@@ -95,7 +95,7 @@ What does a complete generated MCP tool definition look like for a skill with mi
 
 The MCP server listens on localhost. Is localhost-only sufficient, or does it need a shared secret / bearer token?
 
-Consider: ObsidiBot vaults often contain sensitive personal notes. A locally running MCP server without auth means any process on the machine can invoke skills. Assess the threat model and make a recommendation — err on the side of a simple token that can be disabled, or err on the side of localhost-only for zero-friction setup?
+Consider: BojuBot vaults often contain sensitive personal notes. A locally running MCP server without auth means any process on the machine can invoke skills. Assess the threat model and make a recommendation — err on the side of a simple token that can be disabled, or err on the side of localhost-only for zero-friction setup?
 
 ### Q6 — Settings Surface
 
@@ -109,7 +109,7 @@ Is there anything missing? Anything that should be removed to keep first release
 
 ### Q7 — Skills Library Connection
 
-The community skills library spec (`notes/dev/obsidibot-skills-library-spec.md`) envisions skills installed from the community registry landing in `.obsidibot/skills/community/<library-id>/<skill-id>/`. User-authored skills live in `_ObsidiBot Skills/` (or a custom path).
+The community skills library spec (`notes/dev/bojubot-skills-library-spec.md`) envisions skills installed from the community registry landing in `.bojubot/skills/community/<library-id>/<skill-id>/`. User-authored skills live in `_BojuBot Skills/` (or a custom path).
 
 Does the MCP server need to distinguish between community-installed and user-authored skills, or is the folder abstraction (`scanSkillFolder`) sufficient to treat them uniformly? Are there any trust or namespace collision concerns?
 
@@ -117,7 +117,7 @@ Does the MCP server need to distinguish between community-installed and user-aut
 
 ## Constraints to Keep in Mind
 
-- **No API key.** ObsidiBot rides a Claude Pro/Max subscription via the CLI. The MCP server invokes Claude the same way as the plugin: `spawnClaude()` with a prompt on stdin.
+- **No API key.** BojuBot rides a Claude Pro/Max subscription via the CLI. The MCP server invokes Claude the same way as the plugin: `spawnClaude()` with a prompt on stdin.
 - **Desktop only.** No mobile, no browser.
 - **Design first.** The CLAUDE.md says "Larger refactors get a design discussion first." The output of this session is a design doc Scott can review — not a PR. Do not write implementation code.
 - **Scott commits, Claude writes code.** Don't commit anything.

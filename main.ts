@@ -2,7 +2,7 @@ import { Plugin, Notice, addIcon } from 'obsidian';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
-import { ObsidiBotSettings, DEFAULT_SETTINGS, ObsidiBotSettingsTab } from './src/settings';
+import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
 import { findClaudeBinary, PermissionMode } from './src/ClaudeProcess';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
@@ -13,8 +13,8 @@ import { AppInternal } from './src/obsidianInternal';
 import { resolveSkillsFolder, scanSkillFolder } from './src/SkillLoader';
 import { PermissionPickerModal } from './src/modals/PermissionPickerModal';
 
-export default class ObsidiBotPlugin extends Plugin {
-  settings: ObsidiBotSettings;
+export default class BojuBotPlugin extends Plugin {
+  settings: BojuBotSettings;
   shellEnv: Record<string, string> = {};
   claudeBinaryPath: string | null = null;
   private skillCommandIds = new Set<string>();
@@ -37,7 +37,7 @@ export default class ObsidiBotPlugin extends Plugin {
       filePath: this.settings.logFilePath,
       verbosity: this.settings.logVerbosity,
     });
-    log('ObsidiBot loading — vault root:', vaultRoot);
+    log('BojuBot loading — vault root:', vaultRoot);
 
     this.app.workspace.onLayoutReady(() => {
       this.generateCommandsFile();
@@ -56,12 +56,12 @@ export default class ObsidiBotPlugin extends Plugin {
     this.claudeBinaryPath = findClaudeBinary(this.settings.binaryPath);
 
     if (!this.claudeBinaryPath) {
-      new Notice('ObsidiBot: Claude binary not found. Check plugin settings.');
+      new Notice('BojuBot: Claude binary not found. Check plugin settings.');
     }
 
-    // Register custom icon — three S-curves suggesting obsidibot folds (gyri).
+    // Register custom icon — three S-curves suggesting bojubot folds (gyri).
     // Replace the path data here when the final logo SVG is ready.
-    addIcon('obsidibot', `
+    addIcon('bojubot', `
       <path d="M10,32 C24,12 38,12 50,32 C62,52 76,52 90,32"
             stroke="currentColor" fill="none" stroke-width="8" stroke-linecap="round"/>
       <path d="M10,50 C24,30 38,30 50,50 C62,70 76,70 90,50"
@@ -72,7 +72,7 @@ export default class ObsidiBotPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_CLAUDE, (leaf) => new ClaudeView(leaf, this));
 
-    this.addRibbonIcon('brain-circuit', 'Open ObsidiBot agent', () => {
+    this.addRibbonIcon('brain-circuit', 'Open BojuBot agent', () => {
       void this.activateView();
     });
 
@@ -89,7 +89,7 @@ export default class ObsidiBotPlugin extends Plugin {
       name: 'Open settings',
       callback: () => {
         (this.app as unknown as AppInternal).setting.open();
-        (this.app as unknown as AppInternal).setting.openTabById('obsidibot');
+        (this.app as unknown as AppInternal).setting.openTabById('bojubot');
       }
     });
 
@@ -232,15 +232,15 @@ export default class ObsidiBotPlugin extends Plugin {
       name: 'Reload skills',
       callback: () => {
         if (!this.settings.registerSkillsAsCommands) {
-          new Notice('ObsidiBot: "Register skills as Ctrl+P commands" is disabled in settings.');
+          new Notice('BojuBot: "Register skills as Ctrl+P commands" is disabled in settings.');
           return;
         }
         this.reloadSkillCommands();
-        new Notice('ObsidiBot: skills reloaded.');
+        new Notice('BojuBot: skills reloaded.');
       }
     });
 
-    this.addSettingTab(new ObsidiBotSettingsTab(this.app, this));
+    this.addSettingTab(new BojuBotSettingsTab(this.app, this));
   }
 
   onunload() {
@@ -376,13 +376,13 @@ export default class ObsidiBotPlugin extends Plugin {
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     // Migrate old hardcoded log paths → empty so the dynamic default takes over
-    if (this.settings.logFilePath === '_obsidibot-debug.log') {
+    if (this.settings.logFilePath === '_bojubot-debug.log') {
       this.settings.logFilePath = '';
       await this.saveSettings();
     }
     // Resolve empty log path to a configDir-relative default at load time
     if (!this.settings.logFilePath) {
-      this.settings.logFilePath = `${this.app.vault.configDir}/plugins/obsidibot/obsidibot-debug.log`;
+      this.settings.logFilePath = `${this.app.vault.configDir}/plugins/bojubot/bojubot-debug.log`;
     }
   }
 
@@ -405,7 +405,7 @@ export default class ObsidiBotPlugin extends Plugin {
     const notice = new Notice('', 8000);
     notice.noticeEl.empty();
     notice.noticeEl.createSpan({ text: 'Memory file was modified by Claude. ' });
-    const link = notice.noticeEl.createEl('a', { cls: 'obsidibot-notice-link', text: 'Review', href: '#' });
+    const link = notice.noticeEl.createEl('a', { cls: 'bojubot-notice-link', text: 'Review', href: '#' });
     link.addEventListener('click', (e) => {
       e.preventDefault();
       notice.hide();
@@ -445,7 +445,7 @@ export default class ObsidiBotPlugin extends Plugin {
       const skillEntries = scanSkillFolder(folder);
       for (const { filePath, name } of skillEntries) {
         const commandId = `skill-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-        const fullId = `obsidibot:${commandId}`;
+        const fullId = `bojubot:${commandId}`;
 
         this.addCommand({
           id: commandId,
@@ -476,7 +476,7 @@ export default class ObsidiBotPlugin extends Plugin {
     try {
       const vaultRoot = this.getVaultRoot();
       const configDir = this.app.vault.configDir;
-      const outPath = join(vaultRoot, configDir, 'plugins', 'obsidibot', 'obsidian-commands.md');
+      const outPath = join(vaultRoot, configDir, 'plugins', 'bojubot', 'obsidian-commands.md');
 
       const appInternal = this.app as unknown as AppInternal;
       const commands = Object.values(appInternal.commands.commands)

@@ -2,8 +2,8 @@ import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { ACTION_PREFIX } from './constants';
 export { ACTION_PREFIX } from './constants';
-export { ObsidiBotAction, extractActions } from './utils/actionParser';
-import type { ObsidiBotAction } from './utils/actionParser';
+export { BojuBotAction, extractActions } from './utils/actionParser';
+import type { BojuBotAction } from './utils/actionParser';
 
 interface UIBridgeInternal {
   setting: { open(): void; openTabById(id: string): void };
@@ -42,23 +42,23 @@ class ConfirmCommandModal extends Modal {
   }
 
   onOpen() {
-    this.titleEl.setText('ObsidiBot — unlisted command');
+    this.titleEl.setText('BojuBot — unlisted command');
     const { contentEl } = this;
 
     contentEl.createEl('p', {
       text: `Claude wants to run: "${this.commandName}". This command isn't in your allowlist.`,
-      cls: 'obsidibot-confirm-desc',
+      cls: 'bojubot-confirm-desc',
     });
 
     let remember = false;
-    const checkRow = contentEl.createDiv({ cls: 'obsidibot-confirm-check-row' });
+    const checkRow = contentEl.createDiv({ cls: 'bojubot-confirm-check-row' });
     const checkbox = checkRow.createEl('input', { type: 'checkbox' });
-    checkbox.id = 'obsidibot-confirm-remember';
+    checkbox.id = 'bojubot-confirm-remember';
     checkbox.addEventListener('change', () => { remember = checkbox.checked; });
     const label = checkRow.createEl('label', { text: 'Don\'t ask again' });
-    label.htmlFor = 'obsidibot-confirm-remember';
+    label.htmlFor = 'bojubot-confirm-remember';
 
-    const btnRow = contentEl.createDiv({ cls: 'obsidibot-confirm-btn-row' });
+    const btnRow = contentEl.createDiv({ cls: 'bojubot-confirm-btn-row' });
     const allowBtn = btnRow.createEl('button', { text: 'Allow', cls: 'mod-cta' });
     allowBtn.addEventListener('click', () => this.settle({ allow: true, remember }));
     const denyBtn = btnRow.createEl('button', { text: 'Deny' });
@@ -95,12 +95,12 @@ class RequestPermissionModal extends Modal {
     const { contentEl } = this;
     contentEl.createEl('p', {
       text: `Claude needs permission to use ${this.tool}:`,
-      cls: 'obsidibot-confirm-desc',
+      cls: 'bojubot-confirm-desc',
     });
     if (this.reason) {
-      contentEl.createEl('p', { text: this.reason, cls: 'obsidibot-permission-reason' });
+      contentEl.createEl('p', { text: this.reason, cls: 'bojubot-permission-reason' });
     }
-    const btnRow = contentEl.createDiv({ cls: 'obsidibot-confirm-btn-row' });
+    const btnRow = contentEl.createDiv({ cls: 'bojubot-confirm-btn-row' });
     const allowBtn = btnRow.createEl('button', { text: 'Allow full access for this session', cls: 'mod-cta' });
     allowBtn.addEventListener('click', () => this.settle(true));
     const denyBtn = btnRow.createEl('button', { text: 'Deny' });
@@ -118,11 +118,11 @@ export function promptPermissionRequest(app: App, tool: string, reason: string):
 }
 
 /**
- * Execute a single ObsidiBot UI action via the Obsidian API.
+ * Execute a single BojuBot UI action via the Obsidian API.
  * The 6 built-in actions execute immediately (transparency via show-notice).
  * run-command requires the commandId to be in the allowlist, or prompts if confirmUnlistedCommands is true.
  */
-export async function executeAction(app: App, action: ObsidiBotAction, options: UIBridgeOptions = {}): Promise<void> {
+export async function executeAction(app: App, action: BojuBotAction, options: UIBridgeOptions = {}): Promise<void> {
   const {
     commandAllowlist = [],
     commandDenylist = [],
@@ -211,7 +211,7 @@ export async function executeAction(app: App, action: ObsidiBotAction, options: 
         if (executed) log('UIBridge: run-command executed:', commandId);
         else {
           warn('UIBridge: run-command — command not found or failed:', commandId);
-          new Notice(`ObsidiBot: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
+          new Notice(`BojuBot: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
         }
       } else if (commandDenylist.includes(commandId)) {
         // Permanently denied (and not in allowlist) — hard block silently
@@ -227,24 +227,24 @@ export async function executeAction(app: App, action: ObsidiBotAction, options: 
           if (executed) log('UIBridge: run-command executed:', commandId);
           else {
             warn('UIBridge: run-command — command not found or failed:', commandId);
-            new Notice(`ObsidiBot: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
+            new Notice(`BojuBot: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
           }
         } else {
           if (remember && onAddToDenylist) await onAddToDenylist(commandId);
           log('UIBridge: run-command denied by user:', commandId);
-          new Notice(`ObsidiBot: Command "${displayName}" denied.`, 3000);
+          new Notice(`BojuBot: Command "${displayName}" denied.`, 3000);
         }
       } else {
         // Prompting disabled — hard block with notice
         warn('UIBridge: run-command blocked — not in allowlist:', commandId);
-        new Notice(`ObsidiBot: Claude wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → ObsidiBot to enable it.`, 8000);
+        new Notice(`BojuBot: Claude wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → BojuBot to enable it.`, 8000);
       }
       break;
     }
 
     case 'set-label': {
       const userLabel = ((action.user as string) ?? '').trim() || 'User';
-      const assistantLabel = ((action.assistant as string) ?? '').trim() || 'ObsidiBot';
+      const assistantLabel = ((action.assistant as string) ?? '').trim() || 'BojuBot';
       options.onSetLabel?.(userLabel, assistantLabel);
       break;
     }

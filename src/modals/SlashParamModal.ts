@@ -53,35 +53,35 @@ export class SlashParamModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass('obsidibot-param-modal');
+    contentEl.addClass('bojubot-param-modal');
     contentEl.createEl('h2', { text: this.commandName });
 
     const form = contentEl.createEl('form');
     const errorEls: Record<string, HTMLElement> = {};
 
     for (const param of this.params) {
-      const fieldEl = form.createDiv({ cls: 'obsidibot-param-field' });
-      fieldEl.createEl('label', { text: param.label, cls: 'obsidibot-param-label' });
+      const fieldEl = form.createDiv({ cls: 'bojubot-param-field' });
+      fieldEl.createEl('label', { text: param.label, cls: 'bojubot-param-label' });
       if (param.description) {
-        fieldEl.createEl('div', { text: param.description, cls: 'obsidibot-param-desc' });
+        fieldEl.createEl('div', { text: param.description, cls: 'bojubot-param-desc' });
       }
 
       if (param.type === 'input') {
         const input = fieldEl.createEl('input', {
-          cls: 'obsidibot-param-input',
+          cls: 'bojubot-param-input',
           attr: { type: 'text', placeholder: param.placeholder ?? '' },
         });
         input.value = this.values[param.id];
         input.addEventListener('input', () => { this.values[param.id] = input.value; });
 
       } else if (param.type === 'textarea') {
-        const ta = fieldEl.createEl('textarea', { cls: 'obsidibot-param-textarea' });
+        const ta = fieldEl.createEl('textarea', { cls: 'bojubot-param-textarea' });
         ta.placeholder = param.placeholder ?? '';
         ta.value = this.values[param.id];
         ta.addEventListener('input', () => { this.values[param.id] = ta.value; });
 
       } else if (param.type === 'dropdown') {
-        const sel = fieldEl.createEl('select', { cls: 'obsidibot-param-select' });
+        const sel = fieldEl.createEl('select', { cls: 'bojubot-param-select' });
         for (const opt of param.options ?? []) {
           sel.createEl('option', { text: opt, value: opt });
         }
@@ -93,7 +93,7 @@ export class SlashParamModal extends Modal {
       } else if (param.type === 'checkboxes') {
         const checked: string[] = [];
         for (const opt of param.options ?? []) {
-          const row = fieldEl.createEl('label', { cls: 'obsidibot-param-checkbox-row' });
+          const row = fieldEl.createEl('label', { cls: 'bojubot-param-checkbox-row' });
           const cb = row.createEl('input', { attr: { type: 'checkbox' } });
           row.createSpan({ text: opt });
           cb.addEventListener('change', () => {
@@ -109,7 +109,7 @@ export class SlashParamModal extends Modal {
 
       } else if (isNoteType(param.type)) {
         const noteInput = fieldEl.createEl('input', {
-          cls: 'obsidibot-param-input obsidibot-param-note-input',
+          cls: 'bojubot-param-input bojubot-param-note-input',
           attr: { type: 'text', placeholder: 'Click to pick a note…', readonly: 'true' },
         });
         noteInput.addEventListener('click', () => {
@@ -121,12 +121,12 @@ export class SlashParamModal extends Modal {
         });
       }
 
-      const errEl = fieldEl.createEl('div', { cls: 'obsidibot-param-error' });
+      const errEl = fieldEl.createEl('div', { cls: 'bojubot-param-error' });
       errEl.hide();
       errorEls[param.id] = errEl;
     }
 
-    const btnRow = form.createDiv({ cls: 'obsidibot-param-btn-row' });
+    const btnRow = form.createDiv({ cls: 'bojubot-param-btn-row' });
     btnRow.createEl('button', {
       text: this.autorun ? 'Run' : 'Insert',
       cls: 'mod-cta',

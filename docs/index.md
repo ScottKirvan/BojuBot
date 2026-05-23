@@ -2,19 +2,19 @@
 layout: home
 
 hero:
-  name: "ObsidiBot"
+  name: "BojuBot"
   text: "Claude lives in your vault"
   tagline: An Obsidian plugin that puts a full Claude Code agent at your fingertips — reading, writing, and organizing your notes with you.
   image:
     src: /logo.png
-    alt: ObsidiBot
+    alt: BojuBot
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ScottKirvan/ObsidiBot
+      link: https://github.com/ScottKirvan/BojuBot
     - theme: alt
       text: Join Discord
       link: https://discord.gg/TN6XJSNK5Y
@@ -42,5 +42,5 @@ features:
 
   - icon: 🔌
     title: No API key needed
-    details: ObsidiBot rides your existing Claude Pro or Max subscription via the Claude Code CLI. No separate billing, no extra configuration.
+    details: BojuBot rides your existing Claude Pro or Max subscription via the Claude Code CLI. No separate billing, no extra configuration.
 ---

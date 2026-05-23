@@ -1,5 +1,5 @@
 {
-  "name": "obsidibot",
+  "name": "bojubot",
   "version": "2.16.1",
   "description": "Claude Code agentic file management for Obsidian vaults",
   "main": "main.js",

@@ -1,6 +1,6 @@
 # Chat Panel
 
-The chat panel opens as a sidebar. Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. The "Send on Enter" behaviour can be toggled in **Settings → ObsidiBot**.
+The chat panel opens as a sidebar. Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. The "Send on Enter" behaviour can be toggled in **Settings → BojuBot**.
 
 Claude has access to your full vault — it can read, write, create, move, and organize notes. The vault root is Claude's working directory.
 
@@ -28,18 +28,18 @@ Non-Markdown files show their extension in the dropdown. By default all vault fi
 
 Paste images directly with **Ctrl+V** / **Cmd+V**:
 
-- **Screenshots** — take a screenshot, paste into ObsidiBot
+- **Screenshots** — take a screenshot, paste into BojuBot
 - **Files from Explorer/Finder** — copy a `.png`, `.jpg`, `.gif`, `.webp`, or `.pdf` and paste
 
-Pasted images appear in the context bar. They're saved to `.obsidian/plugins/obsidibot/tmp/` and are not automatically cleaned up.
+Pasted images appear in the context bar. They're saved to `.obsidian/plugins/bojubot/tmp/` and are not automatically cleaned up.
 
 ### Drag and drop
 
-Drag any file from your filesystem and drop it onto the ObsidiBot panel. The panel highlights with a dashed border while dragging. Text files are read inline; images and PDFs are handled the same as the file picker.
+Drag any file from your filesystem and drop it onto the BojuBot panel. The panel highlights with a dashed border while dragging. Text files are read inline; images and PDFs are handled the same as the file picker.
 
 ### Send selected text
 
-Highlight text in any open note, then run **ObsidiBot: Send selection as context** from the Command Palette (or bind it to a hotkey). The selection is attached as a labeled snippet.
+Highlight text in any open note, then run **BojuBot: Send selection as context** from the Command Palette (or bind it to a hotkey). The selection is attached as a labeled snippet.
 
 ---
 
@@ -47,12 +47,12 @@ Highlight text in any open note, then run **ObsidiBot: Send selection as context
 
 A **colored icon** in the input toolbar shows the current permission mode at a glance:
 
-| Icon | Color | Mode |
-|------|-------|------|
-| lock | blue | Chat only |
-| eye | green | Read only |
-| shield | yellow | Standard |
-| triangle | red | Full access |
+| Icon     | Color  | Mode        |
+| -------- | ------ | ----------- |
+| lock     | blue   | Chat only   |
+| eye      | green  | Read only   |
+| shield   | yellow | Standard    |
+| triangle | red    | Full access |
 
 Click it to open a quick picker and switch modes. The change takes effect on the next message. See [Permissions](./permissions.md) for details on what each mode allows.
 
@@ -80,7 +80,7 @@ Claude can execute Obsidian commands directly. Three are pre-approved by default
 | Daily notes: Open today's | `daily-notes`        |
 | Search current file       | `editor:open-search` |
 
-You can manage the full list in **Settings → ObsidiBot → UI Bridge & Commands**.
+You can manage the full list in **Settings → BojuBot → UI Bridge & Commands**.
 
 ### How permission works
 

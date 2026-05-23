@@ -1,6 +1,6 @@
-# Contributing to ObsidiBot
+# Contributing to BojuBot
 
-Thank you for considering contributing to ObsidiBot! This document covers how to report bugs, suggest features, and submit code changes.
+Thank you for considering contributing to BojuBot! This document covers how to report bugs, suggest features, and submit code changes.
 
 ## Code of Conduct
 
@@ -10,19 +10,19 @@ This project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By partic
 
 ## Reporting Bugs
 
-Before filing a bug report, check [existing issues](https://github.com/ScottKirvan/ObsidiBot/issues) to avoid duplicates.
+Before filing a bug report, check [existing issues](https://github.com/ScottKirvan/BojuBot/issues) to avoid duplicates.
 
 **Include in your bug report:**
 - Steps to reproduce
 - What you expected vs. what happened
-- Obsidian version, OS, and ObsidiBot version
+- Obsidian version, OS, and BojuBot version
 - Any relevant error messages from the developer console (Ctrl/Cmd+Shift+I in Obsidian)
 
 ---
 
 ## Suggesting Features
 
-Use the [feature request template](https://github.com/ScottKirvan/ObsidiBot/issues/new?template=feature_request.md). Describe the use case clearly — what problem it solves and how you'd expect it to work.
+Use the [feature request template](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md). Describe the use case clearly — what problem it solves and how you'd expect it to work.
 
 ---
 
@@ -42,8 +42,8 @@ Use the [feature request template](https://github.com/ScottKirvan/ObsidiBot/issu
 ### Clone and Build
 
 ```bash
-git clone https://github.com/ScottKirvan/ObsidiBot.git
-cd ObsidiBot
+git clone https://github.com/ScottKirvan/BojuBot.git
+cd BojuBot
 npm install
 npm run build      # one-shot build → main.js
 npm run dev        # watch mode (rebuilds on save)
@@ -55,21 +55,21 @@ Link the plugin into a throwaway Obsidian vault for live testing.
 
 **Mac/Linux:**
 ```bash
-ln -s /path/to/ObsidiBot /path/to/test-vault/.obsidian/plugins/obsidibot
+ln -s /path/to/BojuBot /path/to/test-vault/.obsidian/plugins/bojubot
 ```
 
 **Windows (PowerShell, run as admin):**
 ```powershell
 New-Item -ItemType Directory -Force -Path "D:\test-vault\.obsidian\plugins"
 New-Item -ItemType SymbolicLink `
-  -Path "D:\test-vault\.obsidian\plugins\obsidibot" `
-  -Target "D:\path\to\ObsidiBot"
+  -Path "D:\test-vault\.obsidian\plugins\bojubot" `
+  -Target "D:\path\to\BojuBot"
 ```
 
 In Obsidian:
 1. Open the test vault
 2. Settings → Community Plugins → disable Safe Mode
-3. Enable **ObsidiBot** in the installed plugins list
+3. Enable **BojuBot** in the installed plugins list
 
 ### Fast Iteration
 
@@ -80,7 +80,7 @@ Without Hot Reload: use Ctrl/Cmd+P → "Reload app without saving" after each bu
 ### Project Structure
 
 ```
-ObsidiBot/
+BojuBot/
   main.ts                      ← plugin entry point, commands, custom icon registration
   manifest.json                ← plugin metadata (id, name, version)
   package.json
@@ -95,7 +95,7 @@ ObsidiBot/
     ClaudeProcess.ts           ← binary detection, spawn (PowerShell on Win), stream-json parsing
     ContextManager.ts          ← vault tree + context file + memory instruction assembly
     ContextGenerationModal.ts  ← first-run modal for context file setup
-    UIBridge.ts                ← @@CORTEX_ACTION protocol: parse + execute Obsidian UI actions
+    UIBridge.ts                ← @@BOJU_ACTION protocol: parse + execute Obsidian UI actions
     settings.ts                ← settings schema and settings tab UI
     declarations.d.ts          ← TypeScript module declarations (e.g. *.jpg imports)
     modals/
@@ -119,7 +119,7 @@ ObsidiBot/
 
 ## Commit Message Convention
 
-ObsidiBot uses [Conventional Commits](https://www.conventionalcommits.org/) — these drive automated versioning via [release-please](https://github.com/googleapis/release-please).
+BojuBot uses [Conventional Commits](https://www.conventionalcommits.org/) — these drive automated versioning via [release-please](https://github.com/googleapis/release-please).
 
 | Prefix             | Effect          | Use for                         |
 | ------------------ | --------------- | ------------------------------- |

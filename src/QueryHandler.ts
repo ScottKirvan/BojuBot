@@ -120,13 +120,13 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
 export function queryLabel(query: VaultQuery): string {
   switch (query.query) {
     case 'backlinks': return `Backlinks for "${query.path}"`;
-    case 'outlinks':  return `Outlinks for "${query.path}"`;
-    case 'tags':      return query.path ? `Tags on "${query.path}"` : `Files tagged #${query.tag}`;
+    case 'outlinks': return `Outlinks for "${query.path}"`;
+    case 'tags': return query.path ? `Tags on "${query.path}"` : `Files tagged #${query.tag}`;
     case 'file-list': {
       const scope = query.folder ? ` in "${query.folder}"` : '';
       return query.depth !== undefined ? `Vault tree (${query.depth} levels)${scope}` : `Files${scope || ' in vault'}`;
     }
-    default:          return query.query;
+    default: return query.query;
   }
 }
 
@@ -137,5 +137,5 @@ export function buildInjectMessage(results: VaultQueryResult[]): string {
     const body = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
     return `Query: ${label}\nResult:\n${body}`;
   });
-  return `[CORTEX_VAULT_RESPONSE]\n${parts.join('\n\n')}\n[/CORTEX_VAULT_RESPONSE]`;
+  return `[BOJU_VAULT_RESPONSE]\n${parts.join('\n\n')}\n[/BOJU_VAULT_RESPONSE]`;
 }

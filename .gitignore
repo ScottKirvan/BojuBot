@@ -1,12 +1,12 @@
 .obsidian/*
 node_modules/
 main.js
-_obsidibot-debug.log
+_bojubot-debug.log
 # Generated at runtime when plugin dev folder is opened directly as a vault
 /obsidian-commands.md
 /commands.md
-obsidibot-debug.log
-# Pasted images saved by ObsidiBot clipboard paste feature
+bojubot-debug.log
+# Pasted images saved by BojuBot clipboard paste feature
 tmp/
 
 # Obsidian plugin runtime data (machine-specific)
@@ -15,8 +15,8 @@ data.json
 # Claude Code — machine-specific and runtime files
 .claude/settings.local.json
 .claude/settings.json
-# ObsidiBot runtime data written when plugin runs from symlinked dev folder
-# In production vaults this lives at .obsidian/plugins/obsidibot/.claude/sessions/
+# BojuBot runtime data written when plugin runs from symlinked dev folder
+# In production vaults this lives at .obsidian/plugins/bojubot/.claude/sessions/
 .claude/sessions/
 .claude/worktrees/
 
@@ -28,7 +28,9 @@ src/**/*.js
 test/**/*.js
 
 notes/COMMIT_DRAFT.md
-ObsidiBot_Marketing/
+BojuBot_Marketing/
 docs/.vitepress/cache/
+bojubot-debug.log
 cortex-debug.log
+obsidibot-debug.log
 *.dead

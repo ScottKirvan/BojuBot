@@ -7,7 +7,7 @@ let verbosity: 'normal' | 'verbose' = 'normal';
 
 export interface LoggerConfig {
   enabled: boolean;
-  /** Vault-relative path, e.g. ".obsidian/plugins/obsidibot/obsidibot-debug.log" */
+  /** Vault-relative path, e.g. ".obsidian/plugins/bojubot/bojubot-debug.log" */
   filePath: string;
   verbosity: 'normal' | 'verbose';
 }
@@ -17,9 +17,9 @@ export function initLogger(vaultRoot: string, config?: LoggerConfig) {
   verbosity = config?.verbosity ?? 'normal';
 
   if (fileEnabled) {
-    logPath = join(vaultRoot, config?.filePath ?? '_obsidibot-debug.log');
+    logPath = join(vaultRoot, config?.filePath ?? '_bojubot-debug.log');
     try {
-      appendFileSync(logPath, `--- ObsidiBot log started ${new Date().toISOString()} ---\n`);
+      appendFileSync(logPath, `--- BojuBot log started ${new Date().toISOString()} ---\n`);
     } catch { /* ignore */ }
   } else {
     logPath = '';
@@ -28,8 +28,8 @@ export function initLogger(vaultRoot: string, config?: LoggerConfig) {
 
 function write(level: string, args: unknown[]) {
   // always echo to devtools console
-  if (level === 'WARN') console.warn('[ObsidiBot]', ...args);
-  else console.debug('[ObsidiBot]', ...args);
+  if (level === 'WARN') console.warn('[BojuBot]', ...args);
+  else console.debug('[BojuBot]', ...args);
 
   if (!fileEnabled || !logPath) return;
 

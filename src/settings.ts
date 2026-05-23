@@ -1,11 +1,11 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
-import type ObsidiBotPlugin from '../main';
+import type BojuBotPlugin from '../main';
 import type { PermissionMode } from './ClaudeProcess';
 export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
 
-export interface ObsidiBotSettings {
+export interface BojuBotSettings {
   binaryPath: string;
   contextFilePath: string;
   sendOnEnter: boolean;
@@ -43,7 +43,7 @@ export interface ObsidiBotSettings {
   lastActiveSessionId: string;
   /**
    * Where session JSON files are stored.
-   * Empty = default (.obsidian/obsidibot/sessions — gitignored).
+   * Empty = default (.obsidian/bojubot/sessions — gitignored).
    * Vault-relative path (e.g. "_sessions") or absolute path.
    */
   sessionStoragePath: string;
@@ -66,7 +66,7 @@ export interface ObsidiBotSettings {
   userLabel: string;
 }
 
-export const DEFAULT_SETTINGS: ObsidiBotSettings = {
+export const DEFAULT_SETTINGS: BojuBotSettings = {
   binaryPath: '',
   contextFilePath: '_claude-context.md',
   sendOnEnter: true,
@@ -85,7 +85,7 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   atMentionExtensions: '*',
   injectSplitPaneFiles: true,
   injectStackedTabFiles: false,
-  exportFolder: 'ObsidiBot Exports',
+  exportFolder: 'BojuBot Exports',
   lastActiveSessionId: '',
   sessionStoragePath: '',
   commandsFolder: '',
@@ -95,10 +95,10 @@ export const DEFAULT_SETTINGS: ObsidiBotSettings = {
   userLabel: '',
 };
 
-export class ObsidiBotSettingsTab extends PluginSettingTab {
-  plugin: ObsidiBotPlugin;
+export class BojuBotSettingsTab extends PluginSettingTab {
+  plugin: BojuBotPlugin;
 
-  constructor(app: App, plugin: ObsidiBotPlugin) {
+  constructor(app: App, plugin: BojuBotPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -274,7 +274,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
         new FolderSuggest(this.app, text.inputEl);
         text
           // eslint-disable-next-line obsidianmd/ui/sentence-case
-          .setPlaceholder('ObsidiBot Exports')
+          .setPlaceholder('BojuBot Exports')
           .setValue(this.plugin.settings.exportFolder)
           .onChange(async (value) => {
             this.plugin.settings.exportFolder = value;
@@ -286,15 +286,15 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       .setName('Session storage path')
       .setDesc(
         'Where session files are stored. ' +
-        'Leave empty for the default location (Obsidian config folder/obsidibot/sessions). ' +
+        'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
         'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
         'or an absolute path to store them outside the vault entirely. ' +
-        'Restart ObsidiBot after changing this.'
+        'Restart BojuBot after changing this.'
       )
       .addText((text) => {
         new FolderSuggest(this.app, text.inputEl);
         text
-          .setPlaceholder('Default (Obsidian config folder/obsidibot/sessions)')
+          .setPlaceholder('Default (Obsidian config folder/bojubot/sessions)')
           .setValue(this.plugin.settings.sessionStoragePath)
           .onChange(async (value) => {
             this.plugin.settings.sessionStoragePath = value.trim();
@@ -328,7 +328,7 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       .setName('Register skills as Ctrl+P commands')
       .setDesc(
         'Expose each skill as an Obsidian command palette entry (prefixed "Skill: …"). ' +
-        'Run "ObsidiBot: Reload skills" from the palette after adding or removing skill files. ' +
+        'Run "BojuBot: Reload skills" from the palette after adding or removing skill files. ' +
         'Disable if you find the extra commands cluttering the palette.'
       )
       .addToggle((toggle) =>
@@ -446,8 +446,8 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
           .onChange(val => { commandSearchQuery = val; renderCommandList(); })
       );
 
-    const commandListEl = containerEl.createDiv({ cls: 'obsidibot-command-list' });
-    const commandCountEl = containerEl.createEl('p', { cls: 'obsidibot-command-count' });
+    const commandListEl = containerEl.createDiv({ cls: 'bojubot-command-list' });
+    const commandCountEl = containerEl.createEl('p', { cls: 'bojubot-command-count' });
 
     const allCommands = Object.values(
       (this.app as unknown as AppInternal).commands.commands
@@ -475,9 +475,9 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
         const allCommandIds = new Set(allCommands.map(c => c.id));
         const orphaned = this.plugin.settings.commandAllowlist.filter(id => !allCommandIds.has(id));
         for (const id of orphaned) {
-          const row = commandListEl.createDiv({ cls: 'obsidibot-command-row obsidibot-command-row--orphaned' });
+          const row = commandListEl.createDiv({ cls: 'bojubot-command-row bojubot-command-row--orphaned' });
           const checkbox = row.createEl('input', { type: 'checkbox' });
-          checkbox.id = `obsidibot-cmd-orphan-${id}`;
+          checkbox.id = `bojubot-cmd-orphan-${id}`;
           checkbox.checked = true;
           checkbox.addEventListener('change', () => {
             this.plugin.settings.commandAllowlist = this.plugin.settings.commandAllowlist.filter(x => x !== id);
@@ -487,10 +487,10 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
               updateCountText();
             });
           });
-          const label = row.createEl('label', { cls: 'obsidibot-command-name' });
-          label.htmlFor = `obsidibot-cmd-orphan-${id}`;
+          const label = row.createEl('label', { cls: 'bojubot-command-name' });
+          label.htmlFor = `bojubot-cmd-orphan-${id}`;
           label.createEl('span', { text: id });
-          label.createEl('span', { text: ' — not found', cls: 'obsidibot-command-orphan-badge' });
+          label.createEl('span', { text: ' — not found', cls: 'bojubot-command-orphan-badge' });
         }
       }
 
@@ -505,12 +505,12 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       });
 
       if (filtered.length === 0) {
-        commandListEl.createEl('p', { text: 'No commands match your search.', cls: 'obsidibot-command-empty' });
+        commandListEl.createEl('p', { text: 'No commands match your search.', cls: 'bojubot-command-empty' });
       } else {
         for (const cmd of filtered) {
-          const row = commandListEl.createDiv({ cls: 'obsidibot-command-row' });
+          const row = commandListEl.createDiv({ cls: 'bojubot-command-row' });
           const checkbox = row.createEl('input', { type: 'checkbox' });
-          checkbox.id = `obsidibot-cmd-${cmd.id}`;
+          checkbox.id = `bojubot-cmd-${cmd.id}`;
           checkbox.checked = this.plugin.settings.commandAllowlist.includes(cmd.id);
           checkbox.addEventListener('change', () => {
             if (checkbox.checked) {
@@ -525,8 +525,8 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
               updateCountText();
             });
           });
-          const label = row.createEl('label', { text: cmd.name, cls: 'obsidibot-command-name' });
-          label.htmlFor = `obsidibot-cmd-${cmd.id}`;
+          const label = row.createEl('label', { text: cmd.name, cls: 'bojubot-command-name' });
+          label.htmlFor = `bojubot-cmd-${cmd.id}`;
         }
       }
 
@@ -556,10 +556,10 @@ export class ObsidiBotSettingsTab extends PluginSettingTab {
       .setDesc('Vault-relative path for the log file. Defaults to the plugin folder so it stays out of your vault.')
       .addText((text) =>
         text
-          .setPlaceholder('Default (plugin folder/obsidibot-debug.log)')
+          .setPlaceholder('Default (plugin folder/bojubot-debug.log)')
           .setValue(this.plugin.settings.logFilePath)
           .onChange(async (value) => {
-            this.plugin.settings.logFilePath = value || '_obsidibot-debug.log';
+            this.plugin.settings.logFilePath = value || '_bojubot-debug.log';
             await this.plugin.saveSettings();
             this.plugin.reconfigureLogger();
           })

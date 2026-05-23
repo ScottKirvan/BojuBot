@@ -1,6 +1,6 @@
 # Session Manager
 
-Open the session manager by clicking the **session name** in the panel toolbar, or via **ObsidiBot: Show session history** in the Command Palette.
+Open the session manager by clicking the **session name** in the panel toolbar, or via **BojuBot: Show session history** in the Command Palette.
 
 ## Actions
 
@@ -19,7 +19,7 @@ The currently open session is marked with an accent-coloured left border and bol
 
 ## Storage Location
 
-Sessions are stored as JSON files in `.obsidian/obsidibot/sessions/` by default (gitignored). You can change this to a vault-relative or absolute path in **Settings → ObsidiBot → Session storage path** — for example, to track sessions in git alongside your notes.
+Sessions are stored as JSON files in `.obsidian/bojubot/sessions/` by default (gitignored). You can change this to a vault-relative or absolute path in **Settings → BojuBot → Session storage path** — for example, to track sessions in git alongside your notes.
 
 ::: warning
 Changing the storage path only affects new sessions. Existing sessions stay where they are and won't appear in the manager until you switch back. Move the `.json` files manually if you want to bring them along.
@@ -37,7 +37,7 @@ Drag handles are hidden while the search filter is active — filtering shows a 
 
 ## Token Cost Model
 
-Understanding when tokens are spent helps you use ObsidiBot efficiently.
+Understanding when tokens are spent helps you use BojuBot efficiently.
 
 | Action                                    | Token cost     | Notes                                             |
 | ----------------------------------------- | -------------- | ------------------------------------------------- |

@@ -44,10 +44,10 @@ jobs:
 
       - name: Package release zip
         run: |
-          mkdir -p dist/obsidibot
-          cp main.js manifest.json styles.css dist/obsidibot/
+          mkdir -p dist/bojubot
+          cp main.js manifest.json styles.css dist/bojubot/
           cd dist
-          zip -r obsidibot-${{ needs.release-please.outputs.tag_name }}.zip obsidibot/
+          zip -r bojubot-${{ needs.release-please.outputs.tag_name }}.zip bojubot/
 
       - name: Polish release notes
         env:
@@ -55,22 +55,22 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
           cat > /tmp/header.md << 'HEADER_EOF'
-          ## 🧠 ObsidiBot — Claude Code Agentic File Management for Obsidian
+          ## 🧠 BojuBot — Claude Code Agentic File Management for Obsidian
 
-          > ObsidiBot puts a full Claude Code agent in Obsidian's sidebar. It reads, writes, reorganizes, and creates notes — and hands you the results inside Obsidian. No API key needed.
+          > BojuBot puts a full Claude Code agent in Obsidian's sidebar. It reads, writes, reorganizes, and creates notes — and hands you the results inside Obsidian. No API key needed.
           >
-          > → [Full feature list and User Guide](https://github.com/ScottKirvan/ObsidiBot#readme)
+          > → [Full feature list and User Guide](https://github.com/ScottKirvan/BojuBot#readme)
 
           ### 📋 Requirements
           - Obsidian **desktop** (Windows, Mac, Linux — no mobile)
           - [Claude Code CLI](https://code.claude.com/docs/en/overview#native-install-recommended) installed and authenticated
 
           ### 📦 Installation
-          **Recommended (beta):** Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) → Add Beta Plugin → `ScottKirvan/ObsidiBot`
+          **Recommended (beta):** Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) → Add Beta Plugin → `ScottKirvan/BojuBot`
 
-          **Manual:** Download `obsidibot-<version>.zip` below → extract → move `obsidibot/` folder to `<vault>/.obsidian/plugins/` → enable in Obsidian settings
+          **Manual:** Download `bojubot-<version>.zip` below → extract → move `bojubot/` folder to `<vault>/.obsidian/plugins/` → enable in Obsidian settings
 
-          > ⚠️ **Public beta** — not yet in the Obsidian community plugin browser. Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y) or via [GitHub Issues](https://github.com/ScottKirvan/ObsidiBot/issues).
+          > ⚠️ **Public beta** — not yet in the Obsidian community plugin browser. Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y) or via [GitHub Issues](https://github.com/ScottKirvan/BojuBot/issues).
 
           ---
 
@@ -81,7 +81,7 @@ jobs:
 
           ---
 
-          📖 [User Guide](https://www.scottkirvan.com/ObsidiBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/ObsidiBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/ObsidiBot/issues/new?template=feature_request.md)
+          📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md)
           FOOTER_EOF
 
           gh release view "$TAG" --json body -q '.body' > /tmp/current_notes.md
@@ -96,10 +96,10 @@ jobs:
             main.js \
             manifest.json \
             styles.css \
-            dist/obsidibot-${{ needs.release-please.outputs.tag_name }}.zip
+            dist/bojubot-${{ needs.release-please.outputs.tag_name }}.zip
 
   announce-discord:
-    needs: [ release-please, build-and-upload ]
+    needs: [release-please, build-and-upload]
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
@@ -124,7 +124,7 @@ jobs:
 
           # Construct JSON
           PAYLOAD=$(jq -n \
-            --arg content "🚀 **ObsidiBot $TAG Published**" \
+            --arg content "🚀 **BojuBot $TAG Published**" \
             --arg desc "$CLEAN_CHANGELOG" \
             --arg url "$RELEASE_URL" \
             '{

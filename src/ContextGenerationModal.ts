@@ -1,5 +1,5 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile } from 'obsidian';
-import type ObsidiBotPlugin from '../main';
+import type BojuBotPlugin from '../main';
 import { spawnClaude, parseStreamOutput } from './ClaudeProcess';
 import { buildVaultTree } from './utils/fileTree';
 import { log } from './utils/logger';
@@ -7,7 +7,7 @@ import { existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
 
 export class ContextGenerationModal extends Modal {
-  private plugin: ObsidiBotPlugin;
+  private plugin: BojuBotPlugin;
   private contextFilePath: string;
   private binaryPath: string;
   private vaultRoot: string;
@@ -16,7 +16,7 @@ export class ContextGenerationModal extends Modal {
 
   constructor(
     app: App,
-    plugin: ObsidiBotPlugin,
+    plugin: BojuBotPlugin,
     contextFilePath: string,
     binaryPath: string,
     vaultRoot: string,
@@ -93,7 +93,7 @@ export class ContextGenerationModal extends Modal {
   }
 
   private generateContextFile(userIntro: string, contextFiles: string[] = []) {
-    new Notice('ObsidiBot: generating context file in the background…');
+    new Notice('BojuBot: generating context file in the background…');
     log('ContextGenerationModal: spawning background generation');
 
     const tree = buildVaultTree(this.app.vault, this.vaultTreeDepth);
@@ -103,7 +103,7 @@ export class ContextGenerationModal extends Modal {
 
     const skills = this.listSkills();
     const skillsSection = skills.length > 0
-      ? `\nThe user has the following ObsidiBot skills available:\n${skills.map(s => `- ${s}`).join('\n')}\nInclude a brief "## Available Skills" section listing these.`
+      ? `\nThe user has the following BojuBot skills available:\n${skills.map(s => `- ${s}`).join('\n')}\nInclude a brief "## Available Skills" section listing these.`
       : '';
 
     const introSection = userIntro.trim()
@@ -117,7 +117,7 @@ export class ContextGenerationModal extends Modal {
     const today = new Date().toISOString().slice(0, 10);
 
     const prompt = [
-      `You are setting up a context file for a new ObsidiBot (Obsidian plugin) user.`,
+      `You are setting up a context file for a new BojuBot (Obsidian plugin) user.`,
       ``,
       `${treeSection}`,
       `${introSection}`,
@@ -125,7 +125,7 @@ export class ContextGenerationModal extends Modal {
       `${skillsSection}`,
       ``,
       `Please create the file \`${this.contextFilePath}\` in the vault root.`,
-      `This file will be injected at the start of every ObsidiBot session as your persistent memory.`,
+      `This file will be injected at the start of every BojuBot session as your persistent memory.`,
       ``,
       `Generate a concise, useful context file (aim for under 300 words) that includes:`,
       `- A brief summary of the vault's organisation based on the folder structure`,
@@ -154,14 +154,14 @@ export class ContextGenerationModal extends Modal {
       onDone: () => {
         const exists = this.app.vault.getFileByPath(this.contextFilePath);
         if (exists) {
-          new Notice(`ObsidiBot: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
+          new Notice(`BojuBot: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
         } else {
-          new Notice(`ObsidiBot: generation finished but "${this.contextFilePath}" was not found. You may need to create it manually.`);
+          new Notice(`BojuBot: generation finished but "${this.contextFilePath}" was not found. You may need to create it manually.`);
         }
       },
       onError: (err) => {
         log('ContextGenerationModal: error:', err);
-        new Notice('ObsidiBot: context file generation encountered an error. Check the debug log.');
+        new Notice('BojuBot: context file generation encountered an error. Check the debug log.');
       },
     });
   }
@@ -171,7 +171,7 @@ export class ContextGenerationModal extends Modal {
     const stub = [
       '# Vault Context',
       '',
-      'This file is injected at the start of every ObsidiBot session as Claude\'s persistent memory.',
+      'This file is injected at the start of every BojuBot session as Claude\'s persistent memory.',
       'Edit it freely — add conventions, ongoing projects, folder explanations, or anything useful.',
       '',
       '## Conventions',
@@ -188,10 +188,10 @@ export class ContextGenerationModal extends Modal {
 
     try {
       await this.app.vault.create(this.contextFilePath, stub);
-      new Notice(`ObsidiBot: created blank context file at "${this.contextFilePath}".`);
+      new Notice(`BojuBot: created blank context file at "${this.contextFilePath}".`);
     } catch (err) {
       log('ContextGenerationModal: failed to create blank template:', err);
-      new Notice('ObsidiBot: failed to create context file. Check the debug log.');
+      new Notice('BojuBot: failed to create context file. Check the debug log.');
     }
   }
 }
@@ -213,33 +213,33 @@ class UserIntroModal extends Modal {
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass('obsidibot-intro-modal');
+    contentEl.addClass('bojubot-intro-modal');
     contentEl.createEl('h2', { text: 'About you and your vault' });
     contentEl.createEl('p', {
       text: 'Help Claude generate a more personalised context file. ' +
         'Tell it a little about yourself and how you use this vault.',
     });
 
-    const ta = contentEl.createEl('textarea', { cls: 'obsidibot-intro-textarea' });
+    const ta = contentEl.createEl('textarea', { cls: 'bojubot-intro-textarea' });
     ta.placeholder = '(Optional) e.g. I\'m a screenwriter using this vault for research and script development.';
     ta.rows = 4;
 
     // ── Additional context files (optional) ──────────────────────────────
-    const filesSection = contentEl.createDiv({ cls: 'obsidibot-intro-files-section' });
+    const filesSection = contentEl.createDiv({ cls: 'bojubot-intro-files-section' });
     filesSection.createEl('div', {
       text: 'Additional context files (optional)',
-      cls: 'obsidibot-intro-files-label',
+      cls: 'bojubot-intro-files-label',
     });
     filesSection.createEl('div', {
       text: 'Add any files Claude should read before generating — e.g. An existing Claude.md, project notes, or style guides.',
-      cls: 'obsidibot-intro-files-desc',
+      cls: 'bojubot-intro-files-desc',
     });
 
-    this.chipsEl = filesSection.createDiv({ cls: 'obsidibot-intro-chips' });
+    this.chipsEl = filesSection.createDiv({ cls: 'bojubot-intro-chips' });
 
     const addBtn = filesSection.createEl('button', {
       text: '+ add file',
-      cls: 'obsidibot-intro-add-btn',
+      cls: 'bojubot-intro-add-btn',
     });
     addBtn.addEventListener('click', () => {
       new ContextFilePicker(this.app, (file) => {
@@ -270,9 +270,9 @@ class UserIntroModal extends Modal {
   private renderChips() {
     this.chipsEl.empty();
     for (const [path, name] of this.selectedFiles) {
-      const chip = this.chipsEl.createDiv({ cls: 'obsidibot-intro-chip' });
-      chip.createSpan({ text: name, cls: 'obsidibot-intro-chip-name' });
-      const remove = chip.createSpan({ text: '×', cls: 'obsidibot-intro-chip-remove' });
+      const chip = this.chipsEl.createDiv({ cls: 'bojubot-intro-chip' });
+      chip.createSpan({ text: name, cls: 'bojubot-intro-chip-name' });
+      const remove = chip.createSpan({ text: '×', cls: 'bojubot-intro-chip-remove' });
       remove.addEventListener('click', () => {
         this.selectedFiles.delete(path);
         this.renderChips();

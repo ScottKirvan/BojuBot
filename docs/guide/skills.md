@@ -40,7 +40,7 @@ The frontmatter controls how the skill appears in the menu and how it behaves. T
 
 ## `params` fields
 
-When `params` is defined, ObsidiBot shows a modal form before running the skill. Each entry is an object with the following properties:
+When `params` is defined, BojuBot shows a modal form before running the skill. Each entry is an object with the following properties:
 
 | Property               | Required                   | Description                                                  |
 | ---------------------- | -------------------------- | ------------------------------------------------------------ |
@@ -55,12 +55,12 @@ When `params` is defined, ObsidiBot shows a modal form before running the skill.
 
 ### Field types
 
-| Type         | Description                                                                                                                   |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `input`      | Single-line text field                                                                                                        |
-| `textarea`   | Multi-line text field                                                                                                         |
-| `dropdown`   | Select from a fixed list of options                                                                                           |
-| `checkboxes` | One or more boolean toggles — result is a comma-separated string                                                              |
+| Type              | Description                                                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input`           | Single-line text field                                                                                                                                                 |
+| `textarea`        | Multi-line text field                                                                                                                                                  |
+| `dropdown`        | Select from a fixed list of options                                                                                                                                    |
+| `checkboxes`      | One or more boolean toggles — result is a comma-separated string                                                                                                       |
 | `obsidianmd_note` | Vault note picker — fuzzy search over all vault notes; injects the **full note content** as an attachment (same as @-mention). Alias: `note` (legacy, still supported) |
 
 ### Variable interpolation
@@ -82,9 +82,9 @@ Use `{{id}}` in the prompt body to reference field values. After submission:
 
 ## Skills folder
 
-**Default:** `_ObsidiBot Skills/` — at your vault root. This keeps skills in your vault, making them easy to edit and sync with Obsidian Git.
+**Default:** `_BojuBot Skills/` — at your vault root. This keeps skills in your vault, making them easy to edit and sync with Obsidian Git.
 
-**Custom:** set **Settings → ObsidiBot → Skills folder** to:
+**Custom:** set **Settings → BojuBot → Skills folder** to:
 - A vault-relative path (e.g. `_skills`) — keeps skills in your vault, synced with Obsidian Git
 - An absolute path — for a shared folder outside the vault
 
@@ -209,6 +209,6 @@ Read the relevant files, understand the existing architecture, implement the fea
 
 Enable **Settings → Register skills as Ctrl+P commands** to expose every skill as an Obsidian command palette entry, prefixed `Skill: …`.
 
-After adding or removing skill files, run **ObsidiBot: Reload skills** from the palette to sync. You can also assign hotkeys to individual skills via **Settings → Hotkeys** — search for `Skill:` to find them all.
+After adding or removing skill files, run **BojuBot: Reload skills** from the palette to sync. You can also assign hotkeys to individual skills via **Settings → Hotkeys** — search for `Skill:` to find them all.
 
 See the [Skills API](./commands#skills-api) section of the Commands reference for details.

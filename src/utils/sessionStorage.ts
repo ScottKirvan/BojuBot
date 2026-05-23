@@ -16,12 +16,12 @@ export interface StoredSession {
 export function getSessionsDir(vaultRoot: string, configDir: string): string {
   // Stored outside the plugin directory so symlinked dev installs don't
   // cause multiple vaults to share the same physical sessions folder.
-  return join(vaultRoot, configDir, 'obsidibot', 'sessions');
+  return join(vaultRoot, configDir, 'bojubot', 'sessions');
 }
 
 /**
  * Resolve the sessions directory from a user-configured path.
- * - Empty / whitespace → default location (<configDir>/obsidibot/sessions)
+ * - Empty / whitespace → default location (<configDir>/bojubot/sessions)
  * - Absolute path → used as-is
  * - Relative path → resolved against vault root
  */
@@ -32,9 +32,12 @@ export function resolveSessionsDir(vaultRoot: string, customPath: string | undef
   return join(vaultRoot, p);
 }
 
-/** Legacy path used before the project was renamed from Cortex to ObsidiBot. */
-export function getLegacySessionsDir(vaultRoot: string, configDir: string): string {
-  return join(vaultRoot, configDir, 'cortex', 'sessions');
+/** Legacy paths from previous project names (Cortex → ObsidiBot → BojuBot). */
+export function getLegacySessionsDirs(vaultRoot: string, configDir: string): string[] {
+  return [
+    join(vaultRoot, configDir, 'obsidibot', 'sessions'),
+    join(vaultRoot, configDir, 'cortex', 'sessions'),
+  ];
 }
 
 export function saveSession(vaultRoot: string, session: StoredSession, sessionsDir: string): void {
@@ -70,11 +73,20 @@ export function loadAllSessions(vaultRoot: string, sessionsDir: string, configDi
   };
 
   const currentSessions = loadDir(sessionsDir, false);
-  const legacySessions = loadDir(getLegacySessionsDir(vaultRoot, configDir), true);
 
-  // Merge: deduplicate by id (current takes precedence if same id exists in both)
+  // Merge legacy dirs in order (obsidibot first, then cortex).
+  // seen grows as we go so the first occurrence of any id wins.
   const seen = new Set(currentSessions.map(s => s.id));
-  const merged = [...currentSessions, ...legacySessions.filter(s => !seen.has(s.id))];
+  const allLegacy: StoredSession[] = [];
+  for (const legacyDir of getLegacySessionsDirs(vaultRoot, configDir)) {
+    for (const s of loadDir(legacyDir, true)) {
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        allLegacy.push(s);
+      }
+    }
+  }
+  const merged = [...currentSessions, ...allLegacy];
 
   return merged.sort((a, b) => {
     const aHas = a.sortOrder !== undefined;
@@ -140,22 +152,22 @@ export interface ChatMessage {
 /** Reverse of ClaudeView's escapeAttr — decode HTML entities in context tag attribute values. */
 function decodeAttr(value: string): string {
   return value.replace(/&(?:amp|quot|lt|gt);/g, (entity) => {
-    if (entity === '&amp;')  return '&';
+    if (entity === '&amp;') return '&';
     if (entity === '&quot;') return '"';
-    if (entity === '&lt;')   return '<';
-    if (entity === '&gt;')   return '>';
+    if (entity === '&lt;') return '<';
+    if (entity === '&gt;') return '>';
     return entity;
   });
 }
 
 /**
- * Strip all <obsidibot-context> tags from content and return the clean text
+ * Strip all <bojubot-context> tags from content and return the clean text
  * plus a structured list of the injected contexts for badge rendering on replay.
  */
-function extractObsidiBotContexts(content: string): { clean: string; contexts: InjectedContext[] } {
+function extractBojuBotContexts(content: string): { clean: string; contexts: InjectedContext[] } {
   const contexts: InjectedContext[] = [];
   // Matches both self-closing-style and body-carrying tags
-  const TAG_RE = /<obsidibot-context\s([^>]*)>([\s\S]*?)<\/obsidibot-context>/g;
+  const TAG_RE = /<bojubot-context\s([^>]*)>([\s\S]*?)<\/bojubot-context>/g;
 
   const clean = content.replace(TAG_RE, (_match, attrStr: string, body: string) => {
     const ctx: Record<string, string> = {};
@@ -250,8 +262,8 @@ export function loadSessionMessages(claudeSessionId: string): ChatMessage[] {
             isFirstUser = false;
           }
 
-          // Strip <obsidibot-context> tags and collect metadata for badge rendering
-          const { clean, contexts } = extractObsidiBotContexts(content);
+          // Strip <bojubot-context> tags and collect metadata for badge rendering
+          const { clean, contexts } = extractBojuBotContexts(content);
           if (clean || contexts.length > 0) {
             messages.push({
               role: 'user',

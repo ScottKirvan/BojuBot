@@ -1,21 +1,21 @@
 # Plugin API
 
-ObsidiBot exposes a typed event API through `SessionCoordinator` for building external plugins and integrations. This API is in early access — the event set is stable, but the host interface may grow as more capabilities are added.
+BojuBot exposes a typed event API through `SessionCoordinator` for building external plugins and integrations. This API is in early access — the event set is stable, but the host interface may grow as more capabilities are added.
 
 ::: info Status
-The plugin API is available in ObsidiBot 2.14.0 and later. It is designed for supporters and contributors who want to extend ObsidiBot's core functionality.
+The plugin API is available in BojuBot 2.14.0 and later. It is designed for supporters and contributors who want to extend BojuBot's core functionality.
 :::
 
 ## Overview
 
-`SessionCoordinator` is the session and turn lifecycle manager inside ObsidiBot. It owns session state (ID, title, timestamps), spawns Claude turns, and emits typed events as the stream progresses. External plugins subscribe to those events to react to what Claude is doing without coupling to ObsidiBot's internal DOM or chat UI.
+`SessionCoordinator` is the session and turn lifecycle manager inside BojuBot. It owns session state (ID, title, timestamps), spawns Claude turns, and emits typed events as the stream progresses. External plugins subscribe to those events to react to what Claude is doing without coupling to BojuBot's internal DOM or chat UI.
 
 ## Accessing the coordinator
 
 The coordinator is exposed on the active `ClaudeView` instance:
 
 ```typescript
-import { VIEW_TYPE_CLAUDE, ClaudeView } from 'obsidibot/src/ClaudeView';
+import { VIEW_TYPE_CLAUDE, ClaudeView } from 'bojubot/src/ClaudeView';
 
 const leaf = app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE)[0];
 const view = leaf?.view as ClaudeView | undefined;
@@ -36,10 +36,10 @@ All events are typed. Import `SessionCoordinatorEvents` for the full type map.
 
 ### Session events
 
-| Event | Payload | When |
-|---|---|---|
-| `session:new` | `(session: StoredSession)` | A fresh session placeholder was created |
-| `session:loaded` | `(payload: SessionLoadedPayload)` | A session was loaded from the session list |
+| Event             | Payload                             | When                                                        |
+| ----------------- | ----------------------------------- | ----------------------------------------------------------- |
+| `session:new`     | `(session: StoredSession)`          | A fresh session placeholder was created                     |
+| `session:loaded`  | `(payload: SessionLoadedPayload)`   | A session was loaded from the session list                  |
 | `session:updated` | `(updates: { title?, sessionId? })` | The session title or Claude session ID changed after a turn |
 
 `SessionLoadedPayload`:
@@ -56,19 +56,19 @@ interface SessionLoadedPayload {
 
 These fire in order during a Claude turn:
 
-| Event | Payload | When |
-|---|---|---|
-| `turn:start` | `()` | Claude process spawned |
-| `turn:text` | `(accumulated: string)` | Text chunk received; `accumulated` is the full clean text so far |
-| `turn:action` | `(action: ObsidiBotAction)` | UI bridge action parsed (excludes `request-permission`) |
-| `turn:tool-call` | `(tool, input, toolUseId)` | Claude initiated a tool call |
-| `turn:tool-result` | `(toolUseId, content)` | Tool result received |
-| `turn:query` | `(query: VaultQuery)` | A `@@CORTEX_QUERY` line received |
-| `turn:usage` | `(usage: TokenUsage)` | Token usage statistics |
-| `turn:stderr` | `(err: string)` | stderr output (non-fatal) |
-| `turn:error` | `(err: string)` | Fatal process error — no `turn:done` follows |
-| `turn:done` | `(result: TurnDoneResult)` | Turn completed normally |
-| `permission:denied` | `(denials, hasPendingRequest)` | One or more tool calls were blocked |
+| Event               | Payload                        | When                                                             |
+| ------------------- | ------------------------------ | ---------------------------------------------------------------- |
+| `turn:start`        | `()`                           | Claude process spawned                                           |
+| `turn:text`         | `(accumulated: string)`        | Text chunk received; `accumulated` is the full clean text so far |
+| `turn:action`       | `(action: BojuBotAction)`      | UI bridge action parsed (excludes `request-permission`)          |
+| `turn:tool-call`    | `(tool, input, toolUseId)`     | Claude initiated a tool call                                     |
+| `turn:tool-result`  | `(toolUseId, content)`         | Tool result received                                             |
+| `turn:query`        | `(query: VaultQuery)`          | A `@@BOJU_QUERY` line received                                   |
+| `turn:usage`        | `(usage: TokenUsage)`          | Token usage statistics                                           |
+| `turn:stderr`       | `(err: string)`                | stderr output (non-fatal)                                        |
+| `turn:error`        | `(err: string)`                | Fatal process error — no `turn:done` follows                     |
+| `turn:done`         | `(result: TurnDoneResult)`     | Turn completed normally                                          |
+| `permission:denied` | `(denials, hasPendingRequest)` | One or more tool calls were blocked                              |
 
 `TurnDoneResult`:
 ```typescript
@@ -108,8 +108,8 @@ Always call `off` in your plugin's `onunload()` to avoid memory leaks.
 
 ```typescript
 import { Plugin } from 'obsidian';
-import { VIEW_TYPE_CLAUDE, ClaudeView } from 'obsidibot/src/ClaudeView';
-import type { TokenUsage } from 'obsidibot/src/ClaudeProcess';
+import { VIEW_TYPE_CLAUDE, ClaudeView } from 'bojubot/src/ClaudeView';
+import type { TokenUsage } from 'bojubot/src/ClaudeProcess';
 
 export default class TokenLoggerPlugin extends Plugin {
   private _usageHandler = (usage: TokenUsage) => {

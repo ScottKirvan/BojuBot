@@ -1,6 +1,6 @@
 # Slash Commands
 
-The `/` menu gives you quick access to built-in ObsidiBot actions and your own **skills** — all without leaving the chat panel.
+The `/` menu gives you quick access to built-in BojuBot actions and your own **skills** — all without leaving the chat panel.
 
 ## Opening the menu
 
@@ -14,15 +14,15 @@ The `/` menu gives you quick access to built-in ObsidiBot actions and your own *
 
 ## Built-in commands
 
-| Category | Command | What it does |
-|---|---|---|
-| **Session** | New session | Start a fresh conversation |
-| **Session** | Show history | Browse and resume past sessions |
-| **Session** | Export session | Save the current session to your vault |
-| **Context** | Attach file | Add a file, image, or URL to the prompt |
-| **Context** | Open context file | Edit your persistent vault context |
-| **Context** | Refresh context | Re-inject vault context into the session |
-| **Context** | Open settings | Open ObsidiBot settings |
+| Category    | Command           | What it does                             |
+| ----------- | ----------------- | ---------------------------------------- |
+| **Session** | New session       | Start a fresh conversation               |
+| **Session** | Show history      | Browse and resume past sessions          |
+| **Session** | Export session    | Save the current session to your vault   |
+| **Context** | Attach file       | Add a file, image, or URL to the prompt  |
+| **Context** | Open context file | Edit your persistent vault context       |
+| **Context** | Refresh context   | Re-inject vault context into the session |
+| **Context** | Open settings     | Open BojuBot settings                    |
 
 ## Skills
 
@@ -32,7 +32,7 @@ Drop a `.md` file in your skills folder and it appears in the menu instantly. No
 
 **Default folder:** `<plugin dir>/commands/` — inside the plugin directory, gitignored by default.
 
-**Custom folder:** set **Settings → ObsidiBot → Skills folder** to any vault-relative path (e.g. `_skills`) or absolute path.
+**Custom folder:** set **Settings → BojuBot → Skills folder** to any vault-relative path (e.g. `_skills`) or absolute path.
 
 See the **[Skills reference](./skills)** for the full file format, all frontmatter fields, and examples.
 
@@ -51,7 +51,7 @@ Save this as `_skills/Summarize Note.md`. It appears under **Writing** in the `/
 
 ### Parameterized skills
 
-Skills can define form fields that ObsidiBot presents as a modal before running:
+Skills can define form fields that BojuBot presents as a modal before running:
 
 ```markdown
 ---

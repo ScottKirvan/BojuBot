@@ -1,8 +1,8 @@
 import { App, Modal } from 'obsidian';
-import type ObsidiBotPlugin from '../../main';
+import type BojuBotPlugin from '../../main';
 
 export class MemoryAuditModal extends Modal {
-  constructor(private _app: App, private plugin: ObsidiBotPlugin) {
+  constructor(private _app: App, private plugin: BojuBotPlugin) {
     super(_app);
   }
 
@@ -15,7 +15,7 @@ export class MemoryAuditModal extends Modal {
         `Open it to review the changes, or ask Claude to audit it for suspicious content.`,
     });
 
-    const btnRow = this.contentEl.createDiv({ cls: 'obsidibot-audit-btn-row' });
+    const btnRow = this.contentEl.createDiv({ cls: 'bojubot-audit-btn-row' });
 
     btnRow.createEl('button', { text: 'Open file' })
       .addEventListener('click', () => {

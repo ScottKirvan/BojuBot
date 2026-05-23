@@ -14,25 +14,25 @@ export class ExportToVaultModal extends Modal {
     contentEl.createEl('h2', { text: 'Export session to vault' });
     contentEl.createEl('p', {
       text: 'Vault-relative path for the note (folder will be created if needed):',
-      cls: 'obsidibot-export-hint',
+      cls: 'bojubot-export-hint',
     });
 
     const input = contentEl.createEl('input', {
-      cls: 'obsidibot-export-path-input',
+      cls: 'bojubot-export-path-input',
       attr: { type: 'text', value: this.defaultPath },
     });
 
-    const checkboxRow = contentEl.createDiv({ cls: 'obsidibot-export-checkbox-row' });
+    const checkboxRow = contentEl.createDiv({ cls: 'bojubot-export-checkbox-row' });
     const checkbox = checkboxRow.createEl('input', {
-      attr: { type: 'checkbox', id: 'obsidibot-open-after' },
+      attr: { type: 'checkbox', id: 'bojubot-open-after' },
     });
     checkbox.checked = false;
     checkboxRow.createEl('label', {
       text: 'Open note after creation',
-      attr: { for: 'obsidibot-open-after' },
+      attr: { for: 'bojubot-open-after' },
     });
 
-    const btnRow = contentEl.createDiv({ cls: 'obsidibot-export-btn-row' });
+    const btnRow = contentEl.createDiv({ cls: 'bojubot-export-btn-row' });
     btnRow.createEl('button', { text: 'Cancel' })
       .addEventListener('click', () => this.close());
     const exportBtn = btnRow.createEl('button', { text: 'Save to vault', cls: 'mod-cta' });

@@ -1,6 +1,6 @@
 # Inline Content Generation — Feature Spec
 
-**Issue:** [#10](https://github.com/ScottKirvan/ObsidiBot/issues/10)  
+**Issue:** [#10](https://github.com/ScottKirvan/BojuBot/issues/10)  
 **Status: PROPOSED** — design complete, not yet implemented (issue #10).  
 **Branch:** (not started)
 **Updated:** 2026/4/22
@@ -9,7 +9,7 @@
 
 ## Overview
 
-Embed AI-generation prompts directly in vault notes using a tag syntax. When ObsidiBot detects a tag, it immediately marks it as pending, fires a headless Claude call, and replaces the tag with the generated result. Tags are **one-shot** — consumed on execution and not re-evaluated on subsequent opens.
+Embed AI-generation prompts directly in vault notes using a tag syntax. When BojuBot detects a tag, it immediately marks it as pending, fires a headless Claude call, and replaces the tag with the generated result. Tags are **one-shot** — consumed on execution and not re-evaluated on subsequent opens.
 
 Works in both regular notes and template files (with protection for the template library itself — see Exclusions).
 
@@ -20,23 +20,23 @@ Works in both regular notes and template files (with protection for the template
 Tags use Templater-style angle-bracket delimiters with a JSON payload:
 
 ```
-<% obsidibot: {"prompt": "your instruction here"} %>
+<% bojubot: {"prompt": "your instruction here"} %>
 ```
 
 ### Why this syntax
 
 No universal community standard exists for consumed/replaced inline tags. The candidates considered:
 
-| Pattern | Plugin | Notes |
-|---|---|---|
-| `<% obsidibot: ... %>` | Templater | **Chosen.** Templater is the dominant template plugin; users already have the mental model that `<% %>` tags get processed and replaced. Templater safely ignores unrecognised prefixes, so this tag passes through intact to the destination note. |
-| `{{obsidibot: ...}}` | QuickAdd, Obsidian core Templates | Familiar but Obsidian's core Templates plugin behaviour with unknown `{{...}}` variables is unverified — could silently strip tags. |
-| `` `obsidibot: ...` `` | Dataview (inline) | Dataview tags re-evaluate on every render; they are not consumed. Wrong mental model for one-shot replacement. |
-| `%%obsidibot: ...%%` | (none) | Obsidian's native comment syntax. Exclusively associated with passive, hidden comments — using it for executable content would be confusing. |
+| Pattern              | Plugin                            | Notes                                                                                                                                                                                                                                               |
+| -------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<% bojubot: ... %>` | Templater                         | **Chosen.** Templater is the dominant template plugin; users already have the mental model that `<% %>` tags get processed and replaced. Templater safely ignores unrecognised prefixes, so this tag passes through intact to the destination note. |
+| `{{bojubot: ...}}`   | QuickAdd, Obsidian core Templates | Familiar but Obsidian's core Templates plugin behaviour with unknown `{{...}}` variables is unverified — could silently strip tags.                                                                                                                 |
+| `` `bojubot: ...` `` | Dataview (inline)                 | Dataview tags re-evaluate on every render; they are not consumed. Wrong mental model for one-shot replacement.                                                                                                                                      |
+| `%%bojubot: ...%%`   | (none)                            | Obsidian's native comment syntax. Exclusively associated with passive, hidden comments — using it for executable content would be confusing.                                                                                                        |
 
 ### Why JSON for the payload
 
-JSON is used instead of a plain string so the tag format is extensible without breaking existing tags. New capabilities are added as new optional keys; any key unrecognised by the current version is silently ignored. This means a tag written today will still work after future ObsidiBot updates that add new keys.
+JSON is used instead of a plain string so the tag format is extensible without breaking existing tags. New capabilities are added as new optional keys; any key unrecognised by the current version is silently ignored. This means a tag written today will still work after future BojuBot updates that add new keys.
 
 ---
 
@@ -49,7 +49,7 @@ All keys are optional except that at least one of `prompt` or `include` must be 
 The literal instruction passed to Claude.
 
 ```
-<% obsidibot: {"prompt": "Write a one-sentence summary of this note"} %>
+<% bojubot: {"prompt": "Write a one-sentence summary of this note"} %>
 ```
 
 ### `context` (boolean, default: inherits setting)
@@ -59,7 +59,7 @@ When `true`, the full body of the **current note** is injected into Claude's con
 Defaults to the plugin setting **"Inject note content as context"** if not specified.
 
 ```
-<% obsidibot: {"prompt": "List the action items in this note", "context": true} %>
+<% bojubot: {"prompt": "List the action items in this note", "context": true} %>
 ```
 
 ### `include` (string — vault path)
@@ -70,33 +70,33 @@ This enables two patterns:
 
 **Skill execution** — `include` points at a skill note containing a detailed instruction set; `prompt` tells Claude to execute it:
 ```
-<% obsidibot: {"prompt": "Execute the skill in the included context", "include": "Skills/meeting-summary.md"} %>
+<% bojubot: {"prompt": "Execute the skill in the included context", "include": "Skills/meeting-summary.md"} %>
 ```
 
 **Reference material** — `include` points at a reference document; `prompt` tells Claude how to use it:
 ```
-<% obsidibot: {"prompt": "Summarize the key decisions from the included document", "include": "Projects/Q2-review.md"} %>
+<% bojubot: {"prompt": "Summarize the key decisions from the included document", "include": "Projects/Q2-review.md"} %>
 ```
 
 Both `include` and `context` can be combined. In that case Claude receives: the included file content + the current note body + the prompt.
 
 ### Reserved keys (not yet implemented)
 
-These keys are documented here for forward-compatibility planning. They are currently ignored by ObsidiBot.
+These keys are documented here for forward-compatibility planning. They are currently ignored by BojuBot.
 
-| Key | Type | Planned purpose |
-|---|---|---|
-| `output` | string | Format hint for the generated content: `"plain"`, `"markdown"`, `"list"`, `"code"` |
-| `max_tokens` | number | Constrain response length — useful for predictable short insertions |
-| `model` | string | Override the Claude model for this tag, e.g. `"haiku"` for simple/cheap fills |
-| `system` | string | Per-tag system prompt override, replacing the default insertion-focused system prompt |
-| `id` | string | Named tag identifier — reserved for future targeting of specific tags from the chat panel |
+| Key          | Type   | Planned purpose                                                                           |
+| ------------ | ------ | ----------------------------------------------------------------------------------------- |
+| `output`     | string | Format hint for the generated content: `"plain"`, `"markdown"`, `"list"`, `"code"`        |
+| `max_tokens` | number | Constrain response length — useful for predictable short insertions                       |
+| `model`      | string | Override the Claude model for this tag, e.g. `"haiku"` for simple/cheap fills             |
+| `system`     | string | Per-tag system prompt override, replacing the default insertion-focused system prompt     |
+| `id`         | string | Named tag identifier — reserved for future targeting of specific tags from the chat panel |
 
 ---
 
 ## Trigger
 
-ObsidiBot registers a `vault.on('modify', file)` listener. On every file modification:
+BojuBot registers a `vault.on('modify', file)` listener. On every file modification:
 
 1. Read the file content
 2. Scan for the tag pattern
@@ -114,19 +114,19 @@ Templater exposes `tp.hooks.on_all_templates_executed()` internally, but this is
 
 ### 1. Tag detected
 
-ObsidiBot immediately rewrites the file, replacing the tag with a visible pending marker:
+BojuBot immediately rewrites the file, replacing the tag with a visible pending marker:
 
 ```
-⏳ *ObsidiBot generating…*
+⏳ *BojuBot generating…*
 ```
 
 This gives the user immediate feedback that the tag was recognized. The original prompt text is preserved internally in the pending job queue (not in the file) so it can be restored on cancel.
 
-A dismissible Notice (toast) also appears: `"ObsidiBot: generating inline content — [Cancel]"`
+A dismissible Notice (toast) also appears: `"BojuBot: generating inline content — [Cancel]"`
 
 ### 2. Headless Claude call
 
-ObsidiBot spawns a short-lived Claude subprocess (no chat session, no `--resume`):
+BojuBot spawns a short-lived Claude subprocess (no chat session, no `--resume`):
 
 - **System prompt:** "You are generating content to be inserted directly into a Markdown note. Return only the content itself — no preamble, no explanation, no markdown fences unless the content is code. The output will be inserted verbatim."
 - **User message:** The prompt text extracted from the tag, optionally prepended with the note's own content as context (see Settings).
@@ -145,7 +145,7 @@ The `⏳ …` line is replaced in-file with the generated content, inserted as p
 
 ### 5. Error
 
-If Claude errors or the call times out, the `⏳ …` line is replaced with the original tag text and a Notice is shown: `"ObsidiBot: inline generation failed — tag restored"`. The tag is restored (not deleted) so the user can retry by saving the file.
+If Claude errors or the call times out, the `⏳ …` line is replaced with the original tag text and a Notice is shown: `"BojuBot: inline generation failed — tag restored"`. The tag is restored (not deleted) so the user can retry by saving the file.
 
 ---
 
@@ -161,33 +161,33 @@ If a file contains multiple tags, they are processed **sequentially** — one Cl
 
 Folders listed here are never scanned. Default: the user's configured Templater template folder (if detectable) and `Templates/`.
 
-Files inside excluded folders can be freely edited without triggering processing — this is the primary protection for template libraries. A template with `<% obsidibot: {"prompt": "summarize this note"} %>` lives safely in the Templates folder. When Templater instantiates it into a new note elsewhere in the vault, that new file gets scanned and the tag fires.
+Files inside excluded folders can be freely edited without triggering processing — this is the primary protection for template libraries. A template with `<% bojubot: {"prompt": "summarize this note"} %>` lives safely in the Templates folder. When Templater instantiates it into a new note elsewhere in the vault, that new file gets scanned and the tag fires.
 
 ### Per-file frontmatter opt-out
 
-Adding `obsidibot-inline: false` to a note's frontmatter skips that file entirely, regardless of folder. Useful for individual files outside excluded folders (e.g., a scratch note you're actively editing that happens to contain a tag you're not ready to run).
+Adding `bojubot-inline: false` to a note's frontmatter skips that file entirely, regardless of folder. Useful for individual files outside excluded folders (e.g., a scratch note you're actively editing that happens to contain a tag you're not ready to run).
 
 ---
 
 ## Settings
 
-| Setting | Type | Default | Description |
-|---|---|---|---|
-| Inline generation | toggle | off (initially) | Master switch; off by default until feature is stable |
-| Excluded folders | text list | `Templates/` | Folders skipped during scanning |
-| Inject note content as context | toggle | on | Passes the note's full body to Claude alongside the prompt |
-| Generation timeout (seconds) | number | 30 | Auto-cancel after this duration |
+| Setting                        | Type      | Default         | Description                                                |
+| ------------------------------ | --------- | --------------- | ---------------------------------------------------------- |
+| Inline generation              | toggle    | off (initially) | Master switch; off by default until feature is stable      |
+| Excluded folders               | text list | `Templates/`    | Folders skipped during scanning                            |
+| Inject note content as context | toggle    | on              | Passes the note's full body to Claude alongside the prompt |
+| Generation timeout (seconds)   | number    | 30              | Auto-cancel after this duration                            |
 
 ---
 
 ## Key Files (implementation targets)
 
-| File | Change |
-|---|---|
-| `main.ts` | Register vault modify listener; wire up to inline processor |
-| `src/InlineProcessor.ts` | New file — tag detection, job queue, Claude spawn, file rewrite |
-| `src/settings.ts` | Add inline generation settings fields |
-| `test/unit.test.ts` | Tests for tag detection regex, file rewrite logic, queue behavior |
+| File                     | Change                                                            |
+| ------------------------ | ----------------------------------------------------------------- |
+| `main.ts`                | Register vault modify listener; wire up to inline processor       |
+| `src/InlineProcessor.ts` | New file — tag detection, job queue, Claude spawn, file rewrite   |
+| `src/settings.ts`        | Add inline generation settings fields                             |
+| `test/unit.test.ts`      | Tests for tag detection regex, file rewrite logic, queue behavior |
 
 ---
 
@@ -202,6 +202,6 @@ Adding `obsidibot-inline: false` to a note's frontmatter skips that file entirel
 
 ## Open Questions
 
-1. **Pending UX** — `⏳ *ObsidiBot generating…*` italic line acceptable, or prefer something less intrusive?
+1. **Pending UX** — `⏳ *BojuBot generating…*` italic line acceptable, or prefer something less intrusive?
 2. **Context injection default** — inject note body by default (on), or opt-in (off)?
 3. **Master switch default** — off until stable feels right; confirm.

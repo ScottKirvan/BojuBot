@@ -12,7 +12,7 @@ export interface PermissionDenial {
   input: unknown;
 }
 
-/** Maps ObsidiBot permissionMode to Claude CLI args. */
+/** Maps BojuBot permissionMode to Claude CLI args. */
 export function permissionArgs(mode: PermissionMode): string[] {
   switch (mode) {
     case 'restricted':
@@ -187,7 +187,7 @@ export interface TokenUsage {
 export interface StreamCallbacks {
   onText: (delta: string) => void;
   onAction: (line: string) => void;
-  /** Called for each @@CORTEX_QUERY line. Optional — existing callers unaffected. */
+  /** Called for each @@BOJU_QUERY line. Optional — existing callers unaffected. */
   onQuery?: (line: string) => void;
   onToolCall: (tool: string, input: unknown, toolUseId: string) => void;
   onToolResult?: (toolUseId: string, content: string) => void;
@@ -259,7 +259,7 @@ function handleMessage(
         for (const block of content) {
           if (block.type === 'text') {
             const raw = (block.text as string) ?? '';
-            // Route @@CORTEX_ACTION / @@CORTEX_QUERY lines; pass the rest to onText
+            // Route @@BOJU_ACTION / @@BOJU_QUERY lines; pass the rest to onText
             const textLines: string[] = [];
             for (const line of raw.split('\n')) {
               if (line.startsWith(ACTION_PREFIX)) {

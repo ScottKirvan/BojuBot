@@ -10,7 +10,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const PROMPT = 'Say exactly: hello from obsidibot';
+const PROMPT = 'Say exactly: hello from bojubot';
 
 // ---------------------------------------------------------------------------
 // Binary detection (mirrors ClaudeProcess.ts)

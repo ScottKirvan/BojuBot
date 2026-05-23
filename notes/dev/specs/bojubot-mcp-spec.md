@@ -1,4 +1,4 @@
-# ObsidiBot MCP Server — Plugin Spec (DRAFT)
+# BojuBot MCP Server — Plugin Spec (DRAFT)
 
 **Status: PROPOSED** — design phase (issue #153). Design brief in `notes/dev/mcp-server-design-brief.md`. Depends on Core Plugin API.
 
@@ -8,16 +8,16 @@
 
 ## Architecture Note
 
-**MCP Server is a separate Obsidian plugin** (`obsidibot-mcp`), not a feature built into ObsidiBot core. It runs a local MCP server that exposes ObsidiBot Skills as callable tools to any MCP-compatible client (Claude Desktop, n8n, custom agents, voice triggers, remote clients over Tailscale, etc.).
+**MCP Server is a separate Obsidian plugin** (`bojubot-mcp`), not a feature built into BojuBot core. It runs a local MCP server that exposes BojuBot Skills as callable tools to any MCP-compatible client (Claude Desktop, n8n, custom agents, voice triggers, remote clients over Tailscale, etc.).
 
-The plugin is **lazy-loaded and opt-in** — it only activates if installed. When not installed, ObsidiBot has no external surface.
+The plugin is **lazy-loaded and opt-in** — it only activates if installed. When not installed, BojuBot has no external surface.
 
 **Core API dependencies:**
 - `core.api.skills.list()` — skill discovery for tool registration
 - `core.api.skills.invoke()` — skill execution on tool call
 - `core.api.plugins.register()` / `.unregister()` — lifecycle registration
 
-See `obsidibot-core-api-spec.md` for full interface definitions.
+See `bojubot-core-api-spec.md` for full interface definitions.
 
 ---
 
@@ -71,13 +71,13 @@ This enables:
   - Session spawned by Core; output returned to MCP client as tool result
 - [ ] **Define parameter handling.** Skill params (defined in frontmatter) map to MCP tool input schema properties. Param types map to JSON Schema types:
 
-| Skill param type | JSON Schema type |
-|---|---|
-| `input` | `string` |
-| `textarea` | `string` |
-| `dropdown` | `string` with `enum` |
-| `checkboxes` | `array` of `string` |
-| `note` | `string` (vault path) |
+| Skill param type | JSON Schema type      |
+| ---------------- | --------------------- |
+| `input`          | `string`              |
+| `textarea`       | `string`              |
+| `dropdown`       | `string` with `enum`  |
+| `checkboxes`     | `array` of `string`   |
+| `note`           | `string` (vault path) |
 
 - [ ] **Param-free skills.** Skills with no params are exposed as zero-argument MCP tools. Valid and useful.
 - [ ] **Define the tool result format.** MCP tool results are text content blocks. Recommend returning Claude's raw output text. If the session errored or timed out, return an error result with a descriptive message.
@@ -116,10 +116,10 @@ This enables:
 
 ### UX / Observability
 
-- [ ] **Server status indicator.** Small indicator in ObsidiBot settings (or ribbon tooltip) showing whether the MCP server is running and on which port.
+- [ ] **Server status indicator.** Small indicator in BojuBot settings (or ribbon tooltip) showing whether the MCP server is running and on which port.
 - [ ] **Active connections.** Count of currently connected MCP clients, visible in settings.
-- [ ] **Invocation log.** Log of recent MCP tool calls: timestamp, tool name, params (redacted if sensitive), outcome. Surfaced via `ObsidiBot: Show MCP log` command.
-- [ ] **Tool list command.** `ObsidiBot: Show MCP tools` — lists all currently exposed tools with their descriptions and the MCP server URL. Useful for configuring external clients.
+- [ ] **Invocation log.** Log of recent MCP tool calls: timestamp, tool name, params (redacted if sensitive), outcome. Surfaced via `BojuBot: Show MCP log` command.
+- [ ] **Tool list command.** `BojuBot: Show MCP tools` — lists all currently exposed tools with their descriptions and the MCP server URL. Useful for configuring external clients.
 
 ---
 
@@ -128,20 +128,20 @@ This enables:
 ### MCP Server Bootstrap
 
 ```typescript
-// obsidibot-mcp/main.ts — onload()
+// bojubot-mcp/main.ts — onload()
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 
-const core = app.plugins.getPlugin('obsidibot') as ObsidiBotCore;
+const core = app.plugins.getPlugin('bojubot') as BojuBotCore;
 
 core.api.plugins.register({
-  id: 'obsidibot-mcp',
-  name: 'ObsidiBot MCP Server',
+  id: 'bojubot-mcp',
+  name: 'BojuBot MCP Server',
   version: this.manifest.version,
 });
 
-const server = new McpServer({ name: 'obsidibot', version: this.manifest.version });
+const server = new McpServer({ name: 'bojubot', version: this.manifest.version });
 this.registerTools(server, core);
 // Start HTTP/SSE listener on configured port
 ```
@@ -149,7 +149,7 @@ this.registerTools(server, core);
 ### Tool Registration
 
 ```typescript
-private registerTools(server: McpServer, core: ObsidiBotCoreAPI) {
+private registerTools(server: McpServer, core: BojuBotCoreAPI) {
   const skills = core.api.skills.list();
   for (const skill of skills) {
     if (skill frontmatter says mcp-exposed: false) continue;
@@ -161,7 +161,7 @@ private registerTools(server: McpServer, core: ObsidiBotCoreAPI) {
         const handle = await core.api.skills.invoke(skill.name, {
           params,
           permissions: skill.mcpPermissions ?? this.settings.defaultPermissions,
-          sourcePlugin: 'obsidibot-mcp',
+          sourcePlugin: 'bojubot-mcp',
         });
         const output = await waitForComplete(handle);
         return { content: [{ type: 'text', text: output.stdout }] };
@@ -180,7 +180,7 @@ Watch the Skills folder via Obsidian's vault events. On any change, call `server
 ### Edge Cases & Failure Modes
 
 - **Port conflict:** If the configured port is in use at plugin load, surface a clear error in plugin settings and disable the server. Do not silently pick a different port.
-- **Core not present:** Fail gracefully with a clear error if ObsidiBot core is not installed.
+- **Core not present:** Fail gracefully with a clear error if BojuBot core is not installed.
 - **Skill invocation timeout:** Return an MCP error result with timeout message; do not hang the MCP client connection.
 - **Obsidian quit while MCP client connected:** Server shuts down on `onunload()`; clients receive a connection-closed signal and should handle reconnect.
 - **Skill with params invoked with missing required params:** Return a descriptive validation error to the MCP client without spawning a session.
@@ -189,12 +189,12 @@ Watch the Skills folder via Obsidian's vault events. On any change, call `server
 
 ## Decided
 
-| Decision | Resolution |
-|---|---|
-| Implementation location | Separate Obsidian plugin (`obsidibot-mcp`); not in Core |
-| Activation model | Lazy-loaded; opt-in via installation |
-| Transport | SSE over localhost HTTP |
-| Skill exposure | All skills by default; opt-out via frontmatter |
-| Trust boundary | Skills folder is the allowlist; no separate access control layer |
-| Default permission level | `read-only` for all MCP-invoked sessions |
-| Mobile use case path | Tailscale + MCP server (no mobile plugin required) |
+| Decision                 | Resolution                                                       |
+| ------------------------ | ---------------------------------------------------------------- |
+| Implementation location  | Separate Obsidian plugin (`bojubot-mcp`); not in Core            |
+| Activation model         | Lazy-loaded; opt-in via installation                             |
+| Transport                | SSE over localhost HTTP                                          |
+| Skill exposure           | All skills by default; opt-out via frontmatter                   |
+| Trust boundary           | Skills folder is the allowlist; no separate access control layer |
+| Default permission level | `read-only` for all MCP-invoked sessions                         |
+| Mobile use case path     | Tailscale + MCP server (no mobile plugin required)               |

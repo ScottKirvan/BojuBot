@@ -64,10 +64,10 @@ export class SessionListModal extends Modal {
     const { contentEl } = this;
     contentEl.createEl('h2', { text: 'Session history' });
 
-    const topBar = contentEl.createDiv({ cls: 'obsidibot-modal-topbar' });
+    const topBar = contentEl.createDiv({ cls: 'bojubot-modal-topbar' });
 
     const filterInput = topBar.createEl('input', {
-      cls: 'obsidibot-session-filter',
+      cls: 'bojubot-session-filter',
       attr: { type: 'text', placeholder: 'Search sessions…' },
     });
     filterInput.addEventListener('input', (e) => {
@@ -81,11 +81,11 @@ export class SessionListModal extends Modal {
 
     const newSessionBtn = topBar.createEl('button', {
       text: '+ new',
-      cls: 'obsidibot-new-session-btn',
+      cls: 'bojubot-new-session-btn',
     });
     newSessionBtn.addEventListener('click', () => this.createNewSession());
 
-    this.listContainer = contentEl.createDiv({ cls: 'obsidibot-session-list-container' });
+    this.listContainer = contentEl.createDiv({ cls: 'bojubot-session-list-container' });
     this.rerenderList();
   }
 
@@ -101,12 +101,12 @@ export class SessionListModal extends Modal {
     if (this.filteredSessions.length === 0) {
       this.listContainer.createEl('p', {
         text: this.sessions.length === 0 ? 'No saved sessions yet.' : 'No sessions match your search.',
-        cls: 'obsidibot-modal-empty',
+        cls: 'bojubot-modal-empty',
       });
       return;
     }
 
-    const list = this.listContainer.createEl('ul', { cls: 'obsidibot-session-list' });
+    const list = this.listContainer.createEl('ul', { cls: 'bojubot-session-list' });
     for (const session of this.filteredSessions) {
       this.renderSessionItem(list, session);
     }
@@ -128,24 +128,24 @@ export class SessionListModal extends Modal {
     const resumable = !isNew && canResumeLocally(session.claudeSessionId);
     const isActive = session.id === this.activeSessionFileId;
     const cls = [
-      'obsidibot-session-item',
-      isNew ? 'obsidibot-session-new' : '',
-      !isNew && !resumable ? 'obsidibot-session-remote' : '',
-      isActive ? 'obsidibot-session-active' : '',
+      'bojubot-session-item',
+      isNew ? 'bojubot-session-new' : '',
+      !isNew && !resumable ? 'bojubot-session-remote' : '',
+      isActive ? 'bojubot-session-active' : '',
     ].filter(Boolean).join(' ');
     const item = list.createEl('li', { cls });
 
     // Drag handle (hidden while filtering)
-    const grip = item.createEl('span', { cls: 'obsidibot-session-drag-handle' });
+    const grip = item.createEl('span', { cls: 'bojubot-session-drag-handle' });
     setIcon(grip, 'grip-vertical');
-    if (this.isFiltering) grip.addClass('obsidibot-invisible');
+    if (this.isFiltering) grip.addClass('bojubot-invisible');
 
     if (!this.isFiltering) {
       item.draggable = true;
 
       item.addEventListener('dragstart', (e) => {
         this.draggedId = session.id;
-        item.addClass('obsidibot-session-dragging');
+        item.addClass('bojubot-session-dragging');
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setDragImage(item, 20, item.offsetHeight / 2);
@@ -154,11 +154,11 @@ export class SessionListModal extends Modal {
 
       item.addEventListener('dragend', () => {
         this.draggedId = null;
-        item.removeClass('obsidibot-session-dragging');
-        list.querySelectorAll('.obsidibot-session-dragover-above, .obsidibot-session-dragover-below')
+        item.removeClass('bojubot-session-dragging');
+        list.querySelectorAll('.bojubot-session-dragover-above, .bojubot-session-dragover-below')
           .forEach(el => {
-            el.removeClass('obsidibot-session-dragover-above');
-            el.removeClass('obsidibot-session-dragover-below');
+            el.removeClass('bojubot-session-dragover-above');
+            el.removeClass('bojubot-session-dragover-below');
           });
       });
 
@@ -167,17 +167,17 @@ export class SessionListModal extends Modal {
         if (!this.draggedId || this.draggedId === session.id) return;
         const rect = item.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
-        list.querySelectorAll('.obsidibot-session-dragover-above, .obsidibot-session-dragover-below')
+        list.querySelectorAll('.bojubot-session-dragover-above, .bojubot-session-dragover-below')
           .forEach(el => {
-            el.removeClass('obsidibot-session-dragover-above');
-            el.removeClass('obsidibot-session-dragover-below');
+            el.removeClass('bojubot-session-dragover-above');
+            el.removeClass('bojubot-session-dragover-below');
           });
-        item.addClass(e.clientY < midY ? 'obsidibot-session-dragover-above' : 'obsidibot-session-dragover-below');
+        item.addClass(e.clientY < midY ? 'bojubot-session-dragover-above' : 'bojubot-session-dragover-below');
       });
 
       item.addEventListener('dragleave', () => {
-        item.removeClass('obsidibot-session-dragover-above');
-        item.removeClass('obsidibot-session-dragover-below');
+        item.removeClass('bojubot-session-dragover-above');
+        item.removeClass('bojubot-session-dragover-below');
       });
 
       item.addEventListener('drop', (e) => {
@@ -201,25 +201,25 @@ export class SessionListModal extends Modal {
         this.rerenderList();
       });
     }
-    const titleEl = item.createEl('span', { text: session.title, cls: 'obsidibot-session-title' });
+    const titleEl = item.createEl('span', { text: session.title, cls: 'bojubot-session-title' });
     item.createEl('span', {
       text: new Date(session.updatedAt).toLocaleString(),
-      cls: 'obsidibot-session-date',
+      cls: 'bojubot-session-date',
     });
     if (isNew) {
-      item.createEl('span', { text: 'New', cls: 'obsidibot-session-new-badge' });
+      item.createEl('span', { text: 'New', cls: 'bojubot-session-new-badge' });
     } else if (!resumable) {
-      item.createEl('span', { text: 'Remote', cls: 'obsidibot-session-remote-badge' });
+      item.createEl('span', { text: 'Remote', cls: 'bojubot-session-remote-badge' });
     }
 
-    const actionsDiv = item.createEl('div', { cls: 'obsidibot-session-actions' });
-    const exportBtn = actionsDiv.createEl('button', { cls: 'obsidibot-export-btn' });
+    const actionsDiv = item.createEl('div', { cls: 'bojubot-session-actions' });
+    const exportBtn = actionsDiv.createEl('button', { cls: 'bojubot-export-btn' });
     setIcon(exportBtn, 'download');
     exportBtn.title = 'Save to vault';
-    const renameBtn = actionsDiv.createEl('button', { cls: 'obsidibot-rename-btn' });
+    const renameBtn = actionsDiv.createEl('button', { cls: 'bojubot-rename-btn' });
     setIcon(renameBtn, 'pencil');
     renameBtn.title = 'Rename session';
-    const deleteBtn = actionsDiv.createEl('button', { cls: 'obsidibot-delete-btn' });
+    const deleteBtn = actionsDiv.createEl('button', { cls: 'bojubot-delete-btn' });
     setIcon(deleteBtn, 'trash-2');
     deleteBtn.title = 'Delete session';
 
@@ -229,7 +229,7 @@ export class SessionListModal extends Modal {
     });
 
     item.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('.obsidibot-session-actions')) return;
+      if ((e.target as HTMLElement).closest('.bojubot-session-actions')) return;
       this.onSelect(session);
       this.close();
     });
@@ -248,7 +248,7 @@ export class SessionListModal extends Modal {
     renameBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const input = item.createEl('input', {
-        cls: 'obsidibot-rename-input',
+        cls: 'bojubot-rename-input',
         attr: { value: session.title, type: 'text' },
       });
       titleEl.hide();
