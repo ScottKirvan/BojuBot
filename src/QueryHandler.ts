@@ -1,8 +1,11 @@
 import { App, TFolder } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { buildVaultTree } from './utils/fileTree';
+import uiBridgeRef from './references/ui-bridge.md';
+import vaultQueryRef from './references/vault-query.md';
+import canvasRef from './references/canvas.md';
 
-export type VaultQueryType = 'backlinks' | 'outlinks' | 'tags' | 'file-list';
+export type VaultQueryType = 'backlinks' | 'outlinks' | 'tags' | 'file-list' | 'help';
 export type VaultQueryMode = 'show' | 'inject';
 
 export interface VaultQuery {
@@ -17,6 +20,8 @@ export interface VaultQuery {
   /** For file-list: return an indented tree to this depth instead of a flat list. 1–N levels, -1 = unlimited. */
   depth?: number;
   mode: VaultQueryMode;
+  /** For help queries: which reference bundle to inject. */
+  topic?: 'ui-bridge' | 'vault-query' | 'canvas';
 }
 
 export interface VaultQueryResult {
@@ -106,6 +111,18 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
         return { query, result: { files } };
       }
 
+      case 'help': {
+        const refs: Record<string, string> = {
+          'ui-bridge': uiBridgeRef,
+          'vault-query': vaultQueryRef,
+          'canvas': canvasRef,
+        };
+        const ref = query.topic ? refs[query.topic] : null;
+        if (!ref) return { query, result: null, error: `unknown help topic: ${query.topic ?? '(none)'}` };
+        log('QueryHandler: help — injecting reference for topic:', query.topic);
+        return { query, result: ref };
+      }
+
       default:
         warn('QueryHandler: unknown query type:', (query).query);
         return { query, result: null, error: `unknown query type: ${String(query.query)}` };
@@ -126,6 +143,7 @@ export function queryLabel(query: VaultQuery): string {
       const scope = query.folder ? ` in "${query.folder}"` : '';
       return query.depth !== undefined ? `Vault tree (${query.depth} levels)${scope}` : `Files${scope || ' in vault'}`;
     }
+    case 'help': return `Reference: ${query.topic ?? 'unknown'}`;
     default: return query.query;
   }
 }
@@ -134,7 +152,11 @@ export function queryLabel(query: VaultQuery): string {
 export function buildInjectMessage(results: VaultQueryResult[]): string {
   const parts = results.map(r => {
     const label = queryLabel(r.query);
-    const body = r.error ? `Error: ${r.error}` : JSON.stringify(r.result, null, 2);
+    const body = r.error
+      ? `Error: ${r.error}`
+      : typeof r.result === 'string'
+        ? r.result
+        : JSON.stringify(r.result, null, 2);
     return `Query: ${label}\nResult:\n${body}`;
   });
   return `[BOJU_VAULT_RESPONSE]\n${parts.join('\n\n')}\n[/BOJU_VAULT_RESPONSE]`;
