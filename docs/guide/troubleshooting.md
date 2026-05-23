@@ -22,7 +22,7 @@ Ensure Safe Mode is disabled (**Settings → Community Plugins**) and that the `
 
 **Claude doesn't seem to know about my vault structure**
 
-Check that your context file exists at the configured path (`_claude-context.md` by default) and contains useful information about your vault. Also check that **Vault tree depth** is not set to Off.
+Check that your context file exists at the configured path (`_claude-context.md` by default) and contains useful information about your vault. If Claude seems unaware of your vault's folder structure, enable **Vault tree depth** in settings (1–3 levels is a good starting point) so the structure is injected at session start.
 
 ---
 
