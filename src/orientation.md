@@ -63,7 +63,7 @@ These lines are intercepted by ObsidiBot — never shown to the user raw. Availa
 | `backlinks` | `path` | — | Files that link to `path` |
 | `outlinks` | `path` | — | Files that `path` links to |
 | `tags` | `path` OR `tag` | — | Tags on a file, or files with a given tag |
-| `file-list` | — | `folder` | Markdown files in the vault (or a subfolder) |
+| `file-list` | — | `folder`, `depth` | Markdown files in the vault (or a subfolder). Add `depth` (1–N, or -1 for unlimited) to get an indented folder/file tree instead of a flat path list — use this when you need spatial awareness of vault structure without paying the session-start cost. |
 
 **Modes:**
 - `mode: "show"` — result is displayed to the user as a card. Use when you want to present vault info directly.

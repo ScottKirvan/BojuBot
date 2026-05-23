@@ -1,5 +1,6 @@
-import { App } from 'obsidian';
+import { App, TFolder } from 'obsidian';
 import { log, warn } from './utils/logger';
+import { buildVaultTree } from './utils/fileTree';
 
 export type VaultQueryType = 'backlinks' | 'outlinks' | 'tags' | 'file-list';
 export type VaultQueryMode = 'show' | 'inject';
@@ -13,6 +14,8 @@ export interface VaultQuery {
   tag?: string;
   /** For file-list: restrict to this folder prefix. */
   folder?: string;
+  /** For file-list: return an indented tree to this depth instead of a flat list. 1–N levels, -1 = unlimited. */
+  depth?: number;
   mode: VaultQueryMode;
 }
 
@@ -81,6 +84,19 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
       }
 
       case 'file-list': {
+        if (query.depth !== undefined && query.depth !== 0) {
+          let startFolder: TFolder | undefined;
+          if (query.folder) {
+            const abstract = app.vault.getAbstractFileByPath(query.folder);
+            if (!(abstract instanceof TFolder)) {
+              return { query, result: null, error: `folder not found: ${query.folder}` };
+            }
+            startFolder = abstract;
+          }
+          const tree = buildVaultTree(app.vault, query.depth, startFolder);
+          log('QueryHandler: file-list (tree) — depth', query.depth);
+          return { query, result: { tree } };
+        }
         const prefix = query.folder ? query.folder.replace(/\/?$/, '/') : '';
         const files = app.vault.getMarkdownFiles()
           .filter(f => prefix ? f.path.startsWith(prefix) : true)
@@ -106,7 +122,10 @@ export function queryLabel(query: VaultQuery): string {
     case 'backlinks': return `Backlinks for "${query.path}"`;
     case 'outlinks':  return `Outlinks for "${query.path}"`;
     case 'tags':      return query.path ? `Tags on "${query.path}"` : `Files tagged #${query.tag}`;
-    case 'file-list': return query.folder ? `Files in "${query.folder}"` : 'All vault files';
+    case 'file-list': {
+      const scope = query.folder ? ` in "${query.folder}"` : '';
+      return query.depth !== undefined ? `Vault tree (${query.depth} levels)${scope}` : `Files${scope || ' in vault'}`;
+    }
     default:          return query.query;
   }
 }
