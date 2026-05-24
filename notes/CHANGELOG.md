@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.1.2](https://github.com/ScottKirvan/BojuBot/compare/3.1.1...3.1.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* address Obsidian submission lint warnings ([514c5bd](https://github.com/ScottKirvan/BojuBot/commit/514c5bdde570b289934f3f31845582101b37e50c))
+
 ## [3.1.1](https://github.com/ScottKirvan/BojuBot/compare/3.1.0...3.1.1) (2026-05-24)
 
 
