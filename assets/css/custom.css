@@ -1,6 +1,5 @@
 body {
     background-color: rgb(10, 12, 16);
-    margin-bottom: 0;
     margin-top: 0;
 
     border-bottom-color: rgb(122, 130, 142);
@@ -176,7 +175,7 @@ code {
     white-space: break-saces;
     background-color: rgba(158, 167, 179, 0.4);
     border-radius: 6px;
-    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+    font-family: SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
     box-sizing: border-box;
     line-height: 1.5;
     word-wrap: break-word;
