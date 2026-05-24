@@ -241,7 +241,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       )
       .addText((text) =>
         text
-          .setPlaceholder('0 (no limit)')
+          .setPlaceholder('0 (No limit)')
           .setValue(
             this.plugin.settings.contextFileSizeCapTokens === 0
               ? ''
