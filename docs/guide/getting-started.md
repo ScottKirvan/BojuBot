@@ -36,22 +36,19 @@ Then run `claude` once in your terminal to authenticate — it will open a brows
 
 ## Installation
 
-### Via BRAT (recommended for beta)
+### From the Community Plugin Browser
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) installs and auto-updates beta plugins directly from GitHub.
+1. Open Obsidian → **Settings → Community Plugins → Browse**
+2. Search for **BojuBot** → click **Install** → **Enable**
 
-1. Install **BRAT** from the Obsidian community plugin browser
-2. In BRAT settings, click **Add Beta Plugin**
-3. Enter: `ScottKirvan/BojuBot`
-4. BRAT installs BojuBot and keeps it updated automatically
+Or open directly in Obsidian: [Add to Obsidian](obsidian://show-plugin?id=bojubot)
 
 ### Manually
 
-1. Download `bojubot-<version>.zip` from the [Releases page](https://github.com/ScottKirvan/BojuBot/releases)
-2. Extract the zip — you should have a `bojubot/` folder containing `main.js`, `manifest.json`, and `styles.css`
-3. Move the `bojubot/` folder into `<your-vault>/.obsidian/plugins/`
-4. In Obsidian: **Settings → Community Plugins → disable Safe Mode** (if prompted)
-5. Find **BojuBot** in the installed plugins list and enable it
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [Releases page](https://github.com/ScottKirvan/BojuBot/releases)
+2. Create the folder `<your-vault>/.obsidian/plugins/bojubot/`
+3. Place the three files inside it
+4. In Obsidian: **Settings → Community Plugins** → find **BojuBot** and enable it
 
 ### From Source
 

@@ -67,11 +67,9 @@ jobs:
           - [Claude Code CLI](https://code.claude.com/docs/en/overview#native-install-recommended) installed and authenticated
 
           ### 📦 Installation
-          **Recommended (beta):** Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) → Add Beta Plugin → `ScottKirvan/BojuBot`
+          **Community plugin browser:** Open Obsidian → Settings → Community Plugins → Browse → search **BojuBot** → Install → Enable
 
           **Manual:** Download `main.js`, `manifest.json`, and `styles.css` below → place in `<vault>/.obsidian/plugins/bojubot/` → enable in Obsidian settings
-
-          > ⚠️ **Public beta** — not yet in the Obsidian community plugin browser. Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y) or via [GitHub Issues](https://github.com/ScottKirvan/BojuBot/issues).
 
           ---
 

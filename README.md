@@ -38,18 +38,21 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 | "Turn this page into a Canvas mind map"                                                                          | Generates a `.canvas` file from your note                                                                                |
 | "Create a skill that summarizes my weekly notes into a report"                                                   | Writes the skill file — available instantly as a `/` slash command, Ctrl+P command, and callable by any plugin or script |
 
-> [!NOTE]
-> **Status:** Public beta —  Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y). Currently [submitted](https://github.com/obsidianmd/obsidian-releases/pull/12000) for inclusion as an Obsidian Community Plugin — awaiting review.
 ## Installation
- *\*Requirements:*
+
+*Requirements:*
 - *Obsidian desktop (Windows, Mac, Linux — no mobile support)*
-- *[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) installed and authenticated — included in Claude Pro/Max subscriptions. (Windows,: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)*
-### Install Via BRAT (recommended)
-1. Install **BRAT** from the Obsidian community plugin browser
-2. In BRAT settings → **Add Beta Plugin** → `ScottKirvan/BojuBot`
+- *[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) installed and authenticated — included in Claude Pro/Max subscriptions. (Windows: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)*
+
+### From the Community Plugin Browser
+1. Open Obsidian → **Settings → Community Plugins → Browse**
+2. Search **BojuBot** → **Install** → **Enable**
+
+Or click **[Add to Obsidian](obsidian://show-plugin?id=bojubot)** to open directly in the installer.
+
 ### Install Manually
-1. Download `bojubot-<version>.zip` from [Releases](https://github.com/ScottKirvan/BojuBot/releases)
-2. Extract to `<your-vault>/.obsidian/plugins/bojubot/`
+1. Download `main.js`, `manifest.json`, and `styles.css` from [Releases](https://github.com/ScottKirvan/BojuBot/releases)
+2. Place them in `<your-vault>/.obsidian/plugins/bojubot/`
 3. **Settings → Community Plugins** → enable **BojuBot**
 
 ---
