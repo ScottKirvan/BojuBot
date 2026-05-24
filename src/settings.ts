@@ -64,6 +64,8 @@ export interface BojuBotSettings {
   canvasMaxChars: number;
   /** Max tokens of context file content injected at session start. 0 = no limit. */
   contextFileSizeCapTokens: number;
+  /** Skip all context injection — orientation, vault tree, context file, active note. Bare Claude Code experience. */
+  minimalMode: boolean;
   /** User's preferred name, set via conversation (set-label action). Empty = unknown. */
   userLabel: string;
 }
@@ -95,6 +97,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   persistFullAccess: false,
   canvasMaxChars: 50000,
   contextFileSizeCapTokens: 0,
+  minimalMode: false,
   userLabel: '',
 };
 
@@ -166,7 +169,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     // ── Context & Memory ───────────────────────────────────────────────────
     new Setting(containerEl).setName('Context & memory').setHeading();
 
-    new Setting(containerEl)
+    const muted = this.plugin.settings.minimalMode;
+    const muteIfMinimal = (s: Setting) => { if (muted) s.settingEl.addClass('bojubot-setting-muted'); return s; };
+
+    muteIfMinimal(new Setting(containerEl)
       .setName('Context file path')
       .setDesc('Vault-relative path to the context file injected at session start.')
       .addText((text) =>
@@ -189,9 +195,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             }
             await this.app.workspace.getLeaf(false).openFile(file);
           })
-      );
+      )
+      .setDisabled(muted));
 
-    new Setting(containerEl)
+    muteIfMinimal(new Setting(containerEl)
       .setName('Vault tree depth')
       .setDesc(
         'How many levels of your vault folder/file tree to include at the start of each session. ' +
@@ -218,9 +225,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.vaultTreeDepth = parseInt(value, 10);
             await this.plugin.saveSettings();
           })
-      );
+      )
+      .setDisabled(muted));
 
-    new Setting(containerEl)
+    muteIfMinimal(new Setting(containerEl)
       .setName('Autonomous memory')
       .setDesc(`Claude will autonomously update the context file (${this.plugin.settings.contextFilePath}) as it learns about your vault. Disable if you prefer to manage the context file manually, or if your vault is shared/public.`)
       .addToggle((toggle) =>
@@ -230,9 +238,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.autonomousMemory = value;
             await this.plugin.saveSettings();
           })
-      );
+      )
+      .setDisabled(muted));
 
-    new Setting(containerEl)
+    muteIfMinimal(new Setting(containerEl)
       .setName('Memory file size limit (tokens)')
       .setDesc(
         'When your context file exceeds this token count, Claude is instructed to compact it before the session ends — ' +
@@ -252,9 +261,28 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.contextFileSizeCapTokens = isNaN(n) || n < 0 ? 0 : n;
             await this.plugin.saveSettings();
           })
-      );
+      )
+      .setDisabled(muted));
 
     new Setting(containerEl)
+      .setName('Minimal mode')
+      .setDesc(
+        'Skip all context injection — no orientation, vault tree, context file, or active note. ' +
+        'Reduces session start cost to zero. ' +
+        'UI Bridge actions (open file, show notice, etc.) and vault queries will not work in this mode. ' +
+        'Skills still work.'
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.minimalMode)
+          .onChange(async (value) => {
+            this.plugin.settings.minimalMode = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
+
+    muteIfMinimal(new Setting(containerEl)
       .setName('Inject split-pane files as context')
       .setDesc('When notes are open side by side in split panes, include all visible file paths in the active note context.')
       .addToggle((toggle) =>
@@ -264,9 +292,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.injectSplitPaneFiles = value;
             await this.plugin.saveSettings();
           })
-      );
+      )
+      .setDisabled(muted));
 
-    new Setting(containerEl)
+    muteIfMinimal(new Setting(containerEl)
       .setName('Inject stacked tab files as context')
       .setDesc('When multiple notes are open as stacked tabs in the same pane, include all open tab file paths in the active note context.')
       .addToggle((toggle) =>
@@ -276,9 +305,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.injectStackedTabFiles = value;
             await this.plugin.saveSettings();
           })
-      );
+      )
+      .setDisabled(muted));
 
-    new Setting(containerEl)
+    muteIfMinimal(new Setting(containerEl)
       .setName('Max canvas size (characters)')
       .setDesc('Canvas files converted to text and injected as context will be truncated at this character limit. Set to 0 for no limit.')
       .addText((text) =>
@@ -290,7 +320,8 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.canvasMaxChars = isNaN(n) || n < 0 ? 0 : n;
             await this.plugin.saveSettings();
           })
-      );
+      )
+      .setDisabled(muted));
 
     new Setting(containerEl)
       .setName('Export folder')

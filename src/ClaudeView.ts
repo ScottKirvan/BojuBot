@@ -898,6 +898,7 @@ export class ClaudeView extends ItemView {
       this.plugin.settings.commandAllowlist,
       effectiveMode,
       this.plugin.settings.contextFileSizeCapTokens,
+      this.plugin.settings.minimalMode,
     );
     const context = await ctx.buildSessionContext();
     this.coordinator.setPendingSystemMessage(`[System: Session context refreshed at user request.]\n\n${context}`);
@@ -1045,7 +1046,7 @@ export class ClaudeView extends ItemView {
 
     // Prepend open file context so Claude knows what note(s) are visible
     let activeFileNote = '';
-    {
+    if (!this.plugin.settings.minimalMode) {
       const leaves = this.app.workspace.getLeavesOfType('markdown');
       const parents = new Set(leaves.map(l => l.parent));
       const isSplit = parents.size > 1;
@@ -1090,6 +1091,7 @@ export class ClaudeView extends ItemView {
         this.plugin.settings.commandAllowlist,
         sessionMode,
         this.plugin.settings.contextFileSizeCapTokens,
+        this.plugin.settings.minimalMode,
       );
       const context = await ctx.buildSessionContext();
       if (ctx.needsCompaction) statusEl.textContent = 'Compacting memory…';

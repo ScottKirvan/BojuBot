@@ -4,6 +4,11 @@
   display: none;
 }
 
+.bojubot-setting-muted {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 /* ── Layout ── */
 .bojubot-view {
   display: flex;
