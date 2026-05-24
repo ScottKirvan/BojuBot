@@ -41,9 +41,11 @@ export class ContextManager {
     private commandAllowlist: string[] = [],
     private permissionMode: PermissionMode = 'standard',
     private contextFileSizeCapTokens: number = 0,
+    private minimalMode: boolean = false,
   ) { }
 
   async buildSessionContext(): Promise<string> {
+    if (this.minimalMode) return '';
     const parts: string[] = [];
     const layerBreakdown: Record<string, { text: string; chars: number; tokens: number }> = {};
 
