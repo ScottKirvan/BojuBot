@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.1.3](https://github.com/ScottKirvan/BojuBot/compare/3.1.2...3.1.3) (2026-05-24)
+
+
+### Bug Fixes
+
+* add artifact attestations and remove zip from release assets ([fddf844](https://github.com/ScottKirvan/BojuBot/commit/fddf8447635db4c9fb6d7c415b9a1a95c6a28c93))
+
 ## [3.1.2](https://github.com/ScottKirvan/BojuBot/compare/3.1.1...3.1.2) (2026-05-24)
 
 
