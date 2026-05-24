@@ -48,7 +48,7 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 1. Open Obsidian → **Settings → Community Plugins → Browse**
 2. Search **BojuBot** → **Install** → **Enable**
 
-Or click **[Add to Obsidian](obsidian://show-plugin?id=bojubot)** to open directly in the installer.
+Or find it at **[community.obsidian.md/plugins/bojubot](https://community.obsidian.md/plugins/bojubot)** → click **Add to Obsidian**.
 
 ### Install Manually
 1. Download `main.js`, `manifest.json`, and `styles.css` from [Releases](https://github.com/ScottKirvan/BojuBot/releases)
