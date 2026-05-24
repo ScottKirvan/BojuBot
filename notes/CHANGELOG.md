@@ -7,6 +7,15 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.1.1](https://github.com/ScottKirvan/BojuBot/compare/3.1.0...3.1.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* add minimal mode to eliminate session context injection overhead ([278dcd9](https://github.com/ScottKirvan/BojuBot/commit/278dcd90d9e3676384270b6e1a8376342e2bb8ec))
+* add missing colons to CSS properties in custom.css ([618e145](https://github.com/ScottKirvan/BojuBot/commit/618e1451eb1c0220361869c443aa8c2fb44b929b))
+* sentence-case lint error in memory cap placeholder ([68ab915](https://github.com/ScottKirvan/BojuBot/commit/68ab9150e2837113803310007c3cd2eb2a43ceb5))
+
 ## [3.1.0](https://github.com/ScottKirvan/BojuBot/compare/3.0.0...3.1.0) (2026-05-23)
 
 
