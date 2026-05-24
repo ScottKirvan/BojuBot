@@ -147,6 +147,12 @@ When **Autonomous memory** is on (default), Claude is instructed to actively mai
 
 Disable in **Settings → BojuBot → Autonomous memory** if you prefer to manage it manually, or if your vault is shared.
 
+### Keeping the context file from growing too large
+
+Over time, autonomous memory can accumulate more than Claude needs. Set **Settings → BojuBot → Memory file size limit (tokens)** to a token ceiling (e.g. `4000`). When the file exceeds that limit, Claude receives an instruction at the start of the session to compact it before the session ends — summarizing redundant entries and dropping outdated observations. The full file is still read; nothing is silently discarded.
+
+Leave the limit at `0` (default) to disable this behaviour.
+
 ### Two kinds of memory
 
 |                   | Session memory (`--resume`)                    | Autonomous memory (context file)     |
