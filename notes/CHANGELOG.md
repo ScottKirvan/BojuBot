@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.1.4](https://github.com/ScottKirvan/BojuBot/compare/3.1.3...3.1.4) (2026-05-24)
+
+
+### Bug Fixes
+
+* add attestations write permission for artifact attestation step ([5c53ad1](https://github.com/ScottKirvan/BojuBot/commit/5c53ad1dd6c57d3515ca538ce4b30105fb66cf0d))
+
 ## [3.1.3](https://github.com/ScottKirvan/BojuBot/compare/3.1.2...3.1.3) (2026-05-24)
 
 
