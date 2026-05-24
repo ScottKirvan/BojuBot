@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   release-please:
@@ -42,12 +43,12 @@ jobs:
       - name: Build plugin
         run: npm run build
 
-      - name: Package release zip
-        run: |
-          mkdir -p dist/bojubot
-          cp main.js manifest.json styles.css dist/bojubot/
-          cd dist
-          zip -r bojubot-${{ needs.release-please.outputs.tag_name }}.zip bojubot/
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            styles.css
 
       - name: Polish release notes
         env:
@@ -68,7 +69,7 @@ jobs:
           ### 📦 Installation
           **Recommended (beta):** Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) → Add Beta Plugin → `ScottKirvan/BojuBot`
 
-          **Manual:** Download `bojubot-<version>.zip` below → extract → move `bojubot/` folder to `<vault>/.obsidian/plugins/` → enable in Obsidian settings
+          **Manual:** Download `main.js`, `manifest.json`, and `styles.css` below → place in `<vault>/.obsidian/plugins/bojubot/` → enable in Obsidian settings
 
           > ⚠️ **Public beta** — not yet in the Obsidian community plugin browser. Feedback welcome on [Discord](https://discord.gg/TN6XJSNK5Y) or via [GitHub Issues](https://github.com/ScottKirvan/BojuBot/issues).
 
@@ -95,8 +96,7 @@ jobs:
           gh release upload ${{ needs.release-please.outputs.tag_name }} \
             main.js \
             manifest.json \
-            styles.css \
-            dist/bojubot-${{ needs.release-please.outputs.tag_name }}.zip
+            styles.css
 
   announce-discord:
     needs: [release-please, build-and-upload]
