@@ -5,6 +5,18 @@ export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
 
+export interface ClaudeModel {
+  id: string;
+  displayName: string;
+  description: string;
+}
+
+export const CLAUDE_MODELS: ClaudeModel[] = [
+  { id: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku', description: 'Fastest — great for quick tasks' },
+  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet', description: 'Balanced speed and capability (default)' },
+  { id: 'claude-opus-4-7', displayName: 'Claude Opus', description: 'Most capable — best for complex reasoning' },
+];
+
 export interface BojuBotSettings {
   binaryPath: string;
   contextFilePath: string;
@@ -68,6 +80,8 @@ export interface BojuBotSettings {
   minimalMode: boolean;
   /** User's preferred name, set via conversation (set-label action). Empty = unknown. */
   userLabel: string;
+  /** Claude model ID passed via --model at spawn time. Empty = Claude default (Sonnet). */
+  defaultModel: string;
 }
 
 export const DEFAULT_SETTINGS: BojuBotSettings = {
@@ -99,6 +113,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   contextFileSizeCapTokens: 0,
   minimalMode: false,
   userLabel: '',
+  defaultModel: '',
 };
 
 export class BojuBotSettingsTab extends PluginSettingTab {

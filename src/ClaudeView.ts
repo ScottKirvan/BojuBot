@@ -9,6 +9,8 @@ import { SlashParamModal } from './modals/SlashParamModal';
 import { openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type BojuBotPlugin from '../main';
 import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
@@ -18,6 +20,7 @@ import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMess
 import { BOJU_PREFIX, neutralizeTriggers } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
+import { CLAUDE_MODELS, ClaudeModel } from './settings';
 import { extractToolDetail } from './utils/toolFormatting';
 import {
   StoredSession,
@@ -122,6 +125,7 @@ export class ClaudeView extends ItemView {
   private tokenGauge: TokenGauge;
   private attachPopoverEl: HTMLElement;
   private permissionIconEl!: HTMLButtonElement;
+  private modelIndicatorEl!: HTMLElement;
   private currentUserLabel = 'User';
   private currentAssistantLabel = 'BojuBot';
 
@@ -134,6 +138,7 @@ export class ClaudeView extends ItemView {
       getConfigDir: () => this.app.vault.configDir,
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
+      getModel: () => this.plugin.settings.defaultModel,
       getSessionsDir: () => this.getSessionsDir(),
       saveLastActiveSessionId: async (id) => {
         this.plugin.settings.lastActiveSessionId = id;
@@ -441,6 +446,11 @@ export class ClaudeView extends ItemView {
       openPermissionPopover(this.plugin, this.permissionIconEl, this.getEffectivePermissionMode());
     });
     this.updatePermissionIcon();
+
+    this.modelIndicatorEl = inputToolbar.createEl('span', { cls: 'bojubot-model-indicator' });
+    this.modelIndicatorEl.title = 'Switch model';
+    this.modelIndicatorEl.addEventListener('click', () => this.openModelPicker());
+    this.updateModelIndicator();
 
     inputToolbar.createDiv({ cls: 'bojubot-input-toolbar-spacer' });
 
@@ -1152,6 +1162,10 @@ export class ClaudeView extends ItemView {
     headerLogo.draggable = false;
     header.createSpan({ cls: 'bojubot-welcome-header-name', text: 'BojuBot' });
     header.createSpan({ cls: 'bojubot-welcome-version', text: `v${this.plugin.manifest.version}` });
+    const activeModel = CLAUDE_MODELS.find(m => m.id === this.plugin.settings.defaultModel);
+    if (activeModel) {
+      header.createSpan({ cls: 'bojubot-welcome-model', text: activeModel.displayName });
+    }
 
     // Centered body: sprite + greeting + tip
     const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
@@ -1771,8 +1785,37 @@ export class ClaudeView extends ItemView {
     }));
   }
 
+  private updateModelIndicator() {
+    if (!this.modelIndicatorEl) return;
+    const active = CLAUDE_MODELS.find(m => m.id === this.plugin.settings.defaultModel);
+    this.modelIndicatorEl.setText(active?.displayName ?? 'Claude Sonnet');
+  }
+
+  openModelPicker() {
+    const customModelsPath = join(
+      this.plugin.getVaultRoot(),
+      this.app.vault.configDir,
+      'plugins', 'bojubot', 'custom-models.json',
+    );
+    const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
+
+    new ModelPickerModal(this.app, this.plugin.settings.defaultModel, allModels, async (model) => {
+      this.plugin.settings.defaultModel = model.id;
+      await this.plugin.saveSettings();
+      this.updateModelIndicator();
+      this.appendMessage('system', `Switching to ${model.displayName} — starting new session.`);
+      this.startNewSession();
+    }).open();
+  }
+
   private buildCommands(): SlashCommand[] {
     return [
+      {
+        category: 'Session',
+        name: 'Switch model',
+        description: 'Choose which Claude model to use',
+        action: () => this.openModelPicker(),
+      },
       {
         category: 'Session',
         name: 'New session',
@@ -1842,6 +1885,61 @@ export class ClaudeView extends ItemView {
 // ---------------------------------------------------------------------------
 // Attach modals
 // ---------------------------------------------------------------------------
+
+function loadCustomModels(filePath: string): ClaudeModel[] {
+  if (!existsSync(filePath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(filePath, 'utf8'));
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (e): e is ClaudeModel =>
+        e && typeof e.id === 'string' && e.id.trim() !== '' &&
+        typeof e.displayName === 'string' && e.displayName.trim() !== '',
+    ).map(e => ({
+      id: e.id.trim(),
+      displayName: e.displayName.trim(),
+      description: typeof e.description === 'string' ? e.description.trim() : '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+class ModelPickerModal extends Modal {
+  constructor(
+    app: App,
+    private currentModelId: string,
+    private models: ClaudeModel[],
+    private onSelect: (model: ClaudeModel) => void,
+  ) {
+    super(app);
+  }
+
+  onOpen() {
+    this.titleEl.setText('Switch model');
+    this.contentEl.addClass('bojubot-model-picker');
+
+    for (const model of this.models) {
+      const row = this.contentEl.createDiv({ cls: 'bojubot-model-row' });
+      if (model.id === this.currentModelId) row.addClass('is-active');
+
+      const text = row.createDiv({ cls: 'bojubot-model-text' });
+      text.createDiv({ cls: 'bojubot-model-name', text: model.displayName });
+      text.createDiv({ cls: 'bojubot-model-desc', text: model.description });
+
+      if (model.id === this.currentModelId) {
+        row.createDiv({ cls: 'bojubot-model-check', text: '✓' });
+      }
+
+      row.addEventListener('click', () => {
+        this.onSelect(model);
+        this.close();
+      });
+    }
+  }
+
+  onClose() { this.contentEl.empty(); }
+}
 
 class AttachUrlModal extends Modal {
   constructor(app: App, private onSubmit: (url: string) => void) {

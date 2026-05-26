@@ -58,6 +58,24 @@ Click it to open a quick picker and switch modes. The change takes effect on the
 
 ---
 
+## Model Indicator
+
+The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the active Claude model. Click it to open the model picker and switch to a different model.
+
+| Model          | Best for                              |
+| -------------- | ------------------------------------- |
+| Claude Haiku   | Fast responses, simple tasks          |
+| Claude Sonnet  | Balanced speed and capability         |
+| Claude Opus    | Complex reasoning and long tasks      |
+
+Switching models starts a **new session** — the current conversation cannot continue with a different model. The selected model persists across restarts.
+
+You can also switch via `/model` in the slash menu or **BojuBot: Switch model** in the Command Palette.
+
+To add models not in the built-in list, see [Custom models](./settings.md#custom-models) in Settings.
+
+---
+
 ## Context Gauge
 
 A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.

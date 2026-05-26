@@ -94,6 +94,7 @@ export interface SpawnOptions {
   env: Record<string, string>;
   resumeSessionId?: string;
   permissionMode?: PermissionMode;
+  model?: string;
 }
 
 export function spawnClaude(opts: SpawnOptions): ChildProcess {
@@ -103,6 +104,10 @@ export function spawnClaude(opts: SpawnOptions): ChildProcess {
     '--print',
     ...permissionArgs(opts.permissionMode ?? 'standard'),
   ];
+
+  if (opts.model) {
+    args.push('--model', opts.model);
+  }
 
   if (opts.resumeSessionId) {
     args.push('--resume', opts.resumeSessionId);

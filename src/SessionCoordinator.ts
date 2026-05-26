@@ -30,6 +30,7 @@ export interface SessionCoordinatorHost {
   getConfigDir(): string;
   getEnv(): Record<string, string>;
   getPermissionMode(): PermissionMode;
+  getModel(): string;
   getSessionsDir(): string;
   saveLastActiveSessionId(id: string): Promise<void>;
   isUiBridgeEnabled(): boolean;
@@ -237,6 +238,7 @@ export class SessionCoordinator {
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
+        model: this.host.getModel() || undefined,
       });
       this._activeProc = proc;
     } catch (e) {

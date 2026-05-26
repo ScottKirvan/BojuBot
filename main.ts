@@ -228,6 +228,22 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'switch-model',
+      name: 'Switch model',
+      callback: () => {
+        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+        if (existing.length) {
+          (existing[0].view as ClaudeView).openModelPicker();
+        } else {
+          void this.activateView().then(() => {
+            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+            if (leaves.length) (leaves[0].view as ClaudeView).openModelPicker();
+          });
+        }
+      },
+    });
+
+    this.addCommand({
       id: 'reload-skills',
       name: 'Reload skills',
       callback: () => {
