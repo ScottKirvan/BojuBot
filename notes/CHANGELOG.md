@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.2.0](https://github.com/ScottKirvan/BojuBot/compare/3.1.4...3.2.0) (2026-05-26)
+
+
+### Features
+
+* add model switcher with toolbar indicator and /model command ([ebb89ba](https://github.com/ScottKirvan/BojuBot/commit/ebb89baaa47b058f9a6d8a50274d979230cea97b))
+
 ## [3.1.4](https://github.com/ScottKirvan/BojuBot/compare/3.1.3...3.1.4) (2026-05-24)
 
 
