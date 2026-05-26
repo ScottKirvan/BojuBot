@@ -25,6 +25,34 @@ Open **Settings → BojuBot** to configure:
 | **@-mention file types**           | `*` (all vault files)                                | Comma-separated extensions for the `@` autocomplete dropdown. `*` includes all vault files. To restrict, list extensions explicitly (e.g. `md, pdf, txt`). Add a trailing comma to also match files with no extension (e.g. `md, txt,`).       |
 | **Inject split-pane files**        | On                                                   | When in split-pane view, include all visible file paths as active note context.                                                                                                                                                                |
 
+## Custom models
+
+BojuBot ships with a hardcoded list of Claude models (Haiku, Sonnet, Opus). When new models are released you can add them without waiting for a plugin update by creating a file at:
+
+```
+<vault>/.obsidian/plugins/bojubot/custom-models.json
+```
+
+The file is a JSON array of model objects. Any valid entries are appended to the built-in list in the `/model` picker:
+
+```json
+[
+  {
+    "id": "claude-sonnet-4-7",
+    "displayName": "Claude Sonnet 4.7",
+    "description": "Latest Sonnet model"
+  }
+]
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `id` | Yes | Full model ID passed to `--model` at spawn time |
+| `displayName` | Yes | Name shown in the picker |
+| `description` | No | Short note shown below the name |
+
+The file is read each time the picker opens, so changes take effect immediately with no restart needed. If the file is missing or malformed, it is silently ignored and only the built-in models are shown.
+
 ## Session storage location
 
 By default, session files are stored in `.obsidian/bojubot/sessions/` inside your vault. This folder is typically gitignored, so sessions don't appear in your git history.

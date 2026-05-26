@@ -19,6 +19,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Session** | New session       | Start a fresh conversation               |
 | **Session** | Show history      | Browse and resume past sessions          |
 | **Session** | Export session    | Save the current session to your vault   |
+| **Session** | Switch model      | Pick the Claude model for new sessions   |
 | **Context** | Attach file       | Add a file, image, or URL to the prompt  |
 | **Context** | Open context file | Edit your persistent vault context       |
 | **Context** | Refresh context   | Re-inject vault context into the session |

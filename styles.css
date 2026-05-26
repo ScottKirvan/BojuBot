@@ -124,7 +124,7 @@
 }
 
 .bojubot-input-toolbar-btn {
-  opacity: 0.65;
+  opacity: 1;
 }
 
 .bojubot-permission-icon {
@@ -212,6 +212,67 @@
 .bojubot-send:hover:not(:disabled) {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
+}
+
+/* ── Model indicator (input toolbar) ── */
+.bojubot-model-indicator {
+  font-size: 0.72em;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.bojubot-model-indicator:hover {
+  color: var(--text-normal);
+}
+
+/* ── Model picker modal ── */
+.bojubot-model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+  min-width: 280px;
+}
+
+.bojubot-model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.bojubot-model-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-model-row.is-active {
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-model-text {
+  flex: 1;
+}
+
+.bojubot-model-name {
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: 0.9em;
+}
+
+.bojubot-model-desc {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.bojubot-model-check {
+  color: var(--interactive-accent);
+  font-size: 0.9em;
 }
 
 /* ── About modal ── */
@@ -615,6 +676,17 @@
 .bojubot-welcome-version {
   font-size: 0.72em;
   color: var(--text-faint);
+}
+
+.bojubot-welcome-model {
+  font-size: 0.72em;
+  color: var(--text-faint);
+  margin-left: 4px;
+}
+
+.bojubot-welcome-model::before {
+  content: '·';
+  margin-right: 4px;
 }
 
 .bojubot-welcome-body {
