@@ -1,8 +1,3 @@
----
-last_updated: 2026-04-30
-status: active
----
-
 # BojuBot [![starline](https://starlines.qoo.monster/assets/ScottKirvan/BojuBot)](https://github.com/qoomon/starline)
 
 <div align="center">
