@@ -1,4 +1,32 @@
-# Session Manager
+# Sessions
+
+## Starting a new session
+
+Click the **+** button in the toolbar to start a new session with default settings.
+
+**Shift+click +** to open the **session setup** dialog and configure the session before it starts:
+
+| Field | What it does |
+|---|---|
+| **Session name** | Pre-fills the title instead of waiting for auto-naming from the first message. Leave blank to use the default. |
+| **Working directory** | Sets the directory Claude runs in (useful for code projects outside the vault). The folder browser opens at your vault root. Leave blank to use the vault root. |
+| **Initial instructions** | A system prompt injected at session start — role, focus, standing rules. Leave blank for none. |
+| **Include vault context** | Checked by default. Uncheck to suppress the vault tree, `_claude-context.md`, and pinned notes — useful for focused code sessions where Obsidian-specific context is noise. The system orientation (permission mode, tools) is always injected regardless. |
+| **Context attachments** | Attach files, vault notes, or URLs before the first message. Same attachment support as the main chat. |
+
+Empty fields fall back to normal defaults — you can fill in one field and leave the rest blank.
+
+::: tip
+Shift+click is a common power-user shortcut in browsers and file managers for "do the thing, but with options." Normal click stays fast; Shift+click unlocks the full setup.
+:::
+
+::: info Primed cwd persists
+The working directory you set is saved in the session JSON and used on every turn, including when you resume the session after a restart. Claude always runs in the directory you picked.
+:::
+
+---
+
+## Session Manager
 
 Open the session manager by clicking the **session name** in the panel toolbar, or via **BojuBot: Show session history** in the Command Palette.
 
