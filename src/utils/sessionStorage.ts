@@ -11,6 +11,8 @@ export interface StoredSession {
   sortOrder?: number;
   userLabel?: string;
   assistantLabel?: string;
+  cwd?: string;
+  suppressVaultContext?: boolean;
 }
 
 export function getSessionsDir(vaultRoot: string, configDir: string): string {
