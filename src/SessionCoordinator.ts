@@ -97,6 +97,9 @@ export class SessionCoordinator {
   private _sessionFileId: string | undefined;
   private _sessionTitle: string | undefined;
   private _sessionCreatedAt: string | undefined;
+  private _sessionCwd: string | undefined;
+  private _suppressVaultContext = false;
+  private _hasCustomTitle = false;
   private _placeholderSessionId: string | undefined;
   private _permissionOverride: PermissionMode | null = null;
   private _pendingSystemMessage: string | null = null;
@@ -135,6 +138,8 @@ export class SessionCoordinator {
   get sessionFileId(): string | undefined { return this._sessionFileId; }
   get sessionTitle(): string | undefined { return this._sessionTitle; }
   get sessionCreatedAt(): string | undefined { return this._sessionCreatedAt; }
+  get sessionCwd(): string | undefined { return this._sessionCwd; }
+  get suppressVaultContext(): boolean { return this._suppressVaultContext; }
 
   getEffectivePermissionMode(): PermissionMode {
     return this._permissionOverride ?? this.host.getPermissionMode();
@@ -158,30 +163,38 @@ export class SessionCoordinator {
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
-  startNewSession(): void {
+  startNewSession(prime?: { name?: string; cwd?: string; suppressVaultContext?: boolean }): void {
     this._permissionOverride = null;
     const vaultRoot = this.host.getVaultRoot();
     const now = new Date().toISOString();
     const sessionId = now.replace(/[:.]/g, '-');
+    const title = prime?.name?.trim() || 'Untitled session';
+    const cwd = prime?.cwd?.trim() || undefined;
+    const suppressVaultContext = prime?.suppressVaultContext ?? false;
 
     const session: StoredSession = {
       id: sessionId,
-      title: 'Untitled session',
+      title,
       createdAt: now,
       updatedAt: now,
       claudeSessionId: '',
+      ...(cwd && { cwd }),
+      ...(suppressVaultContext && { suppressVaultContext }),
     };
 
     saveSessionAtTop(vaultRoot, session, this.host.getSessionsDir(), this.host.getConfigDir());
     this._placeholderSessionId = sessionId;
     this._sessionId = undefined;
     this._sessionFileId = sessionId;
-    this._sessionTitle = 'Untitled session';
+    this._sessionTitle = title;
     this._sessionCreatedAt = now;
+    this._sessionCwd = cwd;
+    this._suppressVaultContext = suppressVaultContext;
+    this._hasCustomTitle = !!prime?.name?.trim();
     void this.host.saveLastActiveSessionId(sessionId);
 
     this.emit('session:new', session);
-    log('New session placeholder created:', sessionId);
+    log('New session placeholder created:', sessionId, cwd ? `cwd=${cwd}` : '');
   }
 
   async loadSession(session: StoredSession): Promise<void> {
@@ -190,6 +203,9 @@ export class SessionCoordinator {
     this._sessionFileId = session.id;
     this._sessionTitle = session.title;
     this._sessionCreatedAt = session.createdAt;
+    this._sessionCwd = session.cwd || undefined;
+    this._suppressVaultContext = session.suppressVaultContext ?? false;
+    this._hasCustomTitle = false;
 
     await this.host.saveLastActiveSessionId(session.id);
 
@@ -234,7 +250,7 @@ export class SessionCoordinator {
       proc = spawnClaude({
         binaryPath: binary,
         prompt,
-        vaultRoot: this.host.getVaultRoot(),
+        vaultRoot: this._sessionCwd ?? this.host.getVaultRoot(),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
@@ -328,13 +344,15 @@ export class SessionCoordinator {
     if (this._placeholderSessionId) {
       // First turn on a placeholder session → bind the real Claude session ID
       this._sessionId = sessionId;
-      if (firstUserInput) this._sessionTitle = titleFromPrompt(firstUserInput);
+      if (firstUserInput && !this._hasCustomTitle) this._sessionTitle = titleFromPrompt(firstUserInput);
       saveSession(vaultRoot, {
         id: this._placeholderSessionId,
         title: this._sessionTitle ?? 'Untitled session',
         createdAt: this._sessionCreatedAt ?? now,
         updatedAt: now,
         claudeSessionId: sessionId,
+        ...(this._sessionCwd && { cwd: this._sessionCwd }),
+        ...(this._suppressVaultContext && { suppressVaultContext: true }),
       }, sessionsDir);
       const placeholderId = this._placeholderSessionId;
       this._placeholderSessionId = undefined;
@@ -355,6 +373,8 @@ export class SessionCoordinator {
         createdAt: now,
         updatedAt: now,
         claudeSessionId: sessionId,
+        ...(this._sessionCwd && { cwd: this._sessionCwd }),
+        ...(this._suppressVaultContext && { suppressVaultContext: true }),
       }, sessionsDir);
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
       log('Session saved:', sessionId, this._sessionTitle);
@@ -368,6 +388,8 @@ export class SessionCoordinator {
         createdAt: this._sessionCreatedAt ?? now,
         updatedAt: now,
         claudeSessionId: this._sessionId,
+        ...(this._sessionCwd && { cwd: this._sessionCwd }),
+        ...(this._suppressVaultContext && { suppressVaultContext: true }),
       }, sessionsDir);
     }
   }

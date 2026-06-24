@@ -6,6 +6,7 @@ import welcomeData from './welcome.json';
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
+import { PrimeSessionModal, PrimeSessionOptions } from './modals/PrimeSessionModal';
 import { openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
@@ -129,6 +130,11 @@ export class ClaudeView extends ItemView {
   private currentUserLabel = 'User';
   private currentAssistantLabel = 'BojuBot';
 
+  // Prime session state — held for the first turn only, cleared on session:new
+  private _primeAttachments: PendingContext[] = [];
+  private _primeInitialInstructions = '';
+  private _primeSuppressVaultContext = false;
+
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
     this.plugin = plugin;
@@ -184,6 +190,7 @@ export class ClaudeView extends ItemView {
       this.currentUserLabel = 'User';
       this.currentAssistantLabel = 'BojuBot';
       this.attachmentHandler.reset();
+      // Prime state is set before this event fires — don't clear it here
       this.messagesEl.empty();
       this.renderWelcomeScreen();
       this.updateExportBtn();
@@ -368,8 +375,19 @@ export class ClaudeView extends ItemView {
 
     const newSessionBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(newSessionBtn, 'message-square-plus');
-    newSessionBtn.title = 'New session';
-    newSessionBtn.addEventListener('click', () => this.startNewSession());
+    newSessionBtn.title = 'New session (Shift+click to configure)';
+    newSessionBtn.addEventListener('click', (evt) => {
+      if (evt.shiftKey) {
+        new PrimeSessionModal(
+          this.app,
+          this.plugin.getVaultRoot(),
+          this.app.vault.configDir,
+          (opts) => this.startNewSession(opts),
+        ).open();
+      } else {
+        this.startNewSession();
+      }
+    });
 
     this.exportBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(this.exportBtn, 'download');
@@ -649,8 +667,11 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  startNewSession() {
-    this.coordinator.startNewSession();
+  startNewSession(prime?: PrimeSessionOptions) {
+    this._primeAttachments = prime?.primeAttachments ?? [];
+    this._primeInitialInstructions = prime?.initialInstructions ?? '';
+    this._primeSuppressVaultContext = prime?.suppressVaultContext ?? false;
+    this.coordinator.startNewSession(prime ? { name: prime.name, cwd: prime.cwd, suppressVaultContext: prime.suppressVaultContext } : undefined);
     // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
     this.updatePermissionIcon();
   }
@@ -1056,7 +1077,7 @@ export class ClaudeView extends ItemView {
 
     // Prepend open file context so Claude knows what note(s) are visible
     let activeFileNote = '';
-    if (!this.plugin.settings.minimalMode) {
+    if (!this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext) {
       const leaves = this.app.workspace.getLeavesOfType('markdown');
       const parents = new Set(leaves.map(l => l.parent));
       const isSplit = parents.size > 1;
@@ -1092,7 +1113,23 @@ export class ClaudeView extends ItemView {
     }
 
     if (isNewSession) {
+      // Inject prime attachments before the user prompt (same format as regular attachments)
+      if (this._primeAttachments.length > 0) {
+        const primeBlock = this._primeAttachments
+          .map((c: PendingContext) => {
+            if (c.type === 'url') return `<bojubot-context type="url" url="${escapeAttr(c.text)}"></bojubot-context>`;
+            if (c.type === 'image') return `<bojubot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</bojubot-context>`;
+            if (c.type === 'pdf') return `<bojubot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</bojubot-context>`;
+            return `<bojubot-context type="attachment" source="${escapeAttr(c.source)}">${neutralizeTriggers(c.text)}</bojubot-context>`;
+          })
+          .join('\n\n');
+        finalPrompt = `${primeBlock}\n\n${finalPrompt}`;
+        this._primeAttachments = [];
+      }
+
       const sessionMode = this.coordinator.getEffectivePermissionMode();
+      const vaultRoot = this.plugin.getVaultRoot();
+      const effectiveCwd = this.coordinator.sessionCwd ?? vaultRoot;
       const ctx = new ContextManager(
         this.app,
         this.plugin.settings.contextFilePath,
@@ -1102,7 +1139,13 @@ export class ClaudeView extends ItemView {
         sessionMode,
         this.plugin.settings.contextFileSizeCapTokens,
         this.plugin.settings.minimalMode,
+        this._primeSuppressVaultContext,
+        this._primeInitialInstructions,
+        effectiveCwd,
+        vaultRoot,
       );
+      this._primeSuppressVaultContext = false;
+      this._primeInitialInstructions = '';
       const context = await ctx.buildSessionContext();
       if (ctx.needsCompaction) statusEl.textContent = 'Compacting memory…';
       const promptTokens = estimateTokens(finalPrompt);

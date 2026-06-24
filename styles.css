@@ -1516,6 +1516,89 @@
   margin-top: 20px;
 }
 
+/* ── Prime session modal extras ── */
+.bojubot-prime-cwd-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.bojubot-prime-cwd-input {
+  flex: 1;
+}
+
+.bojubot-prime-cwd-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+}
+
+.bojubot-prime-cwd-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-prime-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.bojubot-prime-toggle-label {
+  margin: 0;
+}
+
+.bojubot-prime-attach-btns {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.bojubot-prime-attach-btn {
+  padding: 3px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+}
+
+.bojubot-prime-attach-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-prime-attach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bojubot-prime-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--background-modifier-form-field);
+  border-radius: var(--radius-s);
+  font-size: 0.85em;
+}
+
+.bojubot-prime-url-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+.bojubot-prime-url-row .bojubot-param-input {
+  flex: 1;
+}
+
 /* ── User intro modal (context file generation) ── */
 .bojubot-intro-modal .bojubot-intro-textarea {
   width: 100%;
