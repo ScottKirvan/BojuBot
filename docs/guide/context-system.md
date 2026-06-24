@@ -86,7 +86,7 @@ BojuBot's context file and Claude Code's native `CLAUDE.md` serve similar purpos
 The context file can go stale as your vault evolves. A few habits that help:
 
 - **Add a datestamp** (`_Last updated: YYYY-MM-DD_`) so Claude — and you — can tell how fresh it is
-- **Turn on Autonomous memory** (see section 6) and let Claude maintain it as it learns your vault
+- **Turn on Autonomous memory** (see section 7) and let Claude maintain it as it learns your vault
 - **Run "Refresh session context"** from the palette to re-inject the file into an active session after editing it
 
 The context file path is configurable in **Settings → BojuBot**.
@@ -141,7 +141,23 @@ You can use `bojubot-instructions` to tell Claude not to modify a file — e.g. 
 
 ---
 
-## 6. Autonomous Memory
+## 6. Session Setup (Shift+click)
+
+When you **Shift+click** the **+** button to prime a session before it starts, two additional context options become available:
+
+**Initial instructions** — a free-text system prompt you supply at session creation. Injected as a `## Session instructions` block after all vault layers. It takes effect on the first turn and is cached with `--resume`, so it's not re-charged on subsequent turns.
+
+**Suppress vault context** — uncheck "Include vault context" to skip layers 2–5 (vault tree, context file, memory instruction, pinned notes, per-file instructions). The system orientation (Layer 1 — permission mode, tools) is always injected. Use this for focused code sessions where vault-specific context would be noise.
+
+::: tip
+A typical code-project session: set cwd to your repo, uncheck vault context, add a `CLAUDE.md` or README as an attachment, and write a brief role instruction. Claude starts with exactly what it needs and nothing extra.
+:::
+
+See [Sessions → Starting a new session](./sessions.md) for the full session setup dialog reference.
+
+---
+
+## 7. Autonomous Memory
 
 When **Autonomous memory** is on (default), Claude is instructed to actively maintain the context file as it learns about your vault — naming conventions, ongoing projects, your preferences. Claude updates the file directly using its file-editing tools; you can inspect and edit it at any time.
 
