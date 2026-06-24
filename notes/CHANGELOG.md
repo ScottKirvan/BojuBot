@@ -7,6 +7,18 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.3.0](https://github.com/ScottKirvan/BojuBot/compare/3.2.0...3.3.0) (2026-06-24)
+
+
+### Features
+
+* prime session — Shift+click + to pre-configure new session ([b6a3639](https://github.com/ScottKirvan/BojuBot/commit/b6a3639df804e700b94fd6d75727a2cf8c947e08))
+
+
+### Bug Fixes
+
+* inject CWD boundary instruction when session cwd differs from vault root ([b8c3ecc](https://github.com/ScottKirvan/BojuBot/commit/b8c3eccbef70aefa9df6cb2b4f6fba256b2d1d7e))
+
 ## [3.2.0](https://github.com/ScottKirvan/BojuBot/compare/3.1.4...3.2.0) (2026-05-26)
 
 
