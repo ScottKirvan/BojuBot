@@ -45,4 +45,4 @@ export function getElectronClipboard(): ElectronClipboard | null {
   }
 }
 
-/* eslint-enable @typescript-eslint/no-require-imports */
+/* eslint-enable @typescript-eslint/no-require-imports -- Electron runtime access */

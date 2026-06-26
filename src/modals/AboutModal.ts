@@ -1,4 +1,4 @@
-import { App, Modal, Plugin, setIcon } from 'obsidian';
+import { App, Modal, Plugin, sanitizeHTMLToDom, setIcon } from 'obsidian';
 import logoDataUrl from '../../assets/media/logo.png';
 
 // Inline SVG — no file import, no runtime string replacement, attributes set directly.
@@ -76,7 +76,7 @@ export class AboutModal extends Modal {
 
       const iconEl = row.createDiv({ cls: 'bojubot-about-item-icon' });
       if (item.svgInline) {
-        iconEl.innerHTML = item.svgInline;
+        iconEl.appendChild(sanitizeHTMLToDom(item.svgInline));
       } else {
         setIcon(iconEl, item.icon);
       }

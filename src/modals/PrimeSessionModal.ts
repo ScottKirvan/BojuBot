@@ -60,7 +60,7 @@ export class PrimeSessionModal extends Modal {
         attr: { type: 'text', placeholder: 'E.g. Screenplay review — act 2' },
       });
       input.addEventListener('input', () => { this.name = input.value; });
-      window.setTimeout(() => input.focus(), 50);
+      activeWindow.setTimeout(() => input.focus(), 50);
     }
 
     // ── Working directory ─────────────────────────────────────────────────────
@@ -216,7 +216,7 @@ export class PrimeSessionModal extends Modal {
 
     // Insert before the attach list
     if (this.attachListEl) container.insertBefore(row, this.attachListEl);
-    window.setTimeout(() => input.focus(), 20);
+    activeWindow.setTimeout(() => input.focus(), 20);
   }
 
   private renderAttachments(): void {

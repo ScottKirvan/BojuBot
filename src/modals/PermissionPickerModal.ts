@@ -153,7 +153,7 @@ export function openPermissionPopover(
   };
 
   // Defer so the icon's own click event doesn't immediately trigger outsideHandler.
-  window.setTimeout(() => {
+  activeWindow.setTimeout(() => {
     activeDocument.addEventListener('keydown', keyHandler, true);
     activeDocument.addEventListener('mousedown', outsideHandler, true);
   }, 0);

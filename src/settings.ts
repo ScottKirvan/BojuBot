@@ -133,8 +133,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .setDesc('Path to the Claude CLI binary. Leave blank to auto-detect.')
       .addText((text) =>
         text
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          .setPlaceholder('/usr/local/bin/claude')
+          .setPlaceholder('(Auto-detect)')
           .setValue(this.plugin.settings.binaryPath)
           .onChange(async (value) => {
             this.plugin.settings.binaryPath = value;
@@ -168,12 +167,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('@-mention file types')
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
-      .setDesc('Comma-separated extensions for @-mention search (e.g. md, pdf, txt). Use * to match all file types. Add a trailing comma to also include files with no extension.')
+      .setDesc('File extensions for @-mention autocomplete, comma-separated. Use * to match all file types. Add a trailing comma to include extensionless files.')
       .addText((text) =>
         text
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          .setPlaceholder('md, pdf, fountain, txt')
+          .setPlaceholder('*')
           .setValue(this.plugin.settings.atMentionExtensions)
           .onChange(async (value) => {
             this.plugin.settings.atMentionExtensions = value;
@@ -344,8 +341,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .addText((text) => {
         new FolderSuggest(this.app, text.inputEl);
         text
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          .setPlaceholder('BojuBot Exports')
+          .setPlaceholder('BojuBot exports')
           .setValue(this.plugin.settings.exportFolder)
           .onChange(async (value) => {
             this.plugin.settings.exportFolder = value;
@@ -365,7 +361,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .addText((text) => {
         new FolderSuggest(this.app, text.inputEl);
         text
-          .setPlaceholder('Default (Obsidian config folder/bojubot/sessions)')
+          .setPlaceholder('Default (Obsidian config folder/BojuBot/sessions)')
           .setValue(this.plugin.settings.sessionStoragePath)
           .onChange(async (value) => {
             this.plugin.settings.sessionStoragePath = value.trim();
@@ -627,7 +623,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .setDesc('Vault-relative path for the log file. Defaults to the plugin folder so it stays out of your vault.')
       .addText((text) =>
         text
-          .setPlaceholder('Default (plugin folder/bojubot-debug.log)')
+          .setPlaceholder('Default (plugin folder/BojuBot-debug.log)')
           .setValue(this.plugin.settings.logFilePath)
           .onChange(async (value) => {
             this.plugin.settings.logFilePath = value || '_bojubot-debug.log';
