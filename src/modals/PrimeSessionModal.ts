@@ -1,8 +1,9 @@
-import { App, FuzzySuggestModal, Modal, TFile, setIcon } from 'obsidian';
+import { App, FuzzySuggestModal, Modal, Notice, TFile, setIcon } from 'obsidian';
 import type { PendingContext } from '../AttachmentHandler';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
+import { log } from '../utils/logger';
 
 export interface PrimeSessionOptions {
   name: string;
@@ -82,10 +83,15 @@ export class PrimeSessionModal extends Modal {
         void (async () => {
           const dialog = getElectronDialog();
           if (!dialog) return;
-          const result = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: this.vaultRoot });
-          if (!result.canceled && result.filePaths[0]) {
-            input.value = result.filePaths[0];
-            this.cwd = result.filePaths[0];
+          try {
+            const result = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: this.vaultRoot });
+            if (!result.canceled && result.filePaths[0]) {
+              input.value = result.filePaths[0];
+              this.cwd = result.filePaths[0];
+            }
+          } catch (err) {
+            log('error', 'showOpenDialog failed', err);
+            new Notice('Could not open folder picker.');
           }
         })();
       });
