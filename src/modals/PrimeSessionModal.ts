@@ -56,7 +56,7 @@ export class PrimeSessionModal extends Modal {
       field.createEl('div', { text: 'Leave blank to use the first message as title', cls: 'bojubot-param-desc' });
       const input = field.createEl('input', {
         cls: 'bojubot-param-input',
-        attr: { type: 'text', placeholder: 'e.g. Screenplay review — Act 2' },
+        attr: { type: 'text', placeholder: 'E.g. Screenplay review — act 2' },
       });
       input.addEventListener('input', () => { this.name = input.value; });
       setTimeout(() => input.focus(), 50);
@@ -70,25 +70,27 @@ export class PrimeSessionModal extends Modal {
       const row = field.createDiv({ cls: 'bojubot-prime-cwd-row' });
       const input = row.createEl('input', {
         cls: 'bojubot-param-input bojubot-prime-cwd-input',
-        attr: { type: 'text', placeholder: 'e.g. C:\\Projects\\my-repo' },
+        attr: { type: 'text', placeholder: 'E.g. C:\\projects\\my-repo' },
       });
       input.addEventListener('input', () => { this.cwd = input.value; });
 
       const pickBtn = row.createEl('button', { cls: 'bojubot-prime-cwd-btn', attr: { type: 'button' } });
       setIcon(pickBtn, 'folder-open');
       pickBtn.title = 'Browse…';
-      pickBtn.addEventListener('click', async () => {
-        try {
-          const { dialog } = (require('electron') as { remote?: { dialog: ElectronDialog }; dialog?: ElectronDialog }).remote
-            ?? (require('@electron/remote') as { dialog: ElectronDialog });
-          const result = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: this.vaultRoot });
-          if (!result.canceled && result.filePaths[0]) {
-            input.value = result.filePaths[0];
-            this.cwd = result.filePaths[0];
+      pickBtn.addEventListener('click', () => {
+        void (async () => {
+          try {
+            const { dialog } = (require('electron') as { remote?: { dialog: ElectronDialog }; dialog?: ElectronDialog }).remote
+              ?? (require('@electron/remote') as { dialog: ElectronDialog });
+            const result = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: this.vaultRoot });
+            if (!result.canceled && result.filePaths[0]) {
+              input.value = result.filePaths[0];
+              this.cwd = result.filePaths[0];
+            }
+          } catch {
+            // Electron dialog unavailable — user can type the path manually
           }
-        } catch {
-          // Electron dialog unavailable — user can type the path manually
-        }
+        })();
       });
     }
 
@@ -99,7 +101,7 @@ export class PrimeSessionModal extends Modal {
       field.createEl('div', { text: 'System prompt injected at session start. Leave blank for none.', cls: 'bojubot-param-desc' });
       const ta = field.createEl('textarea', {
         cls: 'bojubot-param-textarea',
-        attr: { placeholder: 'e.g. You are reviewing screenplay drafts in this folder. Focus on structure and pacing.' },
+        attr: { placeholder: 'E.g. You are reviewing screenplay drafts in this folder. Focus on structure and pacing.' },
       });
       ta.addEventListener('input', () => { this.initialInstructions = ta.value; });
     }
@@ -111,7 +113,7 @@ export class PrimeSessionModal extends Modal {
       const cb = row.createEl('input', { attr: { type: 'checkbox' } });
       cb.checked = true;
       row.createSpan({ text: 'Include vault context', cls: 'bojubot-param-label bojubot-prime-toggle-label' });
-      field.createEl('div', { text: 'Vault tree, _claude-context.md, and pinned notes. Uncheck for focused sessions.', cls: 'bojubot-param-desc' });
+      field.createEl('div', { text: 'Vault tree, _Claude-context.md, and pinned notes. Uncheck for focused sessions.', cls: 'bojubot-param-desc' });
       cb.addEventListener('change', () => { this.suppressVaultContext = !cb.checked; });
     }
 
@@ -122,10 +124,10 @@ export class PrimeSessionModal extends Modal {
 
       const btnRow = field.createDiv({ cls: 'bojubot-prime-attach-btns' });
 
-      const fileBtn = btnRow.createEl('button', { text: '+ File', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
+      const fileBtn = btnRow.createEl('button', { text: '+ file', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
       fileBtn.addEventListener('click', () => this.pickFile());
 
-      const noteBtn = btnRow.createEl('button', { text: '+ Note', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
+      const noteBtn = btnRow.createEl('button', { text: '+ note', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
       noteBtn.addEventListener('click', () => this.pickNote());
 
       const urlBtn = btnRow.createEl('button', { text: '+ URL', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
@@ -201,7 +203,7 @@ export class PrimeSessionModal extends Modal {
     const row = container.createDiv({ cls: 'bojubot-prime-url-row' });
     const input = row.createEl('input', {
       cls: 'bojubot-param-input',
-      attr: { type: 'text', placeholder: 'https://…' },
+      attr: { type: 'text', placeholder: 'HTTPS://…' },
     });
     const addBtn = row.createEl('button', { text: 'Add', cls: 'mod-cta', attr: { type: 'button' } });
     const addUrl = () => {
