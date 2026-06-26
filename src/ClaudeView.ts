@@ -1842,12 +1842,13 @@ export class ClaudeView extends ItemView {
     );
     const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
 
-    new ModelPickerModal(this.app, this.plugin.settings.defaultModel, allModels, async (model) => {
+    new ModelPickerModal(this.app, this.plugin.settings.defaultModel, allModels, (model) => {
       this.plugin.settings.defaultModel = model.id;
-      await this.plugin.saveSettings();
-      this.updateModelIndicator();
-      this.appendMessage('system', `Switching to ${model.displayName} — starting new session.`);
-      this.startNewSession();
+      void this.plugin.saveSettings().then(() => {
+        this.updateModelIndicator();
+        this.appendMessage('system', `Switching to ${model.displayName} — starting new session.`);
+        this.startNewSession();
+      });
     }).open();
   }
 
