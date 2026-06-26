@@ -82,7 +82,15 @@ Always use the templates in `.github/ISSUE_TEMPLATE/` and `.github/PULL_REQUEST_
 
 **No attributions of any kind** in issue text, PR bodies, or commit messages — no "created by", "contributed by", "Co-Authored-By", "Generated with", or any AI/tool credit lines. This is professional dev; nothing goes on the record about who or what wrote it.
 
-Run `npm run lint` before opening any PR. Lint violations are `fix:` commits, not `chore:`.
+Run all three before opening any PR — all must pass clean:
+```bash
+npm run build   # TypeScript check + bundle
+npm run lint    # ESLint — zero warnings or errors
+npm test        # 89 unit tests via tsx --test
+```
+Lint and TypeScript violations are `fix:` commits, not `chore:`.
+
+**Writing tests:** New pure functions and data-layer logic should have unit tests added to `test/unit.test.ts`. Tests use Node's built-in `node:test` + `node:assert/strict` — no Jest, no Vitest. Tests must not require the Obsidian API or Electron (anything that needs a live plugin can't be unit-tested; note that in the PR instead). Tests go in a `describe` block with a name matching the function or concept. Follow the existing style: assert exact values, test edge cases and failure paths, not just the happy path.
 
 ## Build
 ```bash
