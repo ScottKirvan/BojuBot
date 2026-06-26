@@ -65,7 +65,7 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
           const cache = app.metadataCache.getFileCache(file);
           const inlineTags = (cache?.tags ?? []).map(t => t.tag);
           const fmTags: string[] = Array.isArray(cache?.frontmatter?.tags)
-            ? cache.frontmatter.tags
+            ? (cache.frontmatter.tags as string[])
             : [];
           const tags = [...new Set([...inlineTags, ...fmTags])];
           log('QueryHandler: tags on file —', tags.length, 'tags');

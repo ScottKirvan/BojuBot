@@ -52,8 +52,8 @@ Test vault: `D:\2\deleteme\cortex_test_vault` (junction at `.obsidian/plugins/bo
 | `notes/COMMIT_DRAFT.md`         | Commit msg staging (gitignored)                                                                |
 
 ## Scott's prefs
-- Conventional commits + release-please. Scott commits, I write code.
-- No auto-commit/push.
+- Conventional commits + release-please.
+- I can commit and push on feature/fix branches. Never commit directly to `main`, never push to `main`.
 - Not fluent in TS — I do implementation.
 - Multi-machine (Windows). Keep notes resumable cold.
 - Project = "BojuBot" (not "BojuBot plugin", not "obsidian-claude").
@@ -66,6 +66,16 @@ Before implementing any fix — especially from a code review:
 3. Propose the fix approach and confirm before writing code.
 4. Security and correctness bugs get individual PRs. Maintenance items can batch.
 5. Larger refactors get a design discussion first — no diving straight into a 2,800-line file split.
+
+## GitHub issues and PRs
+Always use the templates in `.github/ISSUE_TEMPLATE/` and `.github/PULL_REQUEST_TEMPLATE.md`.
+
+- Bug reports → `[BUG]` title prefix, `bug_report.md` sections
+- Feature requests → `[FEATURE]` title prefix, `feature_request.md` sections
+- General → `[GENERAL]` title prefix, `general_report.md` sections
+- PRs → fill all checklist sections; no "Generated with Claude Code" or AI credits anywhere
+
+Run `npm run lint` before opening any PR. Lint violations are `fix:` commits, not `chore:`.
 
 ## Build
 ```bash
@@ -85,7 +95,8 @@ npm run dev                    # watch mode
 
 **`feat:` is for genuinely new user-facing capabilities only.** Bug fixes (even GitHub-tracked bugs), privacy/consent fixes, default value changes, internal improvements, and enabling behavior that was always designed but not yet on by default all use `fix:`, `chore:`, or `refactor:`. Mislabeling fixes as features inflates minor version numbers unnecessarily — release-please uses commit types directly to determine version bumps.
 
-After submitting a PR, always switch back to `main`: `git checkout main`.
+After submitting a PR, always switch back to `main`: `git checkout main && git pull`.
+When Scott says a branch is merged or deleted, immediately run `git checkout main && git pull`, then create a new branch before continuing any work.
 
 ## Release process (post-merge checklist)
 release-please only reads commit **subject lines** — commit bodies are ignored. After each release PR merges:

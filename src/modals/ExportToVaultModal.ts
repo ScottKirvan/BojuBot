@@ -46,7 +46,7 @@ export class ExportToVaultModal extends Modal {
       if (e.key === 'Escape') { this.close(); }
     });
 
-    window.setTimeout(() => { input.focus(); input.select(); }, 50);
+    activeWindow.setTimeout(() => { input.focus(); input.select(); }, 50);
   }
 
   onClose() { this.contentEl.empty(); }

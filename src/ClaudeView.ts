@@ -1247,7 +1247,6 @@ export class ClaudeView extends ItemView {
     const isWin = process.platform === 'win32';
     const card = this.messagesEl.createDiv({ cls: 'bojubot-setup-card' });
 
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
     card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'bojubot-setup-title' });
     card.createEl('p', {
       text: 'BojuBot requires the Claude Code CLI (included with Claude Pro/Max). ' +
@@ -1257,11 +1256,9 @@ export class ClaudeView extends ItemView {
 
     // Step 1 — Install
     const step1 = card.createDiv({ cls: 'bojubot-setup-step' });
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
     step1.createEl('p', { text: 'Step 1 — install Claude Code', cls: 'bojubot-setup-step-title' });
     if (isWin) {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
-      step1.createEl('p', { text: 'Open PowerShell (not WSL, not Command Prompt) and run:', cls: 'bojubot-setup-note' });
+      step1.createEl('p', { text: 'Open PowerShell (not WSL, not command prompt) and run:', cls: 'bojubot-setup-note' });
       this.renderCodeRow(step1, 'irm https://claude.ai/install.ps1 | iex');
     } else {
       step1.createEl('p', { text: 'Run in your terminal:', cls: 'bojubot-setup-note' });
@@ -1292,7 +1289,6 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-step-title',
     });
     pathSection.createEl('p', {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude binary below, then click check again.',
       cls: 'bojubot-setup-note',
     });
@@ -1310,7 +1306,6 @@ export class ClaudeView extends ItemView {
     const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
 
     const docsLink = btnRow.createEl('a', {
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: 'Claude Code install guide ↗',
       href: 'https://code.claude.com/docs/en/overview#native-install-recommended',
       cls: 'bojubot-setup-docs-link',
@@ -1330,7 +1325,7 @@ export class ClaudeView extends ItemView {
             : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
           cls: 'bojubot-setup-error',
         });
-        window.setTimeout(() => err.remove(), 6000);
+        activeWindow.setTimeout(() => err.remove(), 6000);
       }
     });
   }
@@ -1341,7 +1336,6 @@ export class ClaudeView extends ItemView {
 
   private renderAuthError(el: HTMLElement) {
     el.empty();
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
     el.createEl('p', { text: 'Error: Claude Code is not authenticated.', cls: 'bojubot-setup-step-title' });
     el.createEl('p', {
       text: 'Click Open terminal below. Claude Code will launch and open a browser window to log in. ' +
@@ -1453,7 +1447,7 @@ export class ClaudeView extends ItemView {
     copyBtn.addEventListener('click', () => {
       void navigator.clipboard.writeText(code).then(() => {
         copyBtn.setText('Copied!');
-        window.setTimeout(() => copyBtn.setText('Copy'), 2000);
+        activeWindow.setTimeout(() => copyBtn.setText('Copy'), 2000);
       });
     });
   }
@@ -1475,7 +1469,7 @@ export class ClaudeView extends ItemView {
         this.closeAttachPopover();
       }
     };
-    window.setTimeout(() => activeDocument.addEventListener('click', this.attachClickOutside), 0);
+    activeWindow.setTimeout(() => activeDocument.addEventListener('click', this.attachClickOutside), 0);
   }
 
   private closeAttachPopover() {
@@ -1933,13 +1927,14 @@ export class ClaudeView extends ItemView {
 function loadCustomModels(filePath: string): ClaudeModel[] {
   if (!existsSync(filePath)) return [];
   try {
-    const raw = JSON.parse(readFileSync(filePath, 'utf8'));
+    const raw: unknown = JSON.parse(readFileSync(filePath, 'utf8'));
     if (!Array.isArray(raw)) return [];
-    return raw.filter(
-      (e): e is ClaudeModel =>
-        e && typeof e.id === 'string' && e.id.trim() !== '' &&
-        typeof e.displayName === 'string' && e.displayName.trim() !== '',
-    ).map(e => ({
+    return (raw as unknown[]).filter((e): e is ClaudeModel => {
+      if (!e || typeof e !== 'object') return false;
+      const obj = e as Record<string, unknown>;
+      return typeof obj.id === 'string' && obj.id.trim() !== '' &&
+        typeof obj.displayName === 'string' && obj.displayName.trim() !== '';
+    }).map(e => ({
       id: e.id.trim(),
       displayName: e.displayName.trim(),
       description: typeof e.description === 'string' ? e.description.trim() : '',
@@ -1999,7 +1994,7 @@ class AttachUrlModal extends Modal {
       if (e.key === 'Enter') { const v = input.value.trim(); if (v) { this.onSubmit(v); this.close(); } }
       if (e.key === 'Escape') this.close();
     });
-    window.setTimeout(() => input.focus(), 50);
+    activeWindow.setTimeout(() => input.focus(), 50);
   }
   onClose() { this.contentEl.empty(); }
 }

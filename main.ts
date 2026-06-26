@@ -390,7 +390,7 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<BojuBotSettings>);
     // Migrate old hardcoded log paths → empty so the dynamic default takes over
     if (this.settings.logFilePath === '_bojubot-debug.log') {
       this.settings.logFilePath = '';
@@ -419,9 +419,9 @@ export default class BojuBotPlugin extends Plugin {
 
   private showMemoryUpdateNotice(): void {
     const notice = new Notice('', 8000);
-    notice.noticeEl.empty();
-    notice.noticeEl.createSpan({ text: 'Memory file was modified by Claude. ' });
-    const link = notice.noticeEl.createEl('a', { cls: 'bojubot-notice-link', text: 'Review', href: '#' });
+    notice.messageEl.empty();
+    notice.messageEl.createSpan({ text: 'Memory file was modified by Claude. ' });
+    const link = notice.messageEl.createEl('a', { cls: 'bojubot-notice-link', text: 'Review', href: '#' });
     link.addEventListener('click', (e) => {
       e.preventDefault();
       notice.hide();

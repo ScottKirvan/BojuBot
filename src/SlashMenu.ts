@@ -63,7 +63,7 @@ export class SlashMenu {
       }
     };
     // Use setTimeout so the click that opened the menu doesn't immediately close it
-    window.setTimeout(() => activeDocument.addEventListener('mousedown', this.outsideClickHandler), 0);
+    activeWindow.setTimeout(() => activeDocument.addEventListener('mousedown', this.outsideClickHandler), 0);
   }
 
   open() {
