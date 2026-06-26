@@ -69,10 +69,10 @@ export function openPermissionPopover(
   iconEl: HTMLElement,
   currentMode: PermissionMode,
 ): void {
-  document.querySelector('.bojubot-perm-popover')?.remove();
+  activeDocument.querySelector('.bojubot-perm-popover')?.remove();
 
   const rect = iconEl.getBoundingClientRect();
-  const popover = document.body.createDiv({ cls: 'bojubot-perm-popover' });
+  const popover = activeDocument.body.createDiv({ cls: 'bojubot-perm-popover' });
 
   // Measure after inserting so we get real height; use an estimate for initial placement.
   const rowHeight = 44;
@@ -122,8 +122,8 @@ export function openPermissionPopover(
 
   function close() {
     popover.remove();
-    document.removeEventListener('keydown', keyHandler, true);
-    document.removeEventListener('mousedown', outsideHandler, true);
+    activeDocument.removeEventListener('keydown', keyHandler, true);
+    activeDocument.removeEventListener('mousedown', outsideHandler, true);
   }
 
   const keyHandler = (e: KeyboardEvent) => {
@@ -153,8 +153,8 @@ export function openPermissionPopover(
   };
 
   // Defer so the icon's own click event doesn't immediately trigger outsideHandler.
-  setTimeout(() => {
-    document.addEventListener('keydown', keyHandler, true);
-    document.addEventListener('mousedown', outsideHandler, true);
+  window.setTimeout(() => {
+    activeDocument.addEventListener('keydown', keyHandler, true);
+    activeDocument.addEventListener('mousedown', outsideHandler, true);
   }, 0);
 }

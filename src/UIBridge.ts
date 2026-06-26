@@ -160,7 +160,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       if (file) {
         const leaf = app.workspace.getLeaf(false);
         await leaf.openFile(file);
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           const view = leaf.view as unknown as { editor?: { getValue(): string; setCursor(pos: { line: number; ch: number }): void } };
           const editor = view?.editor;
           if (editor && action.heading) {

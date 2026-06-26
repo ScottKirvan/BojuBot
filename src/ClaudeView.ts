@@ -1330,7 +1330,7 @@ export class ClaudeView extends ItemView {
             : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
           cls: 'bojubot-setup-error',
         });
-        setTimeout(() => err.remove(), 6000);
+        window.setTimeout(() => err.remove(), 6000);
       }
     });
   }
@@ -1453,7 +1453,7 @@ export class ClaudeView extends ItemView {
     copyBtn.addEventListener('click', () => {
       void navigator.clipboard.writeText(code).then(() => {
         copyBtn.setText('Copied!');
-        setTimeout(() => copyBtn.setText('Copy'), 2000);
+        window.setTimeout(() => copyBtn.setText('Copy'), 2000);
       });
     });
   }
@@ -1475,7 +1475,7 @@ export class ClaudeView extends ItemView {
         this.closeAttachPopover();
       }
     };
-    setTimeout(() => document.addEventListener('click', this.attachClickOutside), 0);
+    window.setTimeout(() => activeDocument.addEventListener('click', this.attachClickOutside), 0);
   }
 
   private closeAttachPopover() {
@@ -1484,7 +1484,7 @@ export class ClaudeView extends ItemView {
       ?.querySelector('.bojubot-icon-btn.is-active')
       ?.classList.remove('is-active');
     if (this.attachClickOutside) {
-      document.removeEventListener('click', this.attachClickOutside);
+      activeDocument.removeEventListener('click', this.attachClickOutside);
       this.attachClickOutside = null;
     }
   }
@@ -1999,7 +1999,7 @@ class AttachUrlModal extends Modal {
       if (e.key === 'Enter') { const v = input.value.trim(); if (v) { this.onSubmit(v); this.close(); } }
       if (e.key === 'Escape') this.close();
     });
-    setTimeout(() => input.focus(), 50);
+    window.setTimeout(() => input.focus(), 50);
   }
   onClose() { this.contentEl.empty(); }
 }

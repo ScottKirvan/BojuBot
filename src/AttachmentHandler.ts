@@ -2,6 +2,7 @@ import { setIcon } from 'obsidian';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { canvasToText } from './utils/canvasParser';
+import { getElectronClipboard } from './utils/electronUtils';
 
 export type PendingContext = {
   text: string;
@@ -73,7 +74,7 @@ export class AttachmentHandler {
   }
 
   openFilePicker(): void {
-    const input = document.createElement('input');
+    const input = activeDocument.createElement('input');
     input.type = 'file';
     input.onchange = async () => {
       const f = input.files?.[0];
@@ -105,8 +106,8 @@ export class AttachmentHandler {
     // Use Electron's clipboard API to get real file paths when a file was
     // copied from Explorer. Works even with context isolation unlike file.path.
     try {
-      const { clipboard } = require('electron') as { clipboard: { readFilePaths(): string[] } };
-      const filePaths = clipboard.readFilePaths();
+      const clipboard = getElectronClipboard();
+      const filePaths = clipboard?.readFilePaths() ?? [];
       if (filePaths.length > 0) {
         let handled = false;
         for (const filePath of filePaths) {

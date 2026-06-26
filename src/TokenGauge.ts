@@ -30,21 +30,21 @@ export class TokenGauge {
   build(inputToolbar: HTMLElement, inputArea: HTMLElement): void {
     const NS = 'http://www.w3.org/2000/svg';
     const R = 7, C = R * 2 * Math.PI;
-    const svg = document.createElementNS(NS, 'svg') as SVGElement;
+    const svg = activeDocument.createElementNS(NS, 'svg') as SVGElement;
     svg.setAttribute('width', '18');
     svg.setAttribute('height', '18');
     svg.setAttribute('viewBox', '0 0 18 18');
     svg.classList.add('bojubot-token-gauge', 'bojubot-hidden');
 
-    const svgTitle = document.createElementNS(NS, 'title');
+    const svgTitle = activeDocument.createElementNS(NS, 'title');
     svg.appendChild(svgTitle);
 
-    const track = document.createElementNS(NS, 'circle');
+    const track = activeDocument.createElementNS(NS, 'circle');
     track.setAttribute('cx', '9'); track.setAttribute('cy', '9'); track.setAttribute('r', String(R));
     track.classList.add('bojubot-gauge-track');
     svg.appendChild(track);
 
-    const arc = document.createElementNS(NS, 'circle');
+    const arc = activeDocument.createElementNS(NS, 'circle');
     arc.setAttribute('cx', '9'); arc.setAttribute('cy', '9'); arc.setAttribute('r', String(R));
     arc.classList.add('bojubot-gauge-arc');
     arc.setAttribute('stroke-dasharray', String(C));
