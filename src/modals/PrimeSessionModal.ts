@@ -246,7 +246,7 @@ export class PrimeSessionModal extends Modal {
   private saveBinaryToTmp(filename: string, data: ArrayBuffer): string {
     const tmpDir = join(this.vaultRoot, this.configDir, 'plugins', 'bojubot', 'tmp');
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
-    const filePath = join(tmpDir, filename);
+    const filePath = join(tmpDir, `${Date.now()}-${filename}`);
     writeFileSync(filePath, Buffer.from(data));
     return filePath;
   }

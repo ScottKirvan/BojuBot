@@ -1837,11 +1837,16 @@ export class ClaudeView extends ItemView {
     const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
 
     new ModelPickerModal(this.app, this.plugin.settings.defaultModel, allModels, (model) => {
+      const previous = this.plugin.settings.defaultModel;
       this.plugin.settings.defaultModel = model.id;
       void this.plugin.saveSettings().then(() => {
         this.updateModelIndicator();
         this.appendMessage('system', `Switching to ${model.displayName} — starting new session.`);
         this.startNewSession();
+      }).catch((err: unknown) => {
+        this.plugin.settings.defaultModel = previous;
+        log('error', 'Failed to save model setting', err);
+        new Notice('Failed to save model setting. Please try again.');
       });
     }).open();
   }
