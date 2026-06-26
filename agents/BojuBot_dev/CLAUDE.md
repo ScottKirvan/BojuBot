@@ -110,6 +110,25 @@ After opening the PR, report the PR URL back to the manager.
 - Use `log('error', ...)` from `src/utils/logger.ts` for error logging
 - Use Obsidian's `new Notice(...)` for user-visible error messages
 
+## Out-of-scope observations
+While working, if you notice anything outside the task scope that looks broken, risky, or worth improving, record it in `agents/BojuBot_dev/NOTES.md`. Do not fix it — just log it and move on. Format:
+
+```
+### [YYYY-MM-DD] Issue #<n> — <short label>
+**File:** `src/...` line N
+**Observation:** What you saw and why it matters.
+```
+
+Append to the file; never overwrite prior entries.
+
+## When you have a question
+**Minor uncertainty** (style call, implementation detail, two equally valid approaches): make the conservative/safest choice, document the decision briefly in the PR body under a "Decisions" section, and proceed.
+
+**Genuine blocker** (ambiguous requirements, architectural question, something that could go materially wrong either way): do not guess. Implement what you can, then:
+1. Write the question clearly in `agents/BojuBot_dev/NOTES.md` under a `### QUESTION` heading
+2. Call it out explicitly in the PR body so the manager sees it on review
+3. Leave the PR open for discussion — do not merge
+
 ## What NOT to do
 - Do not commit or push to `main`
 - Do not create issues unless asked
