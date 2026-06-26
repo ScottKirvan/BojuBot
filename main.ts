@@ -502,9 +502,9 @@ export default class BojuBotPlugin extends Plugin {
       const groups = new Map<string, { id: string; name: string }[]>();
       for (const cmd of commands) {
         const prefix = cmd.id.includes(':') ? cmd.id.split(':')[0] : 'core';
-        if (!groups.has(prefix)) groups.set(prefix, []);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-        groups.get(prefix)!.push(cmd);
+        let group = groups.get(prefix);
+        if (!group) { group = []; groups.set(prefix, group); }
+        group.push(cmd);
       }
 
       const lines: string[] = [
