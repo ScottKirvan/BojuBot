@@ -12,9 +12,9 @@ export interface ClaudeModel {
 }
 
 export const CLAUDE_MODELS: ClaudeModel[] = [
-  { id: 'claude-haiku-4-5-20251001', displayName: 'Claude Haiku', description: 'Fastest — great for quick tasks' },
-  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet', description: 'Balanced speed and capability (default)' },
-  { id: 'claude-opus-4-7', displayName: 'Claude Opus', description: 'Most capable — best for complex reasoning' },
+  { id: 'claude-haiku-4-5', displayName: 'Claude Haiku 4.5', description: 'Fastest — great for quick tasks' },
+  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', description: 'Balanced speed and capability (default)' },
+  { id: 'claude-opus-4-8', displayName: 'Claude Opus 4.8', description: 'Most capable — best for complex reasoning' },
 ];
 
 export interface BojuBotSettings {
