@@ -21,7 +21,7 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: tsc -noEmit -skipLibCheck
+        run: npx tsc -noEmit -skipLibCheck
 
       - name: Lint
         run: npm run lint
