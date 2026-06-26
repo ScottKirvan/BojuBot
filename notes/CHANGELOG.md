@@ -7,6 +7,18 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.3.1](https://github.com/ScottKirvan/BojuBot/compare/3.3.0...3.3.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* catch showOpenDialog rejections in PrimeSessionModal folder picker ([ef34322](https://github.com/ScottKirvan/BojuBot/commit/ef343222826f1017f098ee3b1e5edb7098abbd0d))
+* raise minAppVersion to 1.7.2 to match actual API usage ([5f62247](https://github.com/ScottKirvan/BojuBot/commit/5f62247637e5a1b500ff5268ae6e61487e58adb1))
+* remove undescribed eslint-disable comment in generateCommandsFile ([f41714d](https://github.com/ScottKirvan/BojuBot/commit/f41714d9b2278e570432721449d666366841561c))
+* replace bare globals and require() imports for Obsidian community compliance ([db98833](https://github.com/ScottKirvan/BojuBot/commit/db98833335a663f4dcdc2a4b5c6345ef7bcb3e22))
+* resolve lint violations in prime session changes ([0542445](https://github.com/ScottKirvan/BojuBot/commit/0542445c425e75668d4d3651d91055e15c5cd4ef))
+* resolve remaining lint violations ([#257](https://github.com/ScottKirvan/BojuBot/issues/257), [#258](https://github.com/ScottKirvan/BojuBot/issues/258), [#260](https://github.com/ScottKirvan/BojuBot/issues/260), [#261](https://github.com/ScottKirvan/BojuBot/issues/261)) ([633a3d2](https://github.com/ScottKirvan/BojuBot/commit/633a3d20dafe5fdcf7e78b6473949e64a3784c13))
+
 ## [3.3.0](https://github.com/ScottKirvan/BojuBot/compare/3.2.0...3.3.0) (2026-06-24)
 
 
