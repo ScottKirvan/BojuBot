@@ -53,7 +53,8 @@ Test vault: `D:\2\deleteme\cortex_test_vault` (junction at `.obsidian/plugins/bo
 
 ## Scott's prefs
 - Conventional commits + release-please.
-- I can commit and push on feature/fix branches. Never commit directly to `main`, never push to `main`.
+- I can commit and push on feature/fix branches. **Never commit or merge directly to `main`.** Scott owns `main`. Explicit one-off instructions to do otherwise are temporary exceptions, not rule changes.
+- **Branching:** let scope decide — batch related fixes onto one branch when it's reasonable; individual branches when scope diverges. No prescribed granularity.
 - Not fluent in TS — I do implementation.
 - Multi-machine (Windows). Keep notes resumable cold.
 - Project = "BojuBot" (not "BojuBot plugin", not "obsidian-claude").
@@ -73,7 +74,13 @@ Always use the templates in `.github/ISSUE_TEMPLATE/` and `.github/PULL_REQUEST_
 - Bug reports → `[BUG]` title prefix, `bug_report.md` sections
 - Feature requests → `[FEATURE]` title prefix, `feature_request.md` sections
 - General → `[GENERAL]` title prefix, `general_report.md` sections
-- PRs → fill all checklist sections; no "Generated with Claude Code" or AI credits anywhere
+- PRs → fill all checklist sections
+
+**Before creating any issue, check open issues for duplicates** (`gh issue list --state open --limit 100`). Don't file if it's already tracked.
+
+**Create issues only when asked.** Don't preemptively file issues for future work unless Scott says to.
+
+**No attributions of any kind** in issue text, PR bodies, or commit messages — no "created by", "contributed by", "Co-Authored-By", "Generated with", or any AI/tool credit lines. This is professional dev; nothing goes on the record about who or what wrote it.
 
 Run `npm run lint` before opening any PR. Lint violations are `fix:` commits, not `chore:`.
 
