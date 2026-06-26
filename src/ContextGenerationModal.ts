@@ -264,7 +264,7 @@ class UserIntroModal extends Modal {
     const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
     cancelBtn.addEventListener('click', () => this.close());
 
-    setTimeout(() => ta.focus(), 50);
+    window.setTimeout(() => ta.focus(), 50);
   }
 
   private renderChips() {

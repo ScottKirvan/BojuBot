@@ -2,6 +2,7 @@ import { App, FuzzySuggestModal, Modal, TFile, setIcon } from 'obsidian';
 import type { PendingContext } from '../AttachmentHandler';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
+import { getElectronDialog } from '../utils/electronUtils';
 
 export interface PrimeSessionOptions {
   name: string;
@@ -59,7 +60,7 @@ export class PrimeSessionModal extends Modal {
         attr: { type: 'text', placeholder: 'E.g. Screenplay review — act 2' },
       });
       input.addEventListener('input', () => { this.name = input.value; });
-      setTimeout(() => input.focus(), 50);
+      window.setTimeout(() => input.focus(), 50);
     }
 
     // ── Working directory ─────────────────────────────────────────────────────
@@ -79,16 +80,12 @@ export class PrimeSessionModal extends Modal {
       pickBtn.title = 'Browse…';
       pickBtn.addEventListener('click', () => {
         void (async () => {
-          try {
-            const { dialog } = (require('electron') as { remote?: { dialog: ElectronDialog }; dialog?: ElectronDialog }).remote
-              ?? (require('@electron/remote') as { dialog: ElectronDialog });
-            const result = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: this.vaultRoot });
-            if (!result.canceled && result.filePaths[0]) {
-              input.value = result.filePaths[0];
-              this.cwd = result.filePaths[0];
-            }
-          } catch {
-            // Electron dialog unavailable — user can type the path manually
+          const dialog = getElectronDialog();
+          if (!dialog) return;
+          const result = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: this.vaultRoot });
+          if (!result.canceled && result.filePaths[0]) {
+            input.value = result.filePaths[0];
+            this.cwd = result.filePaths[0];
           }
         })();
       });
@@ -168,7 +165,7 @@ export class PrimeSessionModal extends Modal {
   // ── Attachment helpers ────────────────────────────────────────────────────
 
   private pickFile(): void {
-    const input = document.createElement('input');
+    const input = activeDocument.createElement('input');
     input.type = 'file';
     input.onchange = async () => {
       const f = input.files?.[0];
@@ -219,7 +216,7 @@ export class PrimeSessionModal extends Modal {
 
     // Insert before the attach list
     if (this.attachListEl) container.insertBefore(row, this.attachListEl);
-    setTimeout(() => input.focus(), 20);
+    window.setTimeout(() => input.focus(), 20);
   }
 
   private renderAttachments(): void {
@@ -247,11 +244,6 @@ export class PrimeSessionModal extends Modal {
     writeFileSync(filePath, Buffer.from(data));
     return filePath;
   }
-}
-
-// Minimal Electron dialog type — avoids importing the full electron types
-interface ElectronDialog {
-  showOpenDialog(opts: { properties: string[]; defaultPath?: string }): Promise<{ canceled: boolean; filePaths: string[] }>;
 }
 
 class NotePicker extends FuzzySuggestModal<TFile> {
