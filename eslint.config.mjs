@@ -7,6 +7,14 @@ export default [
   // Full community-bot ruleset — stays in sync with Obsidian plugin submission checks
   ...obsidianmd.configs.recommended,
 
+  // Project-specific rule overrides
+  {
+    files: ['**/*.ts'],
+    rules: {
+      'obsidianmd/ui/sentence-case': ['error', { brands: ['BojuBot', 'Claude', 'Obsidian'] }],
+    },
+  },
+
   // Override: add tsconfig project so type-aware rules (@typescript-eslint/no-unsafe-*,
   // no-floating-promises, no-deprecated, etc.) can resolve types
   {
