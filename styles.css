@@ -1140,6 +1140,10 @@
   background: var(--background-modifier-error-rgb, rgba(255, 80, 80, 0.05));
 }
 
+.bojubot-command-orphan-id {
+  color: var(--text-muted);
+}
+
 .bojubot-command-orphan-badge {
   font-size: var(--font-ui-smaller);
   color: var(--text-error);
