@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  models: read
   id-token: write
   attestations: write
 
@@ -51,43 +52,6 @@ jobs:
             main.js
             styles.css
 
-      - name: Polish release notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: |
-          cat > /tmp/header.md << 'HEADER_EOF'
-          ## 🧠 BojuBot — Claude Code Agentic File Management for Obsidian
-
-          > BojuBot puts a full Claude Code agent in Obsidian's sidebar. It reads, writes, reorganizes, and creates notes — and hands you the results inside Obsidian. No API key needed.
-          >
-          > → [Full feature list and User Guide](https://github.com/ScottKirvan/BojuBot#readme)
-
-          ### 📋 Requirements
-          - Obsidian **desktop** (Windows, Mac, Linux — no mobile)
-          - [Claude Code CLI](https://code.claude.com/docs/en/overview#native-install-recommended) installed and authenticated
-
-          ### 📦 Installation
-          **Community plugin browser:** Open Obsidian → Settings → Community Plugins → Browse → search **BojuBot** → Install → Enable
-
-          **Manual:** Download `main.js`, `manifest.json`, and `styles.css` below → place in `<vault>/.obsidian/plugins/bojubot/` → enable in Obsidian settings
-
-          ---
-
-          ### 🆕 Changes in this Release
-          HEADER_EOF
-
-          cat > /tmp/footer.md << 'FOOTER_EOF'
-
-          ---
-
-          📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md)
-          FOOTER_EOF
-
-          gh release view "$TAG" --json body -q '.body' > /tmp/current_notes.md
-          cat /tmp/header.md /tmp/current_notes.md /tmp/footer.md > /tmp/full_notes.md
-          gh release edit "$TAG" --notes-file /tmp/full_notes.md
-
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,43 +61,39 @@ jobs:
             manifest.json \
             styles.css
 
-  announce-discord:
-    needs: [release-please, build-and-upload]
+  improve-release-notes:
+    needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send Discord Webhook
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          # Access the now-exported body output
-          RAW_BODY: ${{ needs.release-please.outputs.body }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          RELEASE_URL="https://github.com/$REPO/releases/tag/$TAG"
+    uses: ScottKirvan/.github/.github/workflows/reusable-release-notes.yml@main
+    with:
+      tag_name: ${{ needs.release-please.outputs.tag_name }}
+      project_name: "BojuBot"
+      project_context: "BojuBot is an Obsidian plugin that puts a full Claude Code agent in Obsidian's sidebar, enabling AI-assisted note reading, writing, and reorganization without leaving the app. No API key needed."
+      header: |
+        ## 🧠 BojuBot — Claude Code Agentic File Management for Obsidian
 
-          # Use a more flexible regex to swap the comparison link for the release link
-          # This targets the [version](url) pattern at the start of the notes
-          CLEAN_CHANGELOG=$(echo "$RAW_BODY" | sed -E "s|\[.*\]\(https://github.com/[^)]+\)|[$TAG]($RELEASE_URL)|g")
+        > BojuBot puts a full Claude Code agent in Obsidian's sidebar. It reads, writes, reorganizes, and creates notes — and hands you the results inside Obsidian. No API key needed.
 
-          # If CLEAN_CHANGELOG ended up empty for any reason, use RAW_BODY
-          if [ -z "$CLEAN_CHANGELOG" ]; then
-            CLEAN_CHANGELOG="$RAW_BODY"
-          fi
+        ### 📋 Requirements
+        - Obsidian **desktop** (Windows, Mac, Linux — no mobile)
+        - [Claude Code CLI](https://claude.ai/download) installed and authenticated
 
-          # Construct JSON
-          PAYLOAD=$(jq -n \
-            --arg content "🚀 **BojuBot $TAG Published**" \
-            --arg desc "$CLEAN_CHANGELOG" \
-            --arg url "$RELEASE_URL" \
-            '{
-              content: $content,
-              embeds: [{
-                title: "Changelog",
-                description: ($desc | .[0:4000]), # Discord limit safety
-                url: $url,
-                color: 5814783
-              }]
-            }')
+        ### 📦 Installation
+        **Community plugin browser:** Open Obsidian → Settings → Community Plugins → Browse → search **BojuBot** → Install → Enable
 
-          curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$DISCORD_WEBHOOK"
+        **Manual:** Download `main.js`, `manifest.json`, and `styles.css` below → place in `<vault>/.obsidian/plugins/bojubot/` → enable in Obsidian settings
+
+        ---
+      footer: |
+        ---
+        📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md)
+    secrets: inherit
+
+  discord-notify:
+    needs: [improve-release-notes, build-and-upload]
+    if: ${{ needs.release-please.outputs.release_created }}
+    uses: ScottKirvan/.github/.github/workflows/reusable-discord-notify.yml@main
+    with:
+      tag_name: ${{ needs.release-please.outputs.tag_name }}
+      project_name: "BojuBot"
+    secrets: inherit
