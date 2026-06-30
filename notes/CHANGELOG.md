@@ -7,6 +7,19 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.3.2](https://github.com/ScottKirvan/BojuBot/compare/3.3.1...3.3.2) (2026-06-30)
+
+
+### Bug Fixes
+
+* add shared release notes and Discord notify workflows ([4001d1e](https://github.com/ScottKirvan/BojuBot/commit/4001d1ebdab3b1820e2920a9f85401a0e06fa102))
+* dim orphaned allowlist entry ID text in settings UI ([ae46f4b](https://github.com/ScottKirvan/BojuBot/commit/ae46f4bac16c7b9064b2c0ea10521861eee546c8))
+* handle saveSettings failure on model switch and prevent tmp filename collision ([6cf2b11](https://github.com/ScottKirvan/BojuBot/commit/6cf2b11e683e3d768a63ce355b30f4aeb02be57b))
+* remove stale local templates in favor of ScottKirvan/.github shared templates ([cc556f5](https://github.com/ScottKirvan/BojuBot/commit/cc556f55ebcd1768c61c205837bfbdfba16e5a87))
+* update Discord invite URL to correct server link ([7cac292](https://github.com/ScottKirvan/BojuBot/commit/7cac292cd9220f0c1f19b2c079b38c7f59da310e))
+* update model list — Opus 4.8, Haiku canonical ID, remove Fable 5 ([eb61022](https://github.com/ScottKirvan/BojuBot/commit/eb61022871ed91d0bb49da665f02c5ef0240af30))
+* use npx tsc in CI to pick up project-local TypeScript version ([a97ea1e](https://github.com/ScottKirvan/BojuBot/commit/a97ea1e695e20de0423f07ae1fd114ad87da5f88))
+
 ## [3.3.1](https://github.com/ScottKirvan/BojuBot/compare/3.3.0...3.3.1) (2026-06-26)
 
 
