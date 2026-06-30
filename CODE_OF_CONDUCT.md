@@ -40,7 +40,7 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be repor
 
 - GitHub Issues: [Report an issue](https://github.com/ScottKirvan/BojuBot/issues)
 - LinkedIn: [linkedin.com/in/scottkirvan/](https://www.linkedin.com/in/scottkirvan/)
-- Discord: [discord.gg/TSKHvVFYxB](https://discord.gg/TSKHvVFYxB)
+- Discord: [discord.gg/TN6XJSNK5Y](https://discord.gg/TN6XJSNK5Y)
 
 All complaints will be reviewed and investigated promptly and fairly.
 

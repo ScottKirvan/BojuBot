@@ -158,4 +158,4 @@ CHANGELOG is generated automatically by release-please from commit messages; you
 
 Open an issue, or reach out via:
 - [LinkedIn](https://www.linkedin.com/in/scottkirvan/)
-- [Discord](https://discord.gg/TSKHvVFYxB) — cptvideo
+- [Discord](https://discord.gg/TN6XJSNK5Y) — cptvideo
