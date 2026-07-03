@@ -9,6 +9,14 @@
 
 ## [3.4.0](https://github.com/ScottKirvan/BojuBot/compare/3.3.2...3.4.0) (2026-07-03)
 
+### Pull Requests
+
+* [#280](https://github.com/ScottKirvan/BojuBot/pull/280) fix: add emoji input to discord-notify job
+* [#281](https://github.com/ScottKirvan/BojuBot/pull/281) feat: add Claude Fable 5 to available model list
+* [#282](https://github.com/ScottKirvan/BojuBot/pull/282) fix: add workflow_dispatch to release workflow
+* [#283](https://github.com/ScottKirvan/BojuBot/pull/283) chore(main): release 3.4.0
+
+
 
 ### Features
 
