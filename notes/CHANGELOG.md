@@ -7,6 +7,20 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.4.0](https://github.com/ScottKirvan/BojuBot/compare/3.3.2...3.4.0) (2026-07-03)
+
+
+### Features
+
+* add Claude Fable 5 to available model list ([dd0dfd6](https://github.com/ScottKirvan/BojuBot/commit/dd0dfd61775b609de3243dd0b67aaa89558bd12f))
+
+
+### Bug Fixes
+
+* add emoji input to discord-notify job ([14409a2](https://github.com/ScottKirvan/BojuBot/commit/14409a2f6c3a8e70360de4491e07836771615012))
+* add update-changelog-prs job to release workflow ([a09ed40](https://github.com/ScottKirvan/BojuBot/commit/a09ed40092a253467d4737a270f37d9a095fee29))
+* add workflow_dispatch to release workflow ([5d610c1](https://github.com/ScottKirvan/BojuBot/commit/5d610c1a65b1e855047d0968d7f714589a3c2989))
+
 ## [3.3.2](https://github.com/ScottKirvan/BojuBot/compare/3.3.1...3.3.2) (2026-06-30)
 
 
