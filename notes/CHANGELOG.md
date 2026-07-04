@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.4.1](https://github.com/ScottKirvan/BojuBot/compare/3.4.0...3.4.1) (2026-07-04)
+
+
+### Bug Fixes
+
+* add release-please to discord-notify needs ([6339fd6](https://github.com/ScottKirvan/BojuBot/commit/6339fd6fa17ac43a3758ea8eda68fe73dec65ed5))
+
 ## [3.4.0](https://github.com/ScottKirvan/BojuBot/compare/3.3.2...3.4.0) (2026-07-03)
 
 ### Pull Requests
