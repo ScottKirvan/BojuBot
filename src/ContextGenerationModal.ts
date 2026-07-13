@@ -15,6 +15,7 @@ import { join, isAbsolute } from 'path';
  */
 class ContextGenerationProgressModal extends Modal {
   private settled = false;
+  private statusEl!: HTMLElement;
 
   constructor(app: App, private onCancel: () => void) {
     super(app);
@@ -24,9 +25,9 @@ class ContextGenerationProgressModal extends Modal {
     this.titleEl.setText('Generating your context file…');
     const { contentEl } = this;
     contentEl.createEl('p', {
-      text: 'Claude is exploring your vault and writing your context file. ' +
-        'The chat isn\'t ready yet — starting a session now would race with this background work.',
+      text: 'Your BojuBot session will start up momentarily, please wait.',
     });
+    this.statusEl = contentEl.createEl('p', { cls: 'bojubot-status', text: 'Thinking…' });
     const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
     const cancelBtn = btnRow.createEl('button', { text: 'Cancel generation', cls: 'mod-warning' });
     cancelBtn.addEventListener('click', () => {
@@ -34,6 +35,11 @@ class ContextGenerationProgressModal extends Modal {
       this.onCancel();
       this.close();
     });
+  }
+
+  /** Reflect real tool activity so it's obvious the process hasn't hung. */
+  updateStatus(text: string) {
+    this.statusEl?.setText(text);
   }
 
   /** Call when generation finishes (success or error) to allow the modal to actually close. */
@@ -52,6 +58,23 @@ class ContextGenerationProgressModal extends Modal {
   }
 }
 
+/** Friendly status text for the progress modal, based on which tool Claude is using. */
+function statusForTool(tool: string): string {
+  switch (tool) {
+    case 'Read':
+    case 'Glob':
+    case 'Grep':
+      return 'Reading your vault…';
+    case 'Write':
+    case 'Edit':
+      return 'Writing your context file…';
+    case 'ToolSearch':
+      return 'Loading tools…';
+    default:
+      return 'Thinking…';
+  }
+}
+
 export class ContextGenerationModal extends Modal {
   private plugin: BojuBotPlugin;
   private contextFilePath: string;
@@ -59,6 +82,7 @@ export class ContextGenerationModal extends Modal {
   private vaultRoot: string;
   private env: Record<string, string>;
   private vaultTreeDepth: number;
+  private settled = false;
 
   constructor(
     app: App,
@@ -94,6 +118,7 @@ export class ContextGenerationModal extends Modal {
       cls: 'mod-cta',
     });
     generateBtn.addEventListener('click', () => {
+      this.settled = true;
       this.close();
       new UserIntroModal(this.app, (intro, contextFiles) => {
         void this.generateContextFile(intro, contextFiles);
@@ -102,12 +127,14 @@ export class ContextGenerationModal extends Modal {
 
     const blankBtn = btnRow.createEl('button', { text: 'Create blank template' });
     blankBtn.addEventListener('click', () => {
+      this.settled = true;
       this.close();
       void this.createBlankTemplate();
     });
 
     const skipBtn = btnRow.createEl('button', { text: 'Skip' });
     skipBtn.addEventListener('click', () => {
+      this.settled = true;
       this.plugin.settings.skipContextFilePrompt = true;
       void this.plugin.saveSettings().then(() => { this.close(); });
     });
@@ -115,6 +142,17 @@ export class ContextGenerationModal extends Modal {
 
   onClose() {
     this.contentEl.empty();
+    if (!this.settled) {
+      // Easy to fat-finger away via Escape or an outside click before even reading
+      // it — reopen instead of silently losing the offer to set up a context file.
+      activeWindow.setTimeout(() => this.open(), 0);
+    }
+  }
+
+  /** Re-show this same setup prompt — used when the user cancels generation partway through. */
+  reopen(): void {
+    this.settled = false;
+    this.open();
   }
 
   private resolveSkillsFolder(): string {
@@ -218,13 +256,19 @@ export class ContextGenerationModal extends Modal {
       cancelled = true;
       killProcess(proc);
       new Notice('BojuBot: context file generation cancelled.');
+      // Re-show the original setup prompt so the user can choose again
+      // (generate, blank template, or skip) instead of being left with nothing.
+      this.reopen();
     });
     progressModal.open();
 
     parseStreamOutput(proc, {
       onText: () => { /* background — discard streaming text */ },
       onAction: () => { /* background — discard UI actions */ },
-      onToolCall: (tool) => { log('ContextGenerationModal: tool call:', tool); },
+      onToolCall: (tool) => {
+        log('ContextGenerationModal: tool call:', tool);
+        progressModal.updateStatus(statusForTool(tool));
+      },
       onPermissionDenied: () => { /* background generation — denials not surfaced */ },
       onUsage: () => { /* background generation — usage not surfaced */ },
       onDone: () => {
