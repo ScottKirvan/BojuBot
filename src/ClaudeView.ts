@@ -1027,6 +1027,11 @@ export class ClaudeView extends ItemView {
     const prompt = this.inputEl.value.trim();
     if (!prompt) return;
 
+    if (this.coordinator.isBusy) {
+      new Notice('BojuBot: a turn is already running — wait for it to finish or press stop first.');
+      return;
+    }
+
     if (!this.plugin.claudeBinaryPath) {
       this.appendMessage('system', 'Claude binary not found. Check BojuBot settings.');
       return;
