@@ -227,6 +227,11 @@ export class SessionCoordinator {
 
   // ── Turn execution ─────────────────────────────────────────────────────────
 
+  /** True while a turn's claude process is running — a second send() must not be started until this clears. */
+  get isBusy(): boolean {
+    return this._activeProc !== null;
+  }
+
   cancel(): void {
     if (this._activeProc) killProcess(this._activeProc);
   }
@@ -239,6 +244,14 @@ export class SessionCoordinator {
    *                        the first turn of a new session. Omit for inject turns.
    */
   send(prompt: string, firstUserInput?: string): void {
+    if (this._activeProc) {
+      // A previous turn's process is still running — starting another here would spawn
+      // a second `claude --resume <id>` against the same session transcript concurrently,
+      // racing both processes' file writes and orphaning the first from cancel().
+      this.emit('turn:error', 'A turn is already in progress — wait for it to finish or cancel it first.');
+      return;
+    }
+
     const binary = this.host.getBinaryPath();
     if (!binary) {
       this.emit('turn:error', 'Claude binary not found.');
