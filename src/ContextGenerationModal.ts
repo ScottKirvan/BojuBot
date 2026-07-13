@@ -1,7 +1,7 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import { spawnClaude, parseStreamOutput, killProcess } from './ClaudeProcess';
-import { buildVaultTree } from './utils/fileTree';
+import { ContextManager } from './ContextManager';
 import { log } from './utils/logger';
 import { existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
@@ -96,7 +96,7 @@ export class ContextGenerationModal extends Modal {
     generateBtn.addEventListener('click', () => {
       this.close();
       new UserIntroModal(this.app, (intro, contextFiles) => {
-        this.generateContextFile(intro, contextFiles);
+        void this.generateContextFile(intro, contextFiles);
       }).open();
     });
 
@@ -138,13 +138,33 @@ export class ContextGenerationModal extends Modal {
     }
   }
 
-  private generateContextFile(userIntro: string, contextFiles: string[] = []) {
+  private async generateContextFile(userIntro: string, contextFiles: string[] = []) {
     log('ContextGenerationModal: spawning background generation');
 
-    const tree = buildVaultTree(this.app.vault, this.vaultTreeDepth);
-    const treeSection = tree
-      ? `Here is the current vault structure (folder and file names only — no file contents):\n\`\`\`\n${tree}\n\`\`\``
-      : 'The vault structure is not available — please explore with your file tools.';
+    // Reuse the same session-start context injection every normal session gets
+    // (orientation — including the "ignore additional working directories"
+    // boundary — vault tree at the configured depth, pinned notes, per-file
+    // instructions) instead of a separate hand-rolled prompt. Keeps this path in
+    // sync with fixes made to ContextManager instead of silently drifting out of
+    // date, and respects the user's actual settings (tree depth, autonomous
+    // memory, command allowlist) rather than re-deciding them here.
+    // Permission mode is forced to 'standard' regardless of the user's configured
+    // default — generation always needs write access to create the file.
+    const ctx = new ContextManager(
+      this.app,
+      this.contextFilePath,
+      this.plugin.settings.autonomousMemory,
+      this.vaultTreeDepth,
+      this.plugin.settings.commandAllowlist,
+      'standard',
+      this.plugin.settings.contextFileSizeCapTokens,
+      false,
+      false,
+      '',
+      this.vaultRoot,
+      this.vaultRoot,
+    );
+    const sessionContext = await ctx.buildSessionContext();
 
     const skills = this.listSkills();
     const skillsSection = skills.length > 0
@@ -161,10 +181,9 @@ export class ContextGenerationModal extends Modal {
 
     const today = new Date().toISOString().slice(0, 10);
 
-    const prompt = [
+    const instructions = [
       `You are setting up a context file for a new BojuBot (Obsidian plugin) user.`,
       ``,
-      `${treeSection}`,
       `${introSection}`,
       `${contextFilesSection}`,
       `${skillsSection}`,
@@ -183,11 +202,14 @@ export class ContextGenerationModal extends Modal {
       `Write the file now using your file tools. Do not ask for confirmation — just create it.`,
     ].join('\n');
 
+    const prompt = sessionContext ? `${sessionContext}\n\n${instructions}` : instructions;
+
     const proc = spawnClaude({
       binaryPath: this.binaryPath,
       prompt,
       vaultRoot: this.vaultRoot,
       env: this.env,
+      permissionMode: 'standard',
     });
 
     let cancelled = false;
