@@ -1,6 +1,7 @@
 import { App, TFolder } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { buildVaultTree } from './utils/fileTree';
+import { neutralizeTriggers } from './constants';
 import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
 import canvasRef from './references/canvas.md';
@@ -157,7 +158,13 @@ export function buildInjectMessage(results: VaultQueryResult[]): string {
       : typeof r.result === 'string'
         ? r.result
         : JSON.stringify(r.result, null, 2);
-    return `Query: ${label}\nResult:\n${body}`;
+    // backlinks/outlinks/tags/file-list results are vault-derived file and folder
+    // names — untrusted content a malicious or planted file could craft to look
+    // like a live @@BOJU line. Neutralize them like every other vault-content
+    // injection path. Help topics return BojuBot's own static reference docs,
+    // which legitimately contain @@BOJU examples, so they're left untouched.
+    const safeBody = r.query.query === 'help' ? body : neutralizeTriggers(body);
+    return `Query: ${label}\nResult:\n${safeBody}`;
   });
   return `[BOJU_VAULT_RESPONSE]\n${parts.join('\n\n')}\n[/BOJU_VAULT_RESPONSE]`;
 }
