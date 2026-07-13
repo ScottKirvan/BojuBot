@@ -1,10 +1,56 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile } from 'obsidian';
 import type BojuBotPlugin from '../main';
-import { spawnClaude, parseStreamOutput } from './ClaudeProcess';
+import { spawnClaude, parseStreamOutput, killProcess } from './ClaudeProcess';
 import { buildVaultTree } from './utils/fileTree';
 import { log } from './utils/logger';
 import { existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
+
+/**
+ * Blocks the user from starting a chat session while the background context-file
+ * generation is in flight — starting one earlier would race with it (the new
+ * session's context injection would run before the file exists) and was part of
+ * the concurrent-process incident in #287. Not dismissible via Escape/outside-click
+ * while generation is running; only Cancel or completion closes it for real.
+ */
+class ContextGenerationProgressModal extends Modal {
+  private settled = false;
+
+  constructor(app: App, private onCancel: () => void) {
+    super(app);
+  }
+
+  onOpen() {
+    this.titleEl.setText('Generating your context file…');
+    const { contentEl } = this;
+    contentEl.createEl('p', {
+      text: 'Claude is exploring your vault and writing your context file. ' +
+        'The chat isn\'t ready yet — starting a session now would race with this background work.',
+    });
+    const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
+    const cancelBtn = btnRow.createEl('button', { text: 'Cancel generation', cls: 'mod-warning' });
+    cancelBtn.addEventListener('click', () => {
+      this.settled = true;
+      this.onCancel();
+      this.close();
+    });
+  }
+
+  /** Call when generation finishes (success or error) to allow the modal to actually close. */
+  finish() {
+    this.settled = true;
+    this.close();
+  }
+
+  onClose() {
+    this.contentEl.empty();
+    if (!this.settled) {
+      // Generation is still running and the user tried to dismiss via Escape or
+      // clicking outside — reopen immediately rather than letting them proceed.
+      activeWindow.setTimeout(() => this.open(), 0);
+    }
+  }
+}
 
 export class ContextGenerationModal extends Modal {
   private plugin: BojuBotPlugin;
@@ -93,7 +139,6 @@ export class ContextGenerationModal extends Modal {
   }
 
   private generateContextFile(userIntro: string, contextFiles: string[] = []) {
-    new Notice('BojuBot: generating context file in the background…');
     log('ContextGenerationModal: spawning background generation');
 
     const tree = buildVaultTree(this.app.vault, this.vaultTreeDepth);
@@ -145,6 +190,15 @@ export class ContextGenerationModal extends Modal {
       env: this.env,
     });
 
+    let cancelled = false;
+    const progressModal = new ContextGenerationProgressModal(this.app, () => {
+      log('ContextGenerationModal: generation cancelled by user');
+      cancelled = true;
+      killProcess(proc);
+      new Notice('BojuBot: context file generation cancelled.');
+    });
+    progressModal.open();
+
     parseStreamOutput(proc, {
       onText: () => { /* background — discard streaming text */ },
       onAction: () => { /* background — discard UI actions */ },
@@ -152,6 +206,10 @@ export class ContextGenerationModal extends Modal {
       onPermissionDenied: () => { /* background generation — denials not surfaced */ },
       onUsage: () => { /* background generation — usage not surfaced */ },
       onDone: () => {
+        progressModal.finish();
+        // Killing the process still fires this via the stream's close event —
+        // the cancel callback above already gave the user a notice, don't pile on.
+        if (cancelled) return;
         const exists = this.app.vault.getFileByPath(this.contextFilePath);
         if (exists) {
           new Notice(`BojuBot: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
@@ -161,6 +219,7 @@ export class ContextGenerationModal extends Modal {
       },
       onError: (err) => {
         log('ContextGenerationModal: error:', err);
+        if (cancelled) return;
         new Notice('BojuBot: context file generation encountered an error. Check the debug log.');
       },
     });
