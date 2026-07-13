@@ -69,7 +69,7 @@ Before implementing any fix — especially from a code review:
 5. Larger refactors get a design discussion first — no diving straight into a 2,800-line file split.
 
 ## GitHub issues and PRs
-Always use the templates in `.github/ISSUE_TEMPLATE/` and `.github/PULL_REQUEST_TEMPLATE.md`.
+Templates aren't stored in this repo — they live in the org-wide `ScottKirvan/.github` repo (`.github/ISSUE_TEMPLATE/` and `.github/pull_request_template.md`) and apply automatically to BojuBot via GitHub's community-health-file fallback. Fetch them from there (e.g. `gh api repos/ScottKirvan/.github/contents/...` or the raw URL) if you need the exact section headers.
 
 - Bug reports → `[BUG]` title prefix, `bug_report.md` sections
 - Feature requests → `[FEATURE]` title prefix, `feature_request.md` sections
