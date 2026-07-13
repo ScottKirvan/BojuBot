@@ -2,6 +2,7 @@ import { App, FuzzySuggestModal, Modal, Notice, TFile } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import { spawnClaude, parseStreamOutput, killProcess } from './ClaudeProcess';
 import { ContextManager } from './ContextManager';
+import { VIEW_TYPE_CLAUDE } from './ClaudeView';
 import { log } from './utils/logger';
 import { existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
@@ -110,6 +111,17 @@ export class ContextGenerationModal extends Modal {
         'This file gives Claude persistent memory of your vault across sessions. ' +
         'You can have Claude generate one from your vault structure, start with a blank template, or skip for now.',
     });
+
+    // The explicit X button is a deliberate "not now" — unlike an accidental Escape
+    // or outside-click, which reopens this prompt (see onClose()), close the whole
+    // BojuBot panel too instead of leaving it sitting there unconfigured. Attached
+    // with `capture: true` so it runs before Obsidian's own close-button handler —
+    // that handler calls this.close() synchronously, and onClose() needs `settled`
+    // already true by then or it'll reopen this same modal.
+    this.modalEl.querySelector('.modal-close-button')?.addEventListener('click', () => {
+      this.settled = true;
+      this.app.workspace.detachLeavesOfType(VIEW_TYPE_CLAUDE);
+    }, { capture: true });
 
     const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
 
