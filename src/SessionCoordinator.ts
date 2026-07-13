@@ -10,7 +10,7 @@ import {
 } from './ClaudeProcess';
 import { VaultQuery } from './QueryHandler';
 import { BOJU_PREFIX } from './constants';
-import { extractActions, BojuBotAction } from './UIBridge';
+import { extractActions, BojuBotAction } from './utils/actionParser';
 import {
   StoredSession,
   ChatMessage,
