@@ -237,6 +237,49 @@ export class SessionCoordinator {
   }
 
   /**
+   * Trigger Claude Code's native /compact slash command via a --resume turn.
+   * Shares the busy guard and _activeProc tracking with send() — previously this
+   * spawned its own untracked process directly from TokenGauge, so compacting
+   * while a turn was streaming raced a second process against the same
+   * --resume session, the same bug class fixed above for send().
+   */
+  compact(onDone: () => void, onError: (message: string) => void): void {
+    if (this._activeProc) {
+      onError('A turn is already in progress — wait for it to finish or cancel it first.');
+      return;
+    }
+    if (!this._sessionId) {
+      onError('No active session to compact.');
+      return;
+    }
+    const binary = this.host.getBinaryPath();
+    if (!binary) {
+      onError('Claude binary not found.');
+      return;
+    }
+
+    let proc: ChildProcess;
+    try {
+      proc = spawnClaude({
+        binaryPath: binary,
+        prompt: '/compact',
+        vaultRoot: this._sessionCwd ?? this.host.getVaultRoot(),
+        env: this.host.getEnv(),
+        resumeSessionId: this._sessionId,
+        permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
+      });
+    } catch (e) {
+      onError(`Failed to start claude: ${e}`);
+      return;
+    }
+
+    this._activeProc = proc;
+    proc.stdout?.resume();
+    proc.on('close', () => { this._activeProc = null; onDone(); });
+    proc.on('error', (err) => { this._activeProc = null; onError(err.message); });
+  }
+
+  /**
    * Spawn a Claude turn and emit stream events as it runs.
    *
    * @param prompt       Full prompt to send (context already injected by caller).

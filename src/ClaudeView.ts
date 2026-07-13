@@ -155,10 +155,7 @@ export class ClaudeView extends ItemView {
     this._setupCoordinatorEvents();
     this.tokenGauge = new TokenGauge({
       getSessionId: () => this.coordinator.sessionId,
-      getBinaryPath: () => this.plugin.claudeBinaryPath ?? '',
-      getVaultRoot: () => this.plugin.getVaultRoot(),
-      getEnv: () => this.plugin.shellEnv,
-      getPermissionMode: () => this.coordinator.getEffectivePermissionMode(),
+      compact: (onDone, onError) => this.coordinator.compact(onDone, onError),
     });
     this.attachmentHandler = new AttachmentHandler({
       getVaultRoot: () => this.plugin.getVaultRoot(),
