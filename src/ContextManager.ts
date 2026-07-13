@@ -69,8 +69,12 @@ export class ContextManager {
       // cwd is outside the vault entirely — absolute path is fine, no vault info leaked
       cwdDisplay = this.cwd;
     }
+    const ADDITIONAL_DIRS_BOUNDARY = 'Your environment may list "Additional working directories" beyond your CWD — these come from Claude Code CLI\'s own global config and are not something BojuBot set up; they are frequently leftover from unrelated projects. Ignore them: do not read, write, or explore any additional working directory unless the user explicitly directs you there.';
     const CWD_BOUNDARY = 'Treat your CWD as your working root. Never autonomously infer or declare a vault root, project root, or repository root from directory structure or config folder markers. If the user explicitly asks you to look at a parent directory, you may do so.';
-    const cwdInstruction = (this.cwd && this.cwd !== this.vaultRoot) ? CWD_BOUNDARY : '';
+    const cwdInstruction = [
+      ADDITIONAL_DIRS_BOUNDARY,
+      (this.cwd && this.cwd !== this.vaultRoot) ? CWD_BOUNDARY : '',
+    ].filter(Boolean).join(' ');
 
     let orientation = orientationTemplate
       .replace('{{CWD}}', cwdDisplay)
