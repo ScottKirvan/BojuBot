@@ -1,12 +1,9 @@
 import { Notice } from 'obsidian';
-import { spawnClaude, PermissionMode } from './ClaudeProcess';
 
 export interface TokenGaugeHost {
   getSessionId(): string | undefined;
-  getBinaryPath(): string;
-  getVaultRoot(): string;
-  getEnv(): Record<string, string>;
-  getPermissionMode(): PermissionMode;
+  /** Delegates to SessionCoordinator.compact() so the reentrancy guard applies. */
+  compact(onDone: () => void, onError: (message: string) => void): void;
 }
 
 /**
@@ -129,16 +126,9 @@ export class TokenGauge {
     this.contextTokens = 0;
     this.update(0);
     new Notice('BojuBot: compacting session…');
-    const proc = spawnClaude({
-      binaryPath: this.host.getBinaryPath(),
-      prompt: '/compact',
-      vaultRoot: this.host.getVaultRoot(),
-      env: this.host.getEnv(),
-      resumeSessionId: sessionId,
-      permissionMode: this.host.getPermissionMode(),
-    });
-    proc.stdout?.resume();
-    proc.on('close', () => new Notice('BojuBot: session compacted.'));
-    proc.on('error', (err) => new Notice(`BojuBot: compaction failed — ${err.message}`));
+    this.host.compact(
+      () => new Notice('BojuBot: session compacted.'),
+      (message) => new Notice(`BojuBot: compaction failed — ${message}`),
+    );
   }
 }
