@@ -23,6 +23,7 @@ import { parseStreamOutput, permissionArgs } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
+import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -992,6 +993,64 @@ describe('resolveShellEnv', () => {
     assert.ok('PATH' in env || 'Path' in env, 'PATH must be present');
     for (const v of Object.values(env)) {
       assert.equal(typeof v, 'string', 'no undefined values — process.env entries with undefined must be excluded');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SessionCoordinator — reentrancy guard
+//
+// Spawns the real Node binary as a stand-in "claude" process (garbage args,
+// exits immediately) purely so a genuine ChildProcess exists to make
+// _activeProc truthy — there's no way to inject a fake spawnClaude today.
+// ---------------------------------------------------------------------------
+
+function makeTestHost(sessionsDir: string): SessionCoordinatorHost {
+  return {
+    getBinaryPath: () => process.execPath,
+    getVaultRoot: () => sessionsDir,
+    getConfigDir: () => '.obsidian',
+    getEnv: () => ({}),
+    getPermissionMode: () => 'standard',
+    getModel: () => '',
+    getSessionsDir: () => sessionsDir,
+    saveLastActiveSessionId: async () => { /* no-op */ },
+    isUiBridgeEnabled: () => false,
+  };
+}
+
+describe('SessionCoordinator reentrancy guard', () => {
+  test('send() rejects a new turn while one is already in flight, and allows one after it clears', async () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      const errors: string[] = [];
+      coordinator.on('turn:error', (err) => errors.push(err));
+
+      assert.equal(coordinator.isBusy, false, 'idle before any send()');
+
+      coordinator.send('first prompt');
+      assert.equal(coordinator.isBusy, true, 'busy immediately after send() spawns a process');
+
+      coordinator.send('second prompt — should be rejected');
+      assert.equal(errors.length, 1, 'second send() while busy must be rejected, not spawn a process');
+      assert.match(errors[0], /already in progress/);
+
+      // Wait for the first (real, if short-lived) process to close so onDone clears _activeProc.
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('timed out waiting for turn:done')), 5000);
+        coordinator.on('turn:done', () => { clearTimeout(timer); resolve(); });
+      });
+      assert.equal(coordinator.isBusy, false, 'idle again once the process closes');
+
+      coordinator.send('third prompt — should be accepted now that the coordinator is idle');
+      assert.equal(errors.length, 1, 'no new rejection once the previous turn has cleared');
+      coordinator.cancel();
+      // Give the killed process (and Windows' handle on the tmp dir as its cwd) a moment
+      // to release before cleanup — best-effort either way, this is just a tmp dir.
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
   });
 });
