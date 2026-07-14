@@ -21,6 +21,8 @@
 * route session compaction through SessionCoordinator's busy guard ([7f16c98](https://github.com/ScottKirvan/BojuBot/commit/7f16c9823f7fc6ca979ef711f0625c0fe4c1f43e))
 * X button on context-setup modal also closes the chat panel ([0333bf6](https://github.com/ScottKirvan/BojuBot/commit/0333bf682e246ff350eb7c9411d7ef82329d5fe9))
 
+Includes PRs: [#288](https://github.com/ScottKirvan/BojuBot/pull/288), [#292](https://github.com/ScottKirvan/BojuBot/pull/292)
+
 ## [3.4.1](https://github.com/ScottKirvan/BojuBot/compare/3.4.0...3.4.1) (2026-07-04)
 
 
