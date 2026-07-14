@@ -7,6 +7,20 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.4.2](https://github.com/ScottKirvan/BojuBot/compare/3.4.1...3.4.2) (2026-07-14)
+
+
+### Bug Fixes
+
+* block a new turn from starting while one is already running ([b08df6c](https://github.com/ScottKirvan/BojuBot/commit/b08df6cfa31af84ed14c717411037cd85329f7c1))
+* block chat while context file generation runs in background ([4df2253](https://github.com/ScottKirvan/BojuBot/commit/4df2253840678b102c1b89e355d35cee8772a683))
+* context-file generation reuses standard session context injection ([4182c50](https://github.com/ScottKirvan/BojuBot/commit/4182c509010f2634d3edb0c65f37de3f37a6ff1a))
+* harden context-generation modals against accidental dismissal ([ec38412](https://github.com/ScottKirvan/BojuBot/commit/ec384125b21f1b1edf89c8495f6e498eaf6bcd74))
+* instruct Claude to ignore additional working directories ([d9904de](https://github.com/ScottKirvan/BojuBot/commit/d9904de9069cd759dd044e6622994e9750f84a70))
+* neutralize BOJU triggers in injected vault-query results ([9efceaa](https://github.com/ScottKirvan/BojuBot/commit/9efceaaaee59dc21a65f51f014407f28ad1feb7a))
+* route session compaction through SessionCoordinator's busy guard ([7f16c98](https://github.com/ScottKirvan/BojuBot/commit/7f16c9823f7fc6ca979ef711f0625c0fe4c1f43e))
+* X button on context-setup modal also closes the chat panel ([0333bf6](https://github.com/ScottKirvan/BojuBot/commit/0333bf682e246ff350eb7c9411d7ef82329d5fe9))
+
 ## [3.4.1](https://github.com/ScottKirvan/BojuBot/compare/3.4.0...3.4.1) (2026-07-04)
 
 
