@@ -1,7 +1,6 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
 import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
-import welcomeData from './welcome.json';
 
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
@@ -138,6 +137,7 @@ export class ClaudeView extends ItemView {
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
     this.plugin = plugin;
+    this.currentAssistantLabel = plugin.brand.name;
     this.coordinator = new SessionCoordinator({
       getBinaryPath: () => this.plugin.claudeBinaryPath,
       getVaultRoot: () => this.plugin.getVaultRoot(),
@@ -185,7 +185,7 @@ export class ClaudeView extends ItemView {
       if (!this.messagesEl) return;
       this.tokenGauge.reset();
       this.currentUserLabel = 'User';
-      this.currentAssistantLabel = 'BojuBot';
+      this.currentAssistantLabel = this.plugin.brand.name;
       this.attachmentHandler.reset();
       // Prime state is set before this event fires — don't clear it here
       this.messagesEl.empty();
@@ -357,8 +357,8 @@ export class ClaudeView extends ItemView {
   }
 
   getViewType(): string { return VIEW_TYPE_CLAUDE; }
-  getDisplayText(): string { return 'BojuBot'; }
-  getIcon(): string { return 'brain-circuit'; }
+  getDisplayText(): string { return this.plugin.brand.name; }
+  getIcon(): string { return this.plugin.brand.icon; }
 
   async onOpen() {
     const root = this.containerEl.children[1] as HTMLElement;
@@ -399,14 +399,14 @@ export class ClaudeView extends ItemView {
 
     const helpBtn = toolbarRight.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(helpBtn, 'circle-help');
-    helpBtn.title = 'About BojuBot';
+    helpBtn.title = `About ${this.plugin.brand.name}`;
     helpBtn.addEventListener('click', () => {
       new AboutModal(this.app, this.plugin).open();
     });
 
     const settingsBtn = toolbarRight.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(settingsBtn, 'brain-cog');
-    settingsBtn.title = 'Open BojuBot settings';
+    settingsBtn.title = `Open ${this.plugin.brand.name} settings`;
     settingsBtn.addEventListener('click', () => {
       this.appInternal.setting.open();
       this.appInternal.setting.openTabById('bojubot');
@@ -441,7 +441,7 @@ export class ClaudeView extends ItemView {
 
     this.inputEl = inputArea.createEl('textarea', {
       cls: 'bojubot-input',
-      attr: { placeholder: 'Ask BojuBot…', rows: '3' },
+      attr: { placeholder: `Ask ${this.plugin.brand.name}…`, rows: '3' },
     });
 
     const inputToolbar = inputArea.createDiv({ cls: 'bojubot-input-toolbar' });
@@ -746,7 +746,7 @@ export class ClaudeView extends ItemView {
   exportToVault(): void {
     const messages = this.messagesEl.querySelectorAll('.bojubot-message');
     if (messages.length === 0) { new Notice('No conversation to export'); return; }
-    const title = this.coordinator.sessionTitle || 'BojuBot Session';
+    const title = this.coordinator.sessionTitle || `${this.plugin.brand.name} Session`;
     const sessionId = this.coordinator.sessionId ?? '';
     const date = new Date().toISOString().slice(0, 10);
     const safeName = title.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
@@ -772,7 +772,7 @@ export class ClaudeView extends ItemView {
       let md = `---\nbojubot_session: true\ndate: ${dateStr}\nsession_id: ${session.claudeSessionId}\nmessages: ${messages.length}\n---\n\n`;
       md += `# ${session.title}\n\n`;
       for (const msg of messages) {
-        const label = msg.role === 'user' ? (session.userLabel ?? 'User') : (session.assistantLabel ?? 'BojuBot');
+        const label = msg.role === 'user' ? (session.userLabel ?? 'User') : (session.assistantLabel ?? this.plugin.brand.name);
         if (msg.role === 'assistant') {
           const text = this.cleanContent(msg.content).trim();
           const queryMd = this.queryResultsAsMarkdown(msg.content);
@@ -802,14 +802,14 @@ export class ClaudeView extends ItemView {
       return;
     }
 
-    let markdown = `# BojuBot Conversation\n`;
+    let markdown = `# ${this.plugin.brand.name} Conversation\n`;
     if (this.coordinator.sessionTitle) {
       markdown += `**Session:** ${this.coordinator.sessionTitle}\n\n`;
     }
 
     messages.forEach((msgEl) => {
       const role = msgEl.classList.contains('bojubot-user') ? 'User' :
-        msgEl.classList.contains('bojubot-assistant') ? 'BojuBot' : 'System';
+        msgEl.classList.contains('bojubot-assistant') ? this.plugin.brand.name : 'System';
       // Use stored raw markdown for assistant messages; textContent for others
       const content = (msgEl as HTMLElement).dataset.markdown ?? msgEl.textContent ?? '';
       markdown += `## ${role}\n\n${content}\n\n`;
@@ -935,7 +935,7 @@ export class ClaudeView extends ItemView {
 
   private async loadSession(session: StoredSession) {
     this.currentUserLabel = session.userLabel ?? 'User';
-    this.currentAssistantLabel = session.assistantLabel ?? 'BojuBot';
+    this.currentAssistantLabel = session.assistantLabel ?? this.plugin.brand.name;
 
     // Coordinator updates session state and emits 'session:loaded' — we also
     // need the payload data synchronously for DOM rendering, so capture it here.
@@ -1025,12 +1025,12 @@ export class ClaudeView extends ItemView {
     if (!prompt) return;
 
     if (this.coordinator.isBusy) {
-      new Notice('BojuBot: a turn is already running — wait for it to finish or press stop first.');
+      new Notice(`${this.plugin.brand.name}: a turn is already running — wait for it to finish or press stop first.`);
       return;
     }
 
     if (!this.plugin.claudeBinaryPath) {
-      this.appendMessage('system', 'Claude binary not found. Check BojuBot settings.');
+      this.appendMessage('system', `Claude binary not found. Check ${this.plugin.brand.name} settings.`);
       return;
     }
 
@@ -1179,8 +1179,19 @@ export class ClaudeView extends ItemView {
     this.coordinator.send(finalPrompt, prompt);
   }
 
+  /**
+   * Resolve a brand logo/sprite value to an <img> src. Empty → bundled
+   * fallback; a `data:` URI is used verbatim; anything else is treated as a
+   * vault-relative path and resolved to an app:// resource URL.
+   */
+  private brandImageSrc(value: string, fallback: string): string {
+    if (!value) return fallback;
+    if (value.startsWith('data:')) return value;
+    return this.app.vault.adapter.getResourcePath(value);
+  }
+
   private renderWelcomeScreen() {
-    const { greetings, tips } = welcomeData.welcome;
+    const { name: brandName, greetings, tips } = this.plugin.brand;
 
     // Time-of-day bucket
     const hour = new Date().getHours();
@@ -1203,9 +1214,9 @@ export class ClaudeView extends ItemView {
 
     // Header: logo + name + version — pinned to top of panel
     const header = welcome.createDiv({ cls: 'bojubot-welcome-header' });
-    const headerLogo = header.createEl('img', { cls: 'bojubot-welcome-header-logo', attr: { alt: '', src: logoUrl } });
+    const headerLogo = header.createEl('img', { cls: 'bojubot-welcome-header-logo', attr: { alt: '', src: this.brandImageSrc(this.plugin.brand.logo, logoUrl) } });
     headerLogo.draggable = false;
-    header.createSpan({ cls: 'bojubot-welcome-header-name', text: 'BojuBot' });
+    header.createSpan({ cls: 'bojubot-welcome-header-name', text: brandName });
     header.createSpan({ cls: 'bojubot-welcome-version', text: `v${this.plugin.manifest.version}` });
     const activeModel = CLAUDE_MODELS.find(m => m.id === this.plugin.settings.defaultModel);
     if (activeModel) {
@@ -1214,9 +1225,9 @@ export class ClaudeView extends ItemView {
 
     // Centered body: sprite + greeting + tip
     const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
-    const sprite = body.createEl('img', { cls: 'bojubot-welcome-sprite', attr: { alt: 'BojuBot', src: spriteUrl } });
+    const sprite = body.createEl('img', { cls: 'bojubot-welcome-sprite', attr: { alt: brandName, src: this.brandImageSrc(this.plugin.brand.sprite, spriteUrl) } });
     sprite.draggable = false;
-    sprite.title = 'About BojuBot';
+    sprite.title = `About ${brandName}`;
     sprite.addEventListener('click', () => new AboutModal(this.app, this.plugin).open());
     body.createEl('p', { cls: 'bojubot-welcome-greeting', text: greetingText });
     body.createEl('p', { cls: 'bojubot-welcome-tip', text: tip });
@@ -1251,7 +1262,7 @@ export class ClaudeView extends ItemView {
 
     card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'bojubot-setup-title' });
     card.createEl('p', {
-      text: 'BojuBot requires the Claude Code CLI (included with Claude Pro/Max). ' +
+      text: `${this.plugin.brand.name} requires the Claude Code CLI (included with Claude Pro/Max). ` +
         'Follow the steps below, then click Check again.',
       cls: 'bojubot-setup-intro',
     });
@@ -1910,7 +1921,7 @@ export class ClaudeView extends ItemView {
       {
         category: 'Context',
         name: 'Open settings',
-        description: 'Open BojuBot settings',
+        description: `Open ${this.plugin.brand.name} settings`,
         action: () => {
           this.appInternal.setting.open();
           this.appInternal.setting.openTabById('bojubot');

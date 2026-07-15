@@ -314,6 +314,18 @@
   overflow: hidden;
 }
 
+.bojubot-about-credit {
+  margin-top: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78em;
+}
+
+.bojubot-about-credit a {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
 .bojubot-about-item {
   display: flex;
   align-items: center;

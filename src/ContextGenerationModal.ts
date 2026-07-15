@@ -4,6 +4,7 @@ import { spawnClaude, parseStreamOutput, killProcess } from './ClaudeProcess';
 import { ContextManager } from './ContextManager';
 import { VIEW_TYPE_CLAUDE } from './ClaudeView';
 import { log } from './utils/logger';
+import { brandName } from './brand';
 import { existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
 
@@ -26,7 +27,7 @@ class ContextGenerationProgressModal extends Modal {
     this.titleEl.setText('Generating your context file…');
     const { contentEl } = this;
     contentEl.createEl('p', {
-      text: 'Your BojuBot session will start up momentarily, please wait.',
+      text: `Your ${brandName()} session will start up momentarily, please wait.`,
     });
     this.statusEl = contentEl.createEl('p', { cls: 'bojubot-status', text: 'Thinking…' });
     const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
@@ -218,7 +219,7 @@ export class ContextGenerationModal extends Modal {
 
     const skills = this.listSkills();
     const skillsSection = skills.length > 0
-      ? `\nThe user has the following BojuBot skills available:\n${skills.map(s => `- ${s}`).join('\n')}\nInclude a brief "## Available Skills" section listing these.`
+      ? `\nThe user has the following ${brandName()} skills available:\n${skills.map(s => `- ${s}`).join('\n')}\nInclude a brief "## Available Skills" section listing these.`
       : '';
 
     const introSection = userIntro.trim()
@@ -232,14 +233,14 @@ export class ContextGenerationModal extends Modal {
     const today = new Date().toISOString().slice(0, 10);
 
     const instructions = [
-      `You are setting up a context file for a new BojuBot (Obsidian plugin) user.`,
+      `You are setting up a context file for a new ${brandName()} (Obsidian plugin) user.`,
       ``,
       `${introSection}`,
       `${contextFilesSection}`,
       `${skillsSection}`,
       ``,
       `Please create the file \`${this.contextFilePath}\` in the vault root.`,
-      `This file will be injected at the start of every BojuBot session as your persistent memory.`,
+      `This file will be injected at the start of every ${brandName()} session as your persistent memory.`,
       ``,
       `Generate a concise, useful context file (aim for under 300 words) that includes:`,
       `- A brief summary of the vault's organisation based on the folder structure`,
@@ -267,7 +268,7 @@ export class ContextGenerationModal extends Modal {
       log('ContextGenerationModal: generation cancelled by user');
       cancelled = true;
       killProcess(proc);
-      new Notice('BojuBot: context file generation cancelled.');
+      new Notice(`${brandName()}: context file generation cancelled.`);
       // Re-show the original setup prompt so the user can choose again
       // (generate, blank template, or skip) instead of being left with nothing.
       this.reopen();
@@ -290,15 +291,15 @@ export class ContextGenerationModal extends Modal {
         if (cancelled) return;
         const exists = this.app.vault.getFileByPath(this.contextFilePath);
         if (exists) {
-          new Notice(`BojuBot: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
+          new Notice(`${brandName()}: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
         } else {
-          new Notice(`BojuBot: generation finished but "${this.contextFilePath}" was not found. You may need to create it manually.`);
+          new Notice(`${brandName()}: generation finished but "${this.contextFilePath}" was not found. You may need to create it manually.`);
         }
       },
       onError: (err) => {
         log('ContextGenerationModal: error:', err);
         if (cancelled) return;
-        new Notice('BojuBot: context file generation encountered an error. Check the debug log.');
+        new Notice(`${brandName()}: context file generation encountered an error. Check the debug log.`);
       },
     });
   }
@@ -308,7 +309,7 @@ export class ContextGenerationModal extends Modal {
     const stub = [
       '# Vault Context',
       '',
-      'This file is injected at the start of every BojuBot session as Claude\'s persistent memory.',
+      `This file is injected at the start of every ${brandName()} session as Claude's persistent memory.`,
       'Edit it freely — add conventions, ongoing projects, folder explanations, or anything useful.',
       '',
       '## Conventions',
@@ -325,10 +326,10 @@ export class ContextGenerationModal extends Modal {
 
     try {
       await this.app.vault.create(this.contextFilePath, stub);
-      new Notice(`BojuBot: created blank context file at "${this.contextFilePath}".`);
+      new Notice(`${brandName()}: created blank context file at "${this.contextFilePath}".`);
     } catch (err) {
       log('ContextGenerationModal: failed to create blank template:', err);
-      new Notice('BojuBot: failed to create context file. Check the debug log.');
+      new Notice(`${brandName()}: failed to create context file. Check the debug log.`);
     }
   }
 }

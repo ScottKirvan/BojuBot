@@ -3,6 +3,7 @@ import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
+import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { findClaudeBinary, PermissionMode } from './src/ClaudeProcess';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
@@ -15,9 +16,17 @@ import { PermissionPickerModal } from './src/modals/PermissionPickerModal';
 
 export default class BojuBotPlugin extends Plugin {
   settings: BojuBotSettings;
+  /** Fully-resolved brand — always populated (loadSettings runs before use). */
+  brand: ResolvedBrand = resolveBrand(undefined);
   shellEnv: Record<string, string> = {};
   claudeBinaryPath: string | null = null;
   private skillCommandIds = new Set<string>();
+
+  /** Recompute the resolved brand and mirror it to the module-level accessor. */
+  refreshBrand(): void {
+    this.brand = resolveBrand(this.settings?.brand);
+    setActiveBrand(this.brand);
+  }
 
   getVaultRoot(): string {
     return (this.app.vault.adapter as unknown as { basePath: string }).basePath;
@@ -37,7 +46,7 @@ export default class BojuBotPlugin extends Plugin {
       filePath: this.settings.logFilePath,
       verbosity: this.settings.logVerbosity,
     });
-    log('BojuBot loading — vault root:', vaultRoot);
+    log(`${this.brand.name} loading — vault root:`, vaultRoot);
 
     this.app.workspace.onLayoutReady(() => {
       this.generateCommandsFile();
@@ -56,7 +65,7 @@ export default class BojuBotPlugin extends Plugin {
     this.claudeBinaryPath = findClaudeBinary(this.settings.binaryPath);
 
     if (!this.claudeBinaryPath) {
-      new Notice('BojuBot: Claude binary not found. Check plugin settings.');
+      new Notice(`${this.brand.name}: Claude binary not found. Check plugin settings.`);
     }
 
     // Register custom icon — three S-curves suggesting bojubot folds (gyri).
@@ -72,7 +81,7 @@ export default class BojuBotPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_CLAUDE, (leaf) => new ClaudeView(leaf, this));
 
-    this.addRibbonIcon('brain-circuit', 'Open BojuBot agent', () => {
+    this.addRibbonIcon(this.brand.icon, `Open ${this.brand.name} agent`, () => {
       void this.activateView();
     });
 
@@ -248,11 +257,11 @@ export default class BojuBotPlugin extends Plugin {
       name: 'Reload skills',
       callback: () => {
         if (!this.settings.registerSkillsAsCommands) {
-          new Notice('BojuBot: "Register skills as Ctrl+P commands" is disabled in settings.');
+          new Notice(`${this.brand.name}: "Register skills as Ctrl+P commands" is disabled in settings.`);
           return;
         }
         this.reloadSkillCommands();
-        new Notice('BojuBot: skills reloaded.');
+        new Notice(`${this.brand.name}: skills reloaded.`);
       }
     });
 
@@ -391,6 +400,11 @@ export default class BojuBotPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<BojuBotSettings>);
+    // `brand` is a nested object: the shallow Object.assign above copies the
+    // whole reference from data.json (or leaves it undefined). resolveBrand()
+    // is what fills every field field-by-field, so a partial brand never drops
+    // sibling defaults.
+    this.refreshBrand();
     // Migrate old hardcoded log paths → empty so the dynamic default takes over
     if (this.settings.logFilePath === '_bojubot-debug.log') {
       this.settings.logFilePath = '';
@@ -404,6 +418,7 @@ export default class BojuBotPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+    this.refreshBrand();
   }
 
   notifyPermissionChanged(): void {

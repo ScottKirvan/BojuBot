@@ -6,6 +6,7 @@ import { neutralizeTriggers } from './constants';
 import { scanPinnedFiles, scanFileInstructions } from './FrontmatterGuard';
 import type { PermissionMode } from './ClaudeProcess';
 import orientationTemplate from './orientation.md';
+import { activeBrand, DEFAULT_BRAND } from './brand';
 
 export const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; can: string; cannot: string }> = {
   restricted: {
@@ -55,6 +56,14 @@ export class ContextManager {
 
     // Layer 0: System orientation (always injected)
     const perm = PERMISSION_DESCRIPTIONS[this.permissionMode];
+    // Assistant identity: only rebranded when the user opts in — otherwise the
+    // orientation stays byte-for-byte the stock BojuBot identity even if a
+    // display name is set elsewhere. Support line falls back to the bundled URLs.
+    const brand = activeBrand();
+    const identityName = brand.applyToAssistantIdentity ? brand.name : DEFAULT_BRAND.name;
+    const supportLine = brand.applyToAssistantIdentity
+      ? [brand.links.support, brand.links.community].filter(Boolean).join(' · ')
+      : `${DEFAULT_BRAND.links.support} · ${DEFAULT_BRAND.links.community}`;
     let cwdDisplay: string;
     if (!this.cwd || this.cwd === this.vaultRoot) {
       cwdDisplay = 'vault root';
@@ -69,7 +78,7 @@ export class ContextManager {
       // cwd is outside the vault entirely — absolute path is fine, no vault info leaked
       cwdDisplay = this.cwd;
     }
-    const ADDITIONAL_DIRS_BOUNDARY = 'Your environment may list "Additional working directories" beyond your CWD — these come from Claude Code CLI\'s own global config and are not something BojuBot set up; they are frequently leftover from unrelated projects. Ignore them: do not read, write, or explore any additional working directory unless the user explicitly directs you there.';
+    const ADDITIONAL_DIRS_BOUNDARY = `Your environment may list "Additional working directories" beyond your CWD — these come from Claude Code CLI's own global config and are not something ${identityName} set up; they are frequently leftover from unrelated projects. Ignore them: do not read, write, or explore any additional working directory unless the user explicitly directs you there.`;
     const CWD_BOUNDARY = 'Treat your CWD as your working root. Never autonomously infer or declare a vault root, project root, or repository root from directory structure or config folder markers. If the user explicitly asks you to look at a parent directory, you may do so.';
     const cwdInstruction = [
       ADDITIONAL_DIRS_BOUNDARY,
@@ -77,6 +86,8 @@ export class ContextManager {
     ].filter(Boolean).join(' ');
 
     let orientation = orientationTemplate
+      .split('{{BRAND}}').join(identityName)
+      .replace('{{SUPPORT_LINE}}', supportLine)
       .replace('{{CWD}}', cwdDisplay)
       .replace('{{CWD_INSTRUCTION}}', cwdInstruction)
       .replace('{{PERMISSION_SUMMARY}}', perm.summary)

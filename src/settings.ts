@@ -4,6 +4,7 @@ import type { PermissionMode } from './ClaudeProcess';
 export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
+import { BrandConfig, brandName } from './brand';
 
 export interface ClaudeModel {
   id: string;
@@ -83,6 +84,12 @@ export interface BojuBotSettings {
   userLabel: string;
   /** Claude model ID passed via --model at spawn time. Empty = Claude default (Sonnet). */
   defaultModel: string;
+  /**
+   * Optional white-label branding (display name, icon, art, greetings, links).
+   * Absent → the stock BojuBot identity, byte-for-byte. Always read through
+   * resolveBrand() — never trust the shallow settings merge to fill it in.
+   */
+  brand?: BrandConfig;
 }
 
 export const DEFAULT_SETTINGS: BojuBotSettings = {
@@ -342,7 +349,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .addText((text) => {
         new FolderSuggest(this.app, text.inputEl);
         text
-          .setPlaceholder('BojuBot exports')
+          .setPlaceholder(`${brandName()} exports`)
           .setValue(this.plugin.settings.exportFolder)
           .onChange(async (value) => {
             this.plugin.settings.exportFolder = value;
@@ -357,7 +364,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
         'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
         'or an absolute path to store them outside the vault entirely. ' +
-        'Restart BojuBot after changing this.'
+        `Restart ${brandName()} after changing this.`
       )
       .addText((text) => {
         new FolderSuggest(this.app, text.inputEl);
@@ -396,7 +403,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .setName('Register skills as Ctrl+P commands')
       .setDesc(
         'Expose each skill as an Obsidian command palette entry (prefixed "Skill: …"). ' +
-        'Run "BojuBot: Reload skills" from the palette after adding or removing skill files. ' +
+        `Run "${brandName()}: Reload skills" from the palette after adding or removing skill files. ` +
         'Disable if you find the extra commands cluttering the palette.'
       )
       .addToggle((toggle) =>
@@ -645,6 +652,115 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.settings.logVerbosity = value as 'normal' | 'verbose';
             await this.plugin.saveSettings();
             this.plugin.reconfigureLogger();
+          })
+      );
+
+    // ── Brand ──────────────────────────────────────────────────────────────
+    // Everything here is optional. Blank fields fall back to the stock BojuBot
+    // identity (see resolveBrand). Nothing is ever removed — an empty link just
+    // hides its card. Greetings/tips overrides are data.json-only for now.
+    new Setting(containerEl).setName('Brand').setHeading();
+
+    const ensureBrand = (): NonNullable<typeof this.plugin.settings.brand> =>
+      (this.plugin.settings.brand ??= {});
+    const ensureLinks = (): NonNullable<NonNullable<typeof this.plugin.settings.brand>['links']> => {
+      const b = ensureBrand();
+      return (b.links ??= {});
+    };
+    const saveBrand = async () => {
+      // Drop an empty brand object so an untouched install stays byte-for-byte.
+      const b = this.plugin.settings.brand;
+      if (b && Object.keys(b).length === 0) delete this.plugin.settings.brand;
+      await this.plugin.saveSettings();
+    };
+
+    new Setting(containerEl)
+      .setName('Display name')
+      .setDesc('Shown in the panel title, welcome header, notices, and prompts. Blank = BojuBot. Reload the panel to apply everywhere.')
+      .addText((text) =>
+        text
+          .setPlaceholder('BojuBot')
+          .setValue(this.plugin.settings.brand?.name ?? '')
+          .onChange(async (value) => {
+            ensureBrand().name = value;
+            await saveBrand();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Ribbon icon')
+      .setDesc('Lucide icon ID for the ribbon and tab. Blank = brain-circuit.')
+      .addText((text) =>
+        text
+          // eslint-disable-next-line obsidianmd/ui/sentence-case -- literal Lucide icon id, must stay lowercase
+          .setPlaceholder('brain-circuit')
+          .setValue(this.plugin.settings.brand?.icon ?? '')
+          .onChange(async (value) => {
+            ensureBrand().icon = value;
+            await saveBrand();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Logo')
+      .setDesc('Data: URI or vault-relative image path for the header logo. Blank = bundled logo.')
+      .addText((text) =>
+        text
+          .setPlaceholder('(Bundled)')
+          .setValue(this.plugin.settings.brand?.logo ?? '')
+          .onChange(async (value) => {
+            ensureBrand().logo = value;
+            await saveBrand();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Welcome sprite')
+      .setDesc('Data: URI or vault-relative image path for the welcome mascot. Blank = bundled sprite.')
+      .addText((text) =>
+        text
+          .setPlaceholder('(Bundled)')
+          .setValue(this.plugin.settings.brand?.sprite ?? '')
+          .onChange(async (value) => {
+            ensureBrand().sprite = value;
+            await saveBrand();
+          })
+      );
+
+    const linkSetting = (
+      name: string,
+      desc: string,
+      key: 'doc' | 'community' | 'source' | 'support',
+      placeholder: string,
+    ) => {
+      new Setting(containerEl)
+        .setName(name)
+        .setDesc(desc)
+        .addText((text) =>
+          text
+            .setPlaceholder(placeholder)
+            .setValue(this.plugin.settings.brand?.links?.[key] ?? '')
+            .onChange(async (value) => {
+              ensureLinks()[key] = value;
+              await saveBrand();
+            })
+        );
+    };
+
+    linkSetting('Documentation link', 'About-modal Documentation card. Blank = default. Set to a single space to hide the card.', 'doc', '(default)');
+    linkSetting('Community link', 'About-modal community/Discord card. Blank = default. Space to hide.', 'community', '(default)');
+    linkSetting('Source link', 'About-modal source-code card. Blank = default upstream repo.', 'source', '(default)');
+    linkSetting('Support link', 'Support URL shown to Claude in the system prompt. Blank = default.', 'support', '(default)');
+
+    new Setting(containerEl)
+      .setName('Rebrand assistant identity')
+      .setDesc('Also use the display name in the system prompt Claude receives (how it refers to itself). Off = the assistant identity stays "BojuBot" even with a custom name.')
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.brand?.applyToAssistantIdentity ?? false)
+          .onChange(async (value) => {
+            ensureBrand().applyToAssistantIdentity = value;
+            await saveBrand();
           })
       );
   }
