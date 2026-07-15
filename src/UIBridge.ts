@@ -1,5 +1,6 @@
 import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
+import { brandName } from './brand';
 export { BOJU_PREFIX } from './constants';
 export { BojuBotAction, extractActions } from './utils/actionParser';
 import type { BojuBotAction } from './utils/actionParser';
@@ -41,7 +42,7 @@ class ConfirmCommandModal extends Modal {
   }
 
   onOpen() {
-    this.titleEl.setText('BojuBot — unlisted command');
+    this.titleEl.setText(`${brandName()} — unlisted command`);
     const { contentEl } = this;
 
     contentEl.createEl('p', {
@@ -210,7 +211,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
         if (executed) log('UIBridge: run-command executed:', commandId);
         else {
           warn('UIBridge: run-command — command not found or failed:', commandId);
-          new Notice(`BojuBot: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
+          new Notice(`${brandName()}: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
         }
       } else if (commandDenylist.includes(commandId)) {
         // Permanently denied (and not in allowlist) — hard block silently
@@ -226,24 +227,24 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
           if (executed) log('UIBridge: run-command executed:', commandId);
           else {
             warn('UIBridge: run-command — command not found or failed:', commandId);
-            new Notice(`BojuBot: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
+            new Notice(`${brandName()}: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
           }
         } else {
           if (remember && onAddToDenylist) await onAddToDenylist(commandId);
           log('UIBridge: run-command denied by user:', commandId);
-          new Notice(`BojuBot: Command "${displayName}" denied.`, 3000);
+          new Notice(`${brandName()}: Command "${displayName}" denied.`, 3000);
         }
       } else {
         // Prompting disabled — hard block with notice
         warn('UIBridge: run-command blocked — not in allowlist:', commandId);
-        new Notice(`BojuBot: Claude wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → BojuBot to enable it.`, 8000);
+        new Notice(`${brandName()}: Claude wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → ${brandName()} to enable it.`, 8000);
       }
       break;
     }
 
     case 'set-label': {
       const userLabel = ((action.user as string) ?? '').trim() || 'User';
-      const assistantLabel = ((action.assistant as string) ?? '').trim() || 'BojuBot';
+      const assistantLabel = ((action.assistant as string) ?? '').trim() || brandName();
       options.onSetLabel?.(userLabel, assistantLabel);
       break;
     }

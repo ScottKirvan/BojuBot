@@ -2,6 +2,7 @@
  * Converts an Obsidian Canvas JSON file to a human-readable text description
  * that Claude can understand without needing to parse raw JSON coordinates.
  */
+import { brandName } from '../brand';
 
 interface CanvasNode {
   id: string;
@@ -119,7 +120,7 @@ export function canvasToText(filename: string, json: string, maxChars = 0): stri
 
   const result = lines.join('\n');
   if (maxChars > 0 && result.length > maxChars) {
-    return result.substring(0, maxChars) + `\n\n[Canvas truncated — ${nodes.length} nodes exceeded the ${maxChars}-character limit. Adjust "Max canvas size" in BojuBot settings to see more.]`;
+    return result.substring(0, maxChars) + `\n\n[Canvas truncated — ${nodes.length} nodes exceeded the ${maxChars}-character limit. Adjust "Max canvas size" in ${brandName()} settings to see more.]`;
   }
   return result;
 }

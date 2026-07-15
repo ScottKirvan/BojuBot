@@ -24,6 +24,7 @@ import { extractToolDetail } from '../src/utils/toolFormatting';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
+import { resolveBrand, isWhiteLabeled, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1052,5 +1053,84 @@ describe('SessionCoordinator reentrancy guard', () => {
     } finally {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveBrand — pure brand-config resolver
+// ---------------------------------------------------------------------------
+
+describe('resolveBrand', () => {
+  test('undefined config → stock BojuBot identity, byte-for-byte', () => {
+    const b = resolveBrand(undefined);
+    assert.equal(b.name, 'BojuBot');
+    assert.equal(b.icon, 'brain-circuit');
+    assert.equal(b.logo, '', "empty logo signals 'use bundled'");
+    assert.equal(b.sprite, '');
+    assert.equal(b.applyToAssistantIdentity, false);
+    assert.equal(b.links.doc, DEFAULT_BRAND.links.doc);
+    assert.equal(b.links.community, DEFAULT_BRAND.links.community);
+    assert.equal(b.links.source, DEFAULT_BRAND.links.source);
+    assert.equal(b.links.support, DEFAULT_BRAND.links.support);
+    assert.equal(isWhiteLabeled(b), false);
+  });
+
+  test('empty object → identical to undefined (all defaults)', () => {
+    assert.deepEqual(resolveBrand({}), resolveBrand(undefined));
+  });
+
+  test('partial config fills every other field from defaults (no shallow-merge drop)', () => {
+    const b = resolveBrand({ name: 'AXI25' });
+    assert.equal(b.name, 'AXI25');
+    assert.equal(b.icon, 'brain-circuit', 'icon still defaulted');
+    assert.equal(b.links.doc, DEFAULT_BRAND.links.doc, 'sibling links still defaulted');
+    assert.equal(isWhiteLabeled(b), true);
+  });
+
+  test('whitespace-only name/icon fall back to defaults', () => {
+    const b = resolveBrand({ name: '   ', icon: '\t' });
+    assert.equal(b.name, 'BojuBot');
+    assert.equal(b.icon, 'brain-circuit');
+  });
+
+  test('name is trimmed', () => {
+    assert.equal(resolveBrand({ name: '  Acme  ' }).name, 'Acme');
+  });
+
+  test("link '' means hide (kept), absent means default", () => {
+    const b = resolveBrand({ links: { community: '' } });
+    assert.equal(b.links.community, '', "explicit '' is preserved, not defaulted");
+    assert.equal(b.links.doc, DEFAULT_BRAND.links.doc, 'absent link still defaults');
+  });
+
+  test('link override is used verbatim', () => {
+    const b = resolveBrand({ links: { doc: 'https://base25.so' } });
+    assert.equal(b.links.doc, 'https://base25.so');
+  });
+
+  test('greetings/tips override when provided, else bundled defaults are used', () => {
+    const withDefaults = resolveBrand({});
+    assert.ok(Array.isArray(withDefaults.tips) && withDefaults.tips.length > 0, 'bundled tips present');
+    assert.ok(Array.isArray(withDefaults.greetings.morning), 'bundled greetings present');
+
+    const customTips = ['only tip'];
+    const customGreetings = {
+      morning: [{ withName: 'Hi {{name}}', withoutName: 'Hi' }],
+      afternoon: [], evening: [], night: [],
+    };
+    const b = resolveBrand({ tips: customTips, greetings: customGreetings });
+    assert.deepEqual(b.tips, customTips);
+    assert.deepEqual(b.greetings, customGreetings);
+  });
+
+  test('applyToAssistantIdentity honours explicit true', () => {
+    assert.equal(resolveBrand({ applyToAssistantIdentity: true }).applyToAssistantIdentity, true);
+  });
+
+  test('resolver is a pure function — does not mutate its input', () => {
+    const input: BrandConfig = { name: 'AXI25', links: { doc: 'x' } };
+    const snapshot = JSON.stringify(input);
+    resolveBrand(input);
+    assert.equal(JSON.stringify(input), snapshot, 'input object untouched');
   });
 });

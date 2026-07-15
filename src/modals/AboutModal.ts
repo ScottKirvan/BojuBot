@@ -1,5 +1,6 @@
 import { App, Modal, Plugin, sanitizeHTMLToDom, setIcon } from 'obsidian';
 import logoDataUrl from '../../assets/media/logo.png';
+import { activeBrand, isWhiteLabeled, DEFAULT_BRAND, ResolvedBrand } from '../brand';
 
 // Inline SVG — no file import, no runtime string replacement, attributes set directly.
 // stroke-width="4" matches Lucide's visual weight at this viewBox size (48×48 vs Lucide's 24×24).
@@ -22,31 +23,44 @@ interface LinkItem {
   svgInline?: string;
 }
 
-const LINK_ITEMS: LinkItem[] = [
-  {
-    icon: 'book-open',
-    title: 'Documentation',
-    desc: 'Official guide, skill reference, and setup instructions.',
-    label: 'Visit',
-    href: 'https://www.scottkirvan.com/BojuBot/',
-    accent: true,
-  },
-  {
-    icon: '',
-    svgInline: DISCORD_SVG,
-    title: 'Discord',
-    desc: 'Chat with other BojuBot users and get support.',
-    label: 'Join',
-    href: 'https://discord.gg/TN6XJSNK5Y',
-  },
-  {
-    icon: 'github',
-    title: 'GitHub',
-    desc: 'Source code, issues, and release notes.',
-    label: 'View',
-    href: 'https://github.com/ScottKirvan/BojuBot',
-  },
-];
+// Cards are built from the resolved brand links. An empty link ('') means the
+// downstream build chose to hide that card — the card is skipped, never deleted
+// from the code. Nothing here removes author attribution: that lives in the
+// credit line below, outside the configurable links.
+function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
+  const { name, links } = brand;
+  const items: LinkItem[] = [];
+  if (links.doc) {
+    items.push({
+      icon: 'book-open',
+      title: 'Documentation',
+      desc: 'Official guide, skill reference, and setup instructions.',
+      label: 'Visit',
+      href: links.doc,
+      accent: true,
+    });
+  }
+  if (links.community) {
+    items.push({
+      icon: '',
+      svgInline: DISCORD_SVG,
+      title: 'Discord',
+      desc: `Chat with other ${name} users and get support.`,
+      label: 'Join',
+      href: links.community,
+    });
+  }
+  if (links.source) {
+    items.push({
+      icon: 'github',
+      title: 'GitHub',
+      desc: 'Source code, issues, and release notes.',
+      label: 'View',
+      href: links.source,
+    });
+  }
+  return items;
+}
 
 export class AboutModal extends Modal {
   private plugin: Plugin;
@@ -60,18 +74,25 @@ export class AboutModal extends Modal {
     const { contentEl } = this;
     contentEl.addClass('bojubot-about-modal');
 
+    const brand = activeBrand();
+    const logoSrc = !brand.logo
+      ? logoDataUrl
+      : brand.logo.startsWith('data:')
+        ? brand.logo
+        : this.app.vault.adapter.getResourcePath(brand.logo);
+
     const header = contentEl.createDiv({ cls: 'bojubot-about-header' });
     const logoImg = header.createEl('img', { cls: 'bojubot-about-logo' });
-    logoImg.src = logoDataUrl;
-    logoImg.alt = 'BojuBot';
-    header.createEl('div', { text: 'BojuBot', cls: 'bojubot-about-name' });
+    logoImg.src = logoSrc;
+    logoImg.alt = brand.name;
+    header.createEl('div', { text: brand.name, cls: 'bojubot-about-name' });
     header.createEl('div', {
       text: `Version ${this.plugin.manifest.version}`,
       cls: 'bojubot-about-version',
     });
 
     const list = contentEl.createDiv({ cls: 'bojubot-about-list' });
-    for (const item of LINK_ITEMS) {
+    for (const item of buildLinkItems(brand)) {
       const row = list.createDiv({ cls: 'bojubot-about-item' });
 
       const iconEl = row.createDiv({ cls: 'bojubot-about-item-icon' });
@@ -92,6 +113,19 @@ export class AboutModal extends Modal {
       });
       btn.setAttr('target', '_blank');
       btn.setAttr('rel', 'noopener');
+    }
+
+    // Preserve upstream attribution on any white-labeled build. Never shown for
+    // a stock BojuBot install (it would be redundant); always shown once the
+    // name is customized, so the origin credit + license can't be configured
+    // away — only the operational links above are configurable.
+    if (isWhiteLabeled(brand)) {
+      const credit = contentEl.createDiv({ cls: 'bojubot-about-credit' });
+      credit.appendText('Based on ');
+      const link = credit.createEl('a', { text: DEFAULT_BRAND.name, href: DEFAULT_BRAND.links.source });
+      link.setAttr('target', '_blank');
+      link.setAttr('rel', 'noopener');
+      credit.appendText(' by Scott Kirvan · MIT');
     }
   }
 

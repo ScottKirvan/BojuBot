@@ -1,4 +1,5 @@
 import { Notice } from 'obsidian';
+import { brandName } from './brand';
 
 export interface TokenGaugeHost {
   getSessionId(): string | undefined;
@@ -101,7 +102,7 @@ export class TokenGauge {
 
   showConfirm(): void {
     if (!this.host.getSessionId()) {
-      new Notice('BojuBot: no active session to compact.');
+      new Notice(`${brandName()}: no active session to compact.`);
       return;
     }
     this.confirmEl.classList.add('is-visible');
@@ -120,15 +121,15 @@ export class TokenGauge {
   compact(): void {
     const sessionId = this.host.getSessionId();
     if (!sessionId) {
-      new Notice('BojuBot: no active session to compact.');
+      new Notice(`${brandName()}: no active session to compact.`);
       return;
     }
     this.contextTokens = 0;
     this.update(0);
-    new Notice('BojuBot: compacting session…');
+    new Notice(`${brandName()}: compacting session…`);
     this.host.compact(
-      () => new Notice('BojuBot: session compacted.'),
-      (message) => new Notice(`BojuBot: compaction failed — ${message}`),
+      () => new Notice(`${brandName()}: session compacted.`),
+      (message) => new Notice(`${brandName()}: compaction failed — ${message}`),
     );
   }
 }
