@@ -111,7 +111,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   atMentionExtensions: '*',
   injectSplitPaneFiles: true,
   injectStackedTabFiles: false,
-  exportFolder: 'BojuBot Exports',
+  exportFolder: '',
   lastActiveSessionId: '',
   sessionStoragePath: '',
   commandsFolder: '',
@@ -732,8 +732,9 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       desc: string,
       key: 'doc' | 'community' | 'source' | 'support',
       placeholder: string,
+      hideable = true,
     ) => {
-      new Setting(containerEl)
+      const setting = new Setting(containerEl)
         .setName(name)
         .setDesc(desc)
         .addText((text) =>
@@ -741,16 +742,35 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             .setPlaceholder(placeholder)
             .setValue(this.plugin.settings.brand?.links?.[key] ?? '')
             .onChange(async (value) => {
-              ensureLinks()[key] = value;
+              const trimmed = value.trim();
+              const links = ensureLinks();
+              // A blank field means "use the default" — delete the key rather
+              // than storing '', which resolveBrand treats as "explicitly
+              // hidden". Hiding a card is a deliberate action via the button
+              // below, not an incidental side effect of clearing the field.
+              if (trimmed) links[key] = trimmed;
+              else delete links[key];
               await saveBrand();
             })
         );
+      if (hideable) {
+        setting.addExtraButton((btn) =>
+          btn
+            .setIcon('eye-off')
+            .setTooltip(`Hide the ${name.replace(' link', '')} card`)
+            .onClick(async () => {
+              ensureLinks()[key] = '';
+              await saveBrand();
+              this.display();
+            })
+        );
+      }
     };
 
-    linkSetting('Documentation link', 'About-modal Documentation card. Blank = default. Set to a single space to hide the card.', 'doc', '(default)');
-    linkSetting('Community link', 'About-modal community/Discord card. Blank = default. Space to hide.', 'community', '(default)');
+    linkSetting('Documentation link', 'About-modal Documentation card. Blank = default.', 'doc', '(default)');
+    linkSetting('Community link', 'About-modal community/Discord card. Blank = default.', 'community', '(default)');
     linkSetting('Source link', 'About-modal source-code card. Blank = default upstream repo.', 'source', '(default)');
-    linkSetting('Support link', 'Support URL shown to Claude in the system prompt. Blank = default.', 'support', '(default)');
+    linkSetting('Support link', 'Support URL shown to Claude in the system prompt. Blank = default.', 'support', '(default)', false);
 
     new Setting(containerEl)
       .setName('Rebrand assistant identity')
