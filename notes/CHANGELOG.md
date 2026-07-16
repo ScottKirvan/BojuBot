@@ -7,6 +7,20 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.5.0](https://github.com/ScottKirvan/BojuBot/compare/3.4.2...3.5.0) (2026-07-16)
+
+
+### Features
+
+* optional brand config (name, icon, art, links, greetings) via settings ([31c600a](https://github.com/ScottKirvan/BojuBot/commit/31c600a995997de0db1578e5b9870c47c698d8d7)), closes [#286](https://github.com/ScottKirvan/BojuBot/issues/286)
+
+
+### Bug Fixes
+
+* avoid eslint-disable for the ribbon-icon placeholder ([ac6c050](https://github.com/ScottKirvan/BojuBot/commit/ac6c050ea0b662628bb8b632f0fad9462f50df94))
+* correct brand-config link semantics and export-folder default ([8068738](https://github.com/ScottKirvan/BojuBot/commit/8068738ea06c1ea15b9aed7666bdde8801dcbba5))
+* make the link hide button a real toggle ([4aed8b3](https://github.com/ScottKirvan/BojuBot/commit/4aed8b34912122351abcc8505825be709aafa665))
+
 ## [3.4.2](https://github.com/ScottKirvan/BojuBot/compare/3.4.1...3.4.2) (2026-07-14)
 
 
