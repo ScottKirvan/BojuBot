@@ -24,7 +24,7 @@ import { extractToolDetail } from '../src/utils/toolFormatting';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
-import { resolveBrand, isWhiteLabeled, DEFAULT_BRAND, BrandConfig } from '../src/brand';
+import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1132,5 +1132,62 @@ describe('resolveBrand', () => {
     const snapshot = JSON.stringify(input);
     resolveBrand(input);
     assert.equal(JSON.stringify(input), snapshot, 'input object untouched');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveIdentityName / applyIdentityName — assistant-identity rebranding
+// ---------------------------------------------------------------------------
+
+describe('resolveIdentityName', () => {
+  test('applyToAssistantIdentity off → stock name, even with a custom brand name', () => {
+    const brand = resolveBrand({ name: 'AXI25' });
+    assert.equal(resolveIdentityName(brand), 'BojuBot');
+  });
+
+  test('applyToAssistantIdentity on → the custom brand name', () => {
+    const brand = resolveBrand({ name: 'AXI25', applyToAssistantIdentity: true });
+    assert.equal(resolveIdentityName(brand), 'AXI25');
+  });
+});
+
+describe('applyIdentityName', () => {
+  test('rebranding off → text passes through unchanged', () => {
+    const brand = resolveBrand({ name: 'AXI25' });
+    const text = 'intercepted by BojuBot, never shown to user';
+    assert.equal(applyIdentityName(text, brand), text);
+  });
+
+  test('rebranding on → every occurrence of the stock name is replaced', () => {
+    const brand = resolveBrand({ name: 'AXI25', applyToAssistantIdentity: true });
+    const text = '## BojuBot\nintercepted by BojuBot, never shown to user\n"assistant":"BojuBot"';
+    assert.equal(
+      applyIdentityName(text, brand),
+      '## AXI25\nintercepted by AXI25, never shown to user\n"assistant":"AXI25"',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveExportFolder — brand-aware default for "export session to vault"
+// ---------------------------------------------------------------------------
+
+describe('resolveExportFolder', () => {
+  test('empty setting → brand-aware default', () => {
+    assert.equal(resolveExportFolder('', resolveBrand(undefined)), 'BojuBot Exports');
+  });
+
+  test('whitespace-only setting → brand-aware default', () => {
+    assert.equal(resolveExportFolder('   ', resolveBrand(undefined)), 'BojuBot Exports');
+  });
+
+  test('custom brand name flows into the default', () => {
+    const brand = resolveBrand({ name: 'AXI25' });
+    assert.equal(resolveExportFolder('', brand), 'AXI25 Exports');
+  });
+
+  test('custom folder setting is used verbatim, trimmed', () => {
+    const brand = resolveBrand({ name: 'AXI25' });
+    assert.equal(resolveExportFolder('  _my exports  ', brand), '_my exports');
   });
 });

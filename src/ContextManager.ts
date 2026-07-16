@@ -6,7 +6,7 @@ import { neutralizeTriggers } from './constants';
 import { scanPinnedFiles, scanFileInstructions } from './FrontmatterGuard';
 import type { PermissionMode } from './ClaudeProcess';
 import orientationTemplate from './orientation.md';
-import { activeBrand, DEFAULT_BRAND } from './brand';
+import { activeBrand, resolveIdentityName, DEFAULT_BRAND } from './brand';
 
 export const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; can: string; cannot: string }> = {
   restricted: {
@@ -60,7 +60,7 @@ export class ContextManager {
     // orientation stays byte-for-byte the stock BojuBot identity even if a
     // display name is set elsewhere. Support line falls back to the bundled URLs.
     const brand = activeBrand();
-    const identityName = brand.applyToAssistantIdentity ? brand.name : DEFAULT_BRAND.name;
+    const identityName = resolveIdentityName(brand);
     const supportLine = brand.applyToAssistantIdentity
       ? [brand.links.support, brand.links.community].filter(Boolean).join(' · ')
       : `${DEFAULT_BRAND.links.support} · ${DEFAULT_BRAND.links.community}`;

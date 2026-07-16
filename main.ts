@@ -414,14 +414,11 @@ export default class BojuBotPlugin extends Plugin {
     if (!this.settings.logFilePath) {
       this.settings.logFilePath = `${this.app.vault.configDir}/plugins/bojubot/bojubot-debug.log`;
     }
-    // Migrate old hardcoded export folder → empty so the brand-aware dynamic default takes over
+    // Migrate old hardcoded export folder → empty so the brand-aware dynamic
+    // default (resolveExportFolder, applied at point of use) takes over
     if (this.settings.exportFolder === 'BojuBot Exports') {
       this.settings.exportFolder = '';
       await this.saveSettings();
-    }
-    // Resolve empty export folder to a brand-aware default at load time
-    if (!this.settings.exportFolder) {
-      this.settings.exportFolder = `${this.brand.name} Exports`;
     }
   }
 

@@ -21,6 +21,7 @@ import { BOJU_PREFIX, neutralizeTriggers } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
 import { CLAUDE_MODELS, ClaudeModel } from './settings';
+import { resolveExportFolder } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import {
   StoredSession,
@@ -750,8 +751,8 @@ export class ClaudeView extends ItemView {
     const sessionId = this.coordinator.sessionId ?? '';
     const date = new Date().toISOString().slice(0, 10);
     const safeName = title.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
-    const folder = this.plugin.settings.exportFolder.trim();
-    const defaultPath = folder ? `${folder}/${safeName} ${date}.md` : `${safeName} ${date}.md`;
+    const folder = resolveExportFolder(this.plugin.settings.exportFolder, this.plugin.brand);
+    const defaultPath = `${folder}/${safeName} ${date}.md`;
     new ExportToVaultModal(this.app, defaultPath, async (notePath, openAfter) => {
       const content = this.buildExportMarkdown(title, sessionId, this.currentUserLabel, this.currentAssistantLabel);
       await this.writeExportNote(notePath, content);
@@ -765,8 +766,8 @@ export class ClaudeView extends ItemView {
     if (messages.length === 0) { new Notice('No messages found for this session'); return; }
     const date = new Date(session.updatedAt).toISOString().slice(0, 10);
     const safeName = session.title.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
-    const folder = this.plugin.settings.exportFolder.trim();
-    const defaultPath = folder ? `${folder}/${safeName} ${date}.md` : `${safeName} ${date}.md`;
+    const folder = resolveExportFolder(this.plugin.settings.exportFolder, this.plugin.brand);
+    const defaultPath = `${folder}/${safeName} ${date}.md`;
     new ExportToVaultModal(this.app, defaultPath, async (notePath, openAfter) => {
       const dateStr = new Date(session.updatedAt).toISOString().slice(0, 10);
       let md = `---\nbojubot_session: true\ndate: ${dateStr}\nsession_id: ${session.claudeSessionId}\nmessages: ${messages.length}\n---\n\n`;
