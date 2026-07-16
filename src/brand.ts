@@ -73,6 +73,15 @@ export interface BrandConfig {
    * downstream build explicitly opts in.
    */
   applyToAssistantIdentity?: boolean;
+  /**
+   * Hide the Brand section from Settings entirely once a white-label build is
+   * configured, so end users can't discover or revert it from the UI. This is
+   * a UX convenience, not a security boundary — anyone with file access to
+   * the vault can still flip it back in data.json, same as any other setting.
+   * Set from within the Settings UI itself (a one-way toggle while unlocked);
+   * there is deliberately no in-app way back once it's on.
+   */
+  locked?: boolean;
 }
 
 export interface ResolvedBrand {
