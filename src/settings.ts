@@ -659,7 +659,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     // Everything here is optional. Blank fields fall back to the stock BojuBot
     // identity (see resolveBrand). Nothing is ever removed — an empty link just
     // hides its card. Greetings/tips overrides are data.json-only for now.
-    new Setting(containerEl).setName('Brand').setHeading();
+    new Setting(containerEl).setName('Branding').setHeading();
 
     if (this.plugin.settings.brand?.locked) {
       new Setting(containerEl)

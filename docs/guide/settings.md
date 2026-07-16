@@ -6,8 +6,8 @@ Open **Settings → BojuBot** to configure:
 | ---------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Claude binary path**             | *(auto-detect)*                                      | Full path to the `claude` executable. Leave blank to auto-detect from PATH and common install locations.                                                                                                                                       |
 | **Context file path**              | `_claude-context.md`                                 | Vault-relative path to the context file injected at session start.                                                                                                                                                                             |
-| **Brand**                          | *(stock BojuBot identity)*                           | Customize name, icon, logo, mascot, and links for white-label distributions. See [Brand](#brand) below.                                                                                                                                        |
-| **Export folder**                  | `BojuBot Exports`                                    | Default folder for **Export session to vault**. Created automatically if it doesn't exist. Follows the display name set under [Brand](#brand) — e.g. `Acme Exports` on a white-labeled build.                                                 |
+| **Branding**                        | *(stock BojuBot identity)*                           | Customize name, icon, logo, mascot, and links for white-label distributions. See [Branding](#branding) below.                                                                                                                                   |
+| **Export folder**                  | `BojuBot Exports`                                    | Default folder for **Export session to vault**. Created automatically if it doesn't exist. Follows the display name set under [Branding](#branding) — e.g. `Acme Exports` on a white-labeled build.                                            |
 | **Session storage path**           | *(empty — default location)*                         | Where session JSON files are stored. See [Session storage location](#session-storage-location) below.                                                                                                                                          |
 | **Skills folder**                  | *(empty — default: `_BojuBot Skills/` at vault root)* | Folder containing skill files. See [Slash commands](./slash-commands).                                                                                                                                                                        |
 | **Vault tree depth**               | Off                                                  | Levels of folder/file names injected at session start. `0` = off (default), `1`–`10` = N levels, `-1` = unlimited. Names only — no file contents. Claude discovers structure on demand via the vault query protocol when off.                  |
@@ -54,11 +54,11 @@ The file is a JSON array of model objects. Any valid entries are appended to the
 
 The file is read each time the picker opens, so changes take effect immediately with no restart needed. If the file is missing or malformed, it is silently ignored and only the built-in models are shown.
 
-## Brand
+## Branding
 
-Every brand setting is optional and defaults to the stock BojuBot identity — leaving all of them blank is byte-for-byte the same experience as today. This exists for white-label distributions (teams, template vaults) that want to present the plugin under their own name without patching the bundle.
+Every branding setting is optional and defaults to the stock BojuBot identity — leaving all of them blank is byte-for-byte the same experience as today. This exists for white-label distributions (teams, template vaults) that want to present the plugin under their own name without patching the bundle.
 
-Configure under **Settings → BojuBot → Brand**:
+Configure under **Settings → BojuBot → Branding**:
 
 | Setting                        | Default                    | Description                                                                                                                                       |
 | ------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -71,7 +71,7 @@ Configure under **Settings → BojuBot → Brand**:
 | **Source link**                | Official GitHub repo        | About-modal source-code card.                                                                                                                      |
 | **Support link**                | Official BojuBot guide      | Support URL shown to Claude in its own system prompt — only used when **Rebrand assistant identity** is on.                                        |
 | **Rebrand assistant identity**  | Off                          | When on, the system prompt Claude receives uses your display name and support links too. Off = Claude still refers to itself as "BojuBot" internally, even with a custom display name set above. |
-| **Lock branding**              | Off                          | One-way toggle: hides the entire Brand section from this panel once you're done configuring it, so end users can't discover or revert it. See below.                                              |
+| **Lock branding**              | Off                          | One-way toggle: hides the entire Branding section from this panel once you're done configuring it, so end users can't discover or revert it. See below.                                            |
 
 **Locking branding:** useful for enterprise or managed distributions — configure everything above, then flip **Lock branding** on and the whole section disappears from Settings for anyone using that install. There's deliberately no toggle back once it's hidden; unlocking requires editing `brand.locked` to `false` in `data.json` directly. This is a UX convenience to stop casual tampering, not a security boundary — anyone with file access to their own vault can always edit `data.json` regardless of what the Settings UI shows.
 
