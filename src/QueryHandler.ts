@@ -2,7 +2,7 @@ import { App, TFolder } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { buildVaultTree } from './utils/fileTree';
 import { neutralizeTriggers } from './constants';
-import { activeBrand, DEFAULT_BRAND } from './brand';
+import { activeBrand, applyIdentityName } from './brand';
 import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
 import canvasRef from './references/canvas.md';
@@ -125,10 +125,7 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
         // ui-bridge.md hardcodes the stock name a few times ("intercepted by
         // BojuBot", the set-label example) — keep it consistent with the
         // orientation Claude already received when identity rebranding is on.
-        const brand = activeBrand();
-        const identityName = brand.applyToAssistantIdentity ? brand.name : DEFAULT_BRAND.name;
-        const body = ref.split(DEFAULT_BRAND.name).join(identityName);
-        return { query, result: body };
+        return { query, result: applyIdentityName(ref, activeBrand()) };
       }
 
       default:

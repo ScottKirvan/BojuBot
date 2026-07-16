@@ -134,6 +134,30 @@ export function isWhiteLabeled(brand: ResolvedBrand): boolean {
   return brand.name !== DEFAULT_BRAND.name;
 }
 
+/**
+ * The name Claude's own identity should use: the custom brand name only when
+ * applyToAssistantIdentity is on, the stock name otherwise. Shared by
+ * ContextManager (system orientation) and QueryHandler (the ui-bridge help
+ * reference) so both stay in sync.
+ */
+export function resolveIdentityName(brand: ResolvedBrand): string {
+  return brand.applyToAssistantIdentity ? brand.name : DEFAULT_BRAND.name;
+}
+
+/**
+ * Rewrite occurrences of the stock name in a static reference doc to match
+ * the resolved assistant identity. A no-op when identity rebranding is off.
+ */
+export function applyIdentityName(text: string, brand: ResolvedBrand): string {
+  const identityName = resolveIdentityName(brand);
+  return text.split(DEFAULT_BRAND.name).join(identityName);
+}
+
+/** Vault-relative export folder, falling back to a brand-aware default when unset. */
+export function resolveExportFolder(custom: string, brand: ResolvedBrand): string {
+  return custom.trim() || `${brand.name} Exports`;
+}
+
 // ---------------------------------------------------------------------------
 // Active-brand accessor
 //
