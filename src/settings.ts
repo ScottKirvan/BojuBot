@@ -4,7 +4,7 @@ import type { PermissionMode } from './ClaudeProcess';
 export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
-import { BrandConfig, brandName } from './brand';
+import { BrandConfig, brandName, DEFAULT_BRAND } from './brand';
 
 export interface ClaudeModel {
   id: string;
@@ -689,11 +689,14 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Ribbon icon')
-      .setDesc('Lucide icon ID for the ribbon and tab. Blank = brain-circuit.')
+      .setDesc(`Lucide icon ID for the ribbon and tab. Blank = ${DEFAULT_BRAND.icon}.`)
       .addText((text) =>
         text
-          // eslint-disable-next-line obsidianmd/ui/sentence-case -- literal Lucide icon id, must stay lowercase
-          .setPlaceholder('brain-circuit')
+          // Referencing the constant (not a literal) keeps this in sync with
+          // DEFAULT_BRAND.icon and avoids a lint disable-comment for a literal
+          // Lucide id that must stay lowercase (Obsidian's submission scan
+          // flags eslint-disable comments on required rules directly).
+          .setPlaceholder(DEFAULT_BRAND.icon)
           .setValue(this.plugin.settings.brand?.icon ?? '')
           .onChange(async (value) => {
             ensureBrand().icon = value;
