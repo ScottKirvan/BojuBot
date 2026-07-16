@@ -69,25 +69,15 @@ jobs:
     with:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
       project_name: "BojuBot"
-      project_context: "BojuBot is an Obsidian plugin that puts a full Claude Code agent in Obsidian's sidebar, enabling AI-assisted note reading, writing, and reorganization without leaving the app. No API key needed."
+      project_context: "BojuBot is an Obsidian plugin. More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code."
       header: |
-        ## 🧠 BojuBot — Claude Code Agentic File Management for Obsidian
+        ## 👾 BojuBot 👾
 
-        > BojuBot puts a full Claude Code agent in Obsidian's sidebar. It reads, writes, reorganizes, and creates notes — and hands you the results inside Obsidian. No API key needed.
+        More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code
 
-        ### 📋 Requirements
-        - Obsidian **desktop** (Windows, Mac, Linux — no mobile)
-        - [Claude Code CLI](https://claude.ai/download) installed and authenticated
-
-        ### 📦 Installation
-        **Community plugin browser:** Open Obsidian → Settings → Community Plugins → Browse → search **BojuBot** → Install → Enable
-
-        **Manual:** Download `main.js`, `manifest.json`, and `styles.css` below → place in `<vault>/.obsidian/plugins/bojubot/` → enable in Obsidian settings
-
-        ---
       footer: |
         ---
-        📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md)
+        🫶❤️[Support this project](https://www.scottkirvan.com/ScottKirvan/sponsor.html) · 📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md) · 📋 [Changelog](https://github.com/ScottKirvan/BojuBot/blob/main/notes/CHANGELOG.md)
     secrets: inherit
 
   update-changelog-prs:
