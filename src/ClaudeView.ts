@@ -1791,8 +1791,14 @@ export class ClaudeView extends ItemView {
   }
 
   private _executeSkillDef(skill: SkillDef): void {
-    const { name, body, params, autorun } = skill;
+    const { name, body: rawBody, params, autorun } = skill;
     if (!this.inputEl) return;
+    // Skill files are files — shareable via git, sync, or download — so a
+    // tampered or planted skill could embed a fake @@BOJU line. Neutralize
+    // the same way every other file-sourced content is before it becomes
+    // prompt or input text, covering all three paths below (param modal,
+    // autorun, manual insert).
+    const body = neutralizeTriggers(rawBody);
     if (params?.length) {
       new SlashParamModal(this.app, name, params, body, autorun, (result, shouldRun, attachments) => {
         for (const att of attachments) {
