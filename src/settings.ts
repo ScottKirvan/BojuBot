@@ -661,6 +661,14 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     // hides its card. Greetings/tips overrides are data.json-only for now.
     new Setting(containerEl).setName('Brand').setHeading();
 
+    if (this.plugin.settings.brand?.locked) {
+      new Setting(containerEl)
+        .setDesc('Branding is locked and cannot be changed from this panel. Edit data.json directly (brand.locked) to unlock it.');
+      // Brand is the last section in display() — safe to bail out here. If a
+      // new section is ever added after Brand, this must become an if/else.
+      return;
+    }
+
     const ensureBrand = (): NonNullable<typeof this.plugin.settings.brand> =>
       (this.plugin.settings.brand ??= {});
     const ensureLinks = (): NonNullable<NonNullable<typeof this.plugin.settings.brand>['links']> => {
@@ -791,6 +799,24 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           .onChange(async (value) => {
             ensureBrand().applyToAssistantIdentity = value;
             await saveBrand();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Lock branding')
+      .setDesc(
+        'Once you\'re done configuring your white-label build, hide this entire section from the panel so end ' +
+        'users can\'t discover or revert it — useful for enterprise/managed distributions. This only hides the ' +
+        'UI: it is not a security boundary, and can be reverted by editing brand.locked in data.json directly.'
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(false)
+          .onChange(async (value) => {
+            if (!value) return;
+            ensureBrand().locked = true;
+            await saveBrand();
+            this.display();
           })
       );
   }
