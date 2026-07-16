@@ -21,6 +21,8 @@
 * correct brand-config link semantics and export-folder default ([8068738](https://github.com/ScottKirvan/BojuBot/commit/8068738ea06c1ea15b9aed7666bdde8801dcbba5))
 * make the link hide button a real toggle ([4aed8b3](https://github.com/ScottKirvan/BojuBot/commit/4aed8b34912122351abcc8505825be709aafa665))
 
+Includes PRs: [#293](https://github.com/ScottKirvan/BojuBot/pull/293), [#294](https://github.com/ScottKirvan/BojuBot/pull/294)
+
 ## [3.4.2](https://github.com/ScottKirvan/BojuBot/compare/3.4.1...3.4.2) (2026-07-14)
 
 
