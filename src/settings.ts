@@ -806,8 +806,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .setName('Lock branding')
       .setDesc(
         'Hide the entire Brand settings section from casual users. This is not a security boundary — it can ' +
-        'still be reverted by editing brand.locked in data.json directly. There\'s no way back from this panel ' +
-        'once enabled.'
+        'still be reverted by editing brand.locked in data.json directly.'
       )
       .addToggle((toggle) =>
         toggle
