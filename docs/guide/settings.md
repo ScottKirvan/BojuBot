@@ -6,7 +6,8 @@ Open **Settings → BojuBot** to configure:
 | ---------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Claude binary path**             | *(auto-detect)*                                      | Full path to the `claude` executable. Leave blank to auto-detect from PATH and common install locations.                                                                                                                                       |
 | **Context file path**              | `_claude-context.md`                                 | Vault-relative path to the context file injected at session start.                                                                                                                                                                             |
-| **Export folder**                  | `BojuBot Exports`                                    | Default folder for **Export session to vault**. Created automatically if it doesn't exist. Leave blank to save at vault root.                                                                                                                  |
+| **Brand**                          | *(stock BojuBot identity)*                           | Customize name, icon, logo, mascot, and links for white-label distributions. See [Brand](#brand) below.                                                                                                                                        |
+| **Export folder**                  | `BojuBot Exports`                                    | Default folder for **Export session to vault**. Created automatically if it doesn't exist. Follows the display name set under [Brand](#brand) — e.g. `Acme Exports` on a white-labeled build.                                                 |
 | **Session storage path**           | *(empty — default location)*                         | Where session JSON files are stored. See [Session storage location](#session-storage-location) below.                                                                                                                                          |
 | **Skills folder**                  | *(empty — default: `_BojuBot Skills/` at vault root)* | Folder containing skill files. See [Slash commands](./slash-commands).                                                                                                                                                                        |
 | **Vault tree depth**               | Off                                                  | Levels of folder/file names injected at session start. `0` = off (default), `1`–`10` = N levels, `-1` = unlimited. Names only — no file contents. Claude discovers structure on demand via the vault query protocol when off.                  |
@@ -52,6 +53,32 @@ The file is a JSON array of model objects. Any valid entries are appended to the
 | `description` | No | Short note shown below the name |
 
 The file is read each time the picker opens, so changes take effect immediately with no restart needed. If the file is missing or malformed, it is silently ignored and only the built-in models are shown.
+
+## Brand
+
+Every brand setting is optional and defaults to the stock BojuBot identity — leaving all of them blank is byte-for-byte the same experience as today. This exists for white-label distributions (teams, template vaults) that want to present the plugin under their own name without patching the bundle.
+
+Configure under **Settings → BojuBot → Brand**:
+
+| Setting                        | Default                    | Description                                                                                                                                       |
+| ------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Display name**                | `BojuBot`                   | Shown in the panel title, ribbon tooltip, welcome header, notices, and prompts.                                                                    |
+| **Ribbon icon**                 | `brain-circuit`              | [Lucide](https://lucide.dev/icons/) icon ID for the ribbon and view tab.                                                                            |
+| **Logo**                       | *(bundled logo)*            | `data:` URI or vault-relative image path for the welcome header logo and About modal.                                                              |
+| **Welcome sprite**              | *(bundled sprite)*          | `data:` URI or vault-relative image path for the welcome-screen mascot.                                                                            |
+| **Documentation link**          | Official BojuBot guide      | About-modal Documentation card.                                                                                                                    |
+| **Community link**              | Official Discord            | About-modal community card.                                                                                                                        |
+| **Source link**                | Official GitHub repo        | About-modal source-code card.                                                                                                                      |
+| **Support link**                | Official BojuBot guide      | Support URL shown to Claude in its own system prompt — only used when **Rebrand assistant identity** is on.                                        |
+| **Rebrand assistant identity**  | Off                          | When on, the system prompt Claude receives uses your display name and support links too. Off = Claude still refers to itself as "BojuBot" internally, even with a custom display name set above. |
+
+**Blank vs. hidden:** for the four link fields, a blank field always means "use the default" — clearing it puts the card back to the bundled URL. To hide a card entirely (for example, a white-label build that runs no community server), use the eye icon next to the field. Hiding is a distinct, deliberate action from leaving the field blank.
+
+**Reload to apply:** most changes take effect the next time the panel or Settings tab is reopened. Restart Obsidian to be sure ribbon icon and tab-title changes have taken effect everywhere.
+
+::: info Attribution stays intact
+Once any display name other than "BojuBot" is set, the About modal adds a small "Based on BojuBot by Scott Kirvan · MIT" credit line below the usual content. This line isn't configurable — it's how upstream attribution is preserved on white-label builds.
+:::
 
 ## Session storage location
 
