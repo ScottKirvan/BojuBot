@@ -134,7 +134,7 @@ Claude triggers Obsidian UI actions by emitting `@@BOJU_ACTION {"action": "...",
 
 UIBridge enforces a command allowlist and denylist (configurable in settings). Allowlisted commands are executed without confirmation. Denylisted commands are always blocked. Mid-session allowlist injection is supported.
 
-Vault content is scanned for `@@BOJU_` strings and neutralized via `neutralizeTriggers()` before being shown to the user or passed to Claude. This prevents prompt injection via crafted vault notes.
+Vault content is scanned for `@@BOJU_` strings and neutralized via `neutralizeTriggers()` before being shown to the user or passed to Claude. This prevents prompt injection via crafted vault notes — but only for content that passes through BojuBot's own code on its way into the prompt (context file, pinned notes, attachments, skill bodies, vault-query results). It cannot cover content Claude reads on its own initiative via its own Read/Glob/Grep tool calls — see Known Limitations.
 
 ### Vault Query Protocol (@@BOJU_QUERY)
 
@@ -258,6 +258,8 @@ Greeting is consent-based: reads `settings.userLabel`. This value is written onl
 **Export button missing from chat panel toolbar (#56)** — export is available via command palette only.
 
 **Pinned context files UI** — backburned; no UI to manage per-session pinned notes yet.
+
+**`neutralizeTriggers()` coverage is structurally partial** — it protects every path where BojuBot's own code reads a file and pastes its content into the prompt, but it cannot cover content Claude reads on its own initiative mid-session via its own Read, Glob, or Grep tool calls. Those tool calls execute entirely inside the Claude Code CLI subprocess; file content goes straight from disk to the model's context, never passing through any of BojuBot's JavaScript. Same root constraint as FrontmatterGuard above — no tool-call interception in `--print` mode. Not a bug to be fixed, but a structural boundary worth stating explicitly so it isn't mistaken for a gap in the neutralization logic itself.
 
 ---
 
