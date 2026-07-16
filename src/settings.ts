@@ -805,9 +805,9 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Lock branding')
       .setDesc(
-        'Once you\'re done configuring your white-label build, hide this entire section from the panel so end ' +
-        'users can\'t discover or revert it — useful for enterprise/managed distributions. This only hides the ' +
-        'UI: it is not a security boundary, and can be reverted by editing brand.locked in data.json directly.'
+        'Hide the entire Brand settings section from casual users. This is not a security boundary — it can ' +
+        'still be reverted by editing brand.locked in data.json directly. There\'s no way back from this panel ' +
+        'once enabled.'
       )
       .addToggle((toggle) =>
         toggle
