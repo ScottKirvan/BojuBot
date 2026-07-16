@@ -485,7 +485,7 @@ export class ClaudeView extends ItemView {
     });
     this.inputEl.addEventListener('input', () => {
       this.atMentionController.handleInput();
-      this.handleSlashTrigger();
+      this.handleSlashInput();
     });
 
     this.inputEl.addEventListener('blur', () => {
@@ -497,7 +497,9 @@ export class ClaudeView extends ItemView {
       if (this.activeSlashMenu) {
         const consumed = this.activeSlashMenu.handleKeyDown(e);
         if (consumed) return;
-        // Not consumed — menu dismissed itself, let the key fall through normally
+        // Not consumed — an ordinary character (or backspace, etc.); let it
+        // fall through to the textarea, then handleSlashInput() re-derives
+        // the query (or closes the menu) on the resulting 'input' event.
       }
 
       // Dropdown navigation takes priority over everything else
@@ -1743,14 +1745,18 @@ export class ClaudeView extends ItemView {
 
     let commands = this.buildCommands();
 
-    // In inline mode, wrap each action to strip the / trigger before executing
+    // In inline mode, wrap each action to strip the /query run before executing.
+    // Recomputed at execution time (not captured at open time) since the user
+    // may have typed a filter query after the / before selecting a command.
     if (mode === 'inline' && this.inputEl) {
-      const triggerPos = (this.inputEl.selectionStart ?? 1) - 1;
       commands = commands.map(cmd => ({
         ...cmd,
         action: () => {
           const val = this.inputEl.value;
-          this.inputEl.value = val.slice(0, triggerPos) + val.slice(triggerPos + 1);
+          const pos = this.inputEl.selectionStart ?? val.length;
+          const match = val.slice(0, pos).match(/\/(\S*)$/);
+          const start = match ? pos - match[0].length : pos;
+          this.inputEl.value = val.slice(0, start) + val.slice(pos);
           this.inputEl.dispatchEvent(new Event('input'));
           cmd.action();
         },
@@ -1766,8 +1772,27 @@ export class ClaudeView extends ItemView {
     this.activeSlashMenu.open();
   }
 
-  private handleSlashTrigger() {
-    if (this.activeSlashMenu) return;
+  /**
+   * Drives the inline slash menu from the chat input's 'input' event: opens
+   * it when a fresh / is typed at a valid position, re-filters it on every
+   * subsequent keystroke from the live /query text, and closes it once that
+   * text no longer forms a valid query (a space or newline breaks it, same
+   * as the / itself being deleted). Mirrors AtMentionController.handleInput()'s
+   * re-derive-from-scratch approach rather than tracking a stored position.
+   */
+  private handleSlashInput() {
+    if (this.activeSlashMenu) {
+      if (this.activeSlashMenu.mode !== 'inline') return;
+      const { value, selectionStart } = this.inputEl;
+      const pos = selectionStart ?? 0;
+      const match = value.slice(0, pos).match(/\/(\S*)$/);
+      if (!match) {
+        this.activeSlashMenu.close();
+        return;
+      }
+      this.activeSlashMenu.filter(match[1]);
+      return;
+    }
     const { value, selectionStart } = this.inputEl;
     const pos = selectionStart ?? 0;
     // Must have just typed a /
