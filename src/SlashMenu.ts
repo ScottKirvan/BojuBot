@@ -1,10 +1,14 @@
 /**
  * SlashMenu — unified command palette for BojuBot.
  *
- * Two modes:
- *  - 'button'  opened via the / toolbar button; includes a search box
- *  - 'inline'  opened by typing / in the input; no search box;
- *              any non-navigation key dismisses and is passed back to input
+ * Two modes, both with live filtering as you type:
+ *  - 'button'  opened via the / toolbar button; has its own dedicated search box
+ *  - 'inline'  opened by typing / in the chat input; no search box of its own —
+ *              the chat input itself is the query source. The caller (ClaudeView)
+ *              re-derives the current query from the text after the triggering /
+ *              on every keystroke and calls filter(); it closes the menu once that
+ *              text no longer forms a valid /query run (e.g. a space is typed, or
+ *              the / itself is deleted).
  */
 
 export interface SlashCommand {
@@ -21,7 +25,7 @@ export class SlashMenu {
   private commands: SlashCommand[];
   private filtered: SlashCommand[];
   private highlightedIndex = -1;
-  private mode: 'button' | 'inline';
+  readonly mode: 'button' | 'inline';
   private onDismiss: () => void;
   private outsideClickHandler: (e: MouseEvent) => void;
 
@@ -88,14 +92,19 @@ export class SlashMenu {
         (c.description ?? '').toLowerCase().includes(q)
       )
       : this.commands;
-    this.highlightedIndex = -1;
+    // Auto-highlight the top match once narrowed by a query, so Enter
+    // selects immediately without an extra arrow-down. The full unfiltered
+    // list (empty query) still starts with nothing highlighted.
+    this.highlightedIndex = q && this.filtered.length > 0 ? 0 : -1;
     this.render();
   }
 
   /**
    * Handle keyboard events. Returns true if the key was consumed.
-   * In inline mode, non-navigation keys return false so the caller
-   * can pass them through to the input and dismiss the menu.
+   * Any key not handled below returns false so the caller passes it through
+   * to the input — in inline mode, ClaudeView re-derives the query from the
+   * resulting text on the following 'input' event (see updateSlashMenu());
+   * in button mode, typing simply goes to the dedicated search box.
    */
   handleKeyDown(e: KeyboardEvent): boolean {
     if (e.key === 'Escape') {
@@ -124,12 +133,6 @@ export class SlashMenu {
       }
       return this.mode === 'button';
     }
-    // In inline mode any other key dismisses the menu (caller keeps the key)
-    if (this.mode === 'inline') {
-      this.close();
-      return false;
-    }
-    // In button mode, redirect typing to the search box
     return false;
   }
 
