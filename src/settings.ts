@@ -663,7 +663,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     if (this.plugin.settings.brand?.locked) {
       new Setting(containerEl)
-        .setDesc('Branding is locked and cannot be changed from this panel. Edit data.json directly (brand.locked) to unlock it.');
+        .setDesc('Branding is locked and cannot be changed from this panel. Edit data.json directly (brand.locked) and reload the plugin to unlock it.');
       // Brand is the last section in display() — safe to bail out here. If a
       // new section is ever added after Brand, this must become an if/else.
       return;
