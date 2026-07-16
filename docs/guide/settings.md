@@ -72,7 +72,7 @@ Configure under **Settings → BojuBot → Brand**:
 | **Support link**                | Official BojuBot guide      | Support URL shown to Claude in its own system prompt — only used when **Rebrand assistant identity** is on.                                        |
 | **Rebrand assistant identity**  | Off                          | When on, the system prompt Claude receives uses your display name and support links too. Off = Claude still refers to itself as "BojuBot" internally, even with a custom display name set above. |
 
-**Blank vs. hidden:** for the four link fields, a blank field always means "use the default" — clearing it puts the card back to the bundled URL. To hide a card entirely (for example, a white-label build that runs no community server), use the eye icon next to the field. Hiding is a distinct, deliberate action from leaving the field blank.
+**Blank vs. hidden:** for the four link fields, a blank field always means "use the default" — clearing it puts the card back to the bundled URL. To hide a card entirely (for example, a white-label build that runs no community server), use the eye icon next to the field — this is a distinct, deliberate action from leaving the field blank. The icon reflects which state you're in: an open eye means the card is currently hidden, and clicking it restores the default link with no need to retype the original URL.
 
 **Reload to apply:** most changes take effect the next time the panel or Settings tab is reopened. Restart Obsidian to be sure ribbon icon and tab-title changes have taken effect everywhere.
 
