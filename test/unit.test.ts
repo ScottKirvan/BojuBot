@@ -26,6 +26,8 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
+import { parseVersion, compareVersions, isNewerThan, isMinorOrMajorBump } from '../src/utils/versionCompare';
+import { bumpHeadingLevel, selectReleasesToAnnounce, buildUpdateAnnouncementMarkdown, GitHubReleaseLike } from '../src/utils/updateAnnouncement';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1219,5 +1221,156 @@ describe('neutralizeTriggers', () => {
   test('is idempotent — neutralizing already-neutralized text is a no-op', () => {
     const once = neutralizeTriggers(`${BOJU_PREFIX}test`);
     assert.equal(neutralizeTriggers(once), once);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// versionCompare — post-update modal version gating
+// ---------------------------------------------------------------------------
+
+describe('parseVersion', () => {
+  test('parses a plain major.minor.patch string', () => {
+    assert.deepEqual(parseVersion('3.5.0'), { major: 3, minor: 5, patch: 0 });
+  });
+
+  test('tolerates a leading v (release tag names)', () => {
+    assert.deepEqual(parseVersion('v3.5.0'), { major: 3, minor: 5, patch: 0 });
+  });
+
+  test('missing or non-numeric segments default to 0', () => {
+    assert.deepEqual(parseVersion(''), { major: 0, minor: 0, patch: 0 });
+    assert.deepEqual(parseVersion('3'), { major: 3, minor: 0, patch: 0 });
+  });
+});
+
+describe('compareVersions / isNewerThan', () => {
+  test('detects a newer patch version', () => {
+    assert.ok(isNewerThan('3.4.2', '3.4.1'));
+    assert.ok(!isNewerThan('3.4.1', '3.4.2'));
+  });
+
+  test('detects a newer minor version', () => {
+    assert.ok(isNewerThan('3.5.0', '3.4.9'));
+  });
+
+  test('detects a newer major version', () => {
+    assert.ok(isNewerThan('4.0.0', '3.99.99'));
+  });
+
+  test('equal versions are not newer than each other', () => {
+    assert.ok(!isNewerThan('3.5.0', '3.5.0'));
+    assert.equal(compareVersions('3.5.0', '3.5.0'), 0);
+  });
+});
+
+describe('isMinorOrMajorBump', () => {
+  test('patch-only bump is not a minor/major bump', () => {
+    assert.ok(!isMinorOrMajorBump('3.4.1', '3.4.2'));
+  });
+
+  test('minor bump counts', () => {
+    assert.ok(isMinorOrMajorBump('3.4.2', '3.5.0'));
+  });
+
+  test('major bump counts', () => {
+    assert.ok(isMinorOrMajorBump('3.5.0', '4.0.0'));
+  });
+
+  test('fresh-install baseline (empty → any version) counts as a bump', () => {
+    assert.ok(isMinorOrMajorBump('', '3.5.0'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateAnnouncement — post-update modal content assembly
+// ---------------------------------------------------------------------------
+
+describe('bumpHeadingLevel', () => {
+  test('adds one # to headings of every level', () => {
+    const input = '# Top\n## Mid\n###### Deep';
+    assert.equal(bumpHeadingLevel(input), '## Top\n### Mid\n####### Deep');
+  });
+
+  test('leaves non-heading lines untouched', () => {
+    const input = 'Just a line.\n#not-a-heading (no space)\nAnother line.';
+    assert.equal(bumpHeadingLevel(input), input);
+  });
+
+  test('leaves body text with a leading # mid-word alone', () => {
+    assert.equal(bumpHeadingLevel('See issue #123 for details'), 'See issue #123 for details');
+  });
+});
+
+describe('selectReleasesToAnnounce', () => {
+  const release = (tag: string, overrides: Partial<GitHubReleaseLike> = {}): GitHubReleaseLike => ({
+    tag_name: tag,
+    draft: false,
+    prerelease: false,
+    body: `Notes for ${tag}`,
+    ...overrides,
+  });
+
+  test('filters out releases at or before the last announced version', () => {
+    const releases = [release('3.4.2'), release('3.5.0'), release('3.4.1')];
+    const result = selectReleasesToAnnounce(releases, '3.4.2');
+    assert.deepEqual(result.map(r => r.tag_name), ['3.5.0']);
+  });
+
+  test('excludes drafts and prereleases even if newer', () => {
+    const releases = [
+      release('3.6.0', { draft: true }),
+      release('3.6.1', { prerelease: true }),
+      release('3.5.0'),
+    ];
+    const result = selectReleasesToAnnounce(releases, '3.4.2');
+    assert.deepEqual(result.map(r => r.tag_name), ['3.5.0']);
+  });
+
+  test('sorts oldest first', () => {
+    const releases = [release('3.6.0'), release('3.5.0'), release('3.5.1')];
+    const result = selectReleasesToAnnounce(releases, '3.4.2');
+    assert.deepEqual(result.map(r => r.tag_name), ['3.5.0', '3.5.1', '3.6.0']);
+  });
+
+  test('empty input yields empty output', () => {
+    assert.deepEqual(selectReleasesToAnnounce([], '3.4.2'), []);
+  });
+});
+
+describe('buildUpdateAnnouncementMarkdown', () => {
+  const opts = {
+    currentVersion: '3.5.0',
+    bmacUrl: 'https://buymeacoffee.com/scottkirvan',
+    discordUrl: 'https://discord.gg/TN6XJSNK5Y',
+    issuesUrl: 'https://github.com/ScottKirvan/BojuBot/issues',
+  };
+
+  test('includes the current version, funding link, and support links', () => {
+    const md = buildUpdateAnnouncementMarkdown([], opts);
+    assert.ok(md.includes("What's new in BojuBot v3.5.0"));
+    assert.ok(md.includes(opts.bmacUrl));
+    assert.ok(md.includes(opts.discordUrl));
+    assert.ok(md.includes(opts.issuesUrl));
+  });
+
+  test('bumps heading levels in release bodies and joins with a divider', () => {
+    const releases: GitHubReleaseLike[] = [
+      { tag_name: '3.5.0', draft: false, prerelease: false, body: '## Fixed\n- a bug' },
+    ];
+    const md = buildUpdateAnnouncementMarkdown(releases, opts);
+    assert.ok(md.includes('### Fixed'));
+    assert.ok(md.includes('---'));
+  });
+
+  test('handles a null release body without throwing', () => {
+    const releases: GitHubReleaseLike[] = [
+      { tag_name: '3.5.0', draft: false, prerelease: false, body: null },
+    ];
+    assert.doesNotThrow(() => buildUpdateAnnouncementMarkdown(releases, opts));
+  });
+
+  test('no releases → just the preamble, no trailing divider content', () => {
+    const md = buildUpdateAnnouncementMarkdown([], opts);
+    assert.equal(md.trim().endsWith(opts.issuesUrl + ')'), true);
   });
 });

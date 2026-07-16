@@ -1824,6 +1824,17 @@
   cursor: pointer;
 }
 
+/* ── Update modal ── */
+.bojubot-update-modal {
+  padding: 4px;
+}
+
+.bojubot-update-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 /* ── Utility ── */
 .bojubot-invisible {
   visibility: hidden;

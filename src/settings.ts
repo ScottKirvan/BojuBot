@@ -84,6 +84,10 @@ export interface BojuBotSettings {
   userLabel: string;
   /** Claude model ID passed via --model at spawn time. Empty = Claude default (Sonnet). */
   defaultModel: string;
+  /** Version string of the last release the user was shown via the update modal. Empty = never announced. */
+  lastAnnouncedVersion: string;
+  /** Controls when the post-update modal appears. Skipped entirely on white-labeled installs regardless of this setting. */
+  announceUpdates: 'all' | 'major' | 'none';
   /**
    * Optional white-label branding (display name, icon, art, greetings, links).
    * Absent → the stock BojuBot identity, byte-for-byte. Always read through
@@ -122,6 +126,8 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   minimalMode: false,
   userLabel: '',
   defaultModel: '',
+  lastAnnouncedVersion: '',
+  announceUpdates: 'major',
 };
 
 export class BojuBotSettingsTab extends PluginSettingTab {
@@ -169,6 +175,21 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.resumeLastSession)
           .onChange(async (value) => {
             this.plugin.settings.resumeLastSession = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Show release notes on update')
+      .setDesc('Show a post-update modal with release notes for any versions you missed. Never shown on white-labeled installs, regardless of this setting.')
+      .addDropdown((drop) =>
+        drop
+          .addOption('all', 'All updates')
+          .addOption('major', 'Minor & major only (default)')
+          .addOption('none', 'Never')
+          .setValue(this.plugin.settings.announceUpdates)
+          .onChange(async (value) => {
+            this.plugin.settings.announceUpdates = value as 'all' | 'major' | 'none';
             await this.plugin.saveSettings();
           })
       );

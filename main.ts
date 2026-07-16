@@ -3,11 +3,13 @@ import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
-import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
+import { ResolvedBrand, resolveBrand, setActiveBrand, isWhiteLabeled } from './src/brand';
 import { findClaudeBinary, PermissionMode } from './src/ClaudeProcess';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
+import { isMinorOrMajorBump } from './src/utils/versionCompare';
 import { AboutModal } from './src/modals/AboutModal';
+import { UpdateModal } from './src/modals/UpdateModal';
 import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
 import { ContextGenerationModal } from './src/ContextGenerationModal';
 import { AppInternal } from './src/obsidianInternal';
@@ -266,6 +268,8 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addSettingTab(new BojuBotSettingsTab(this.app, this));
+
+    void this.announceUpdate();
   }
 
   onunload() {
@@ -396,6 +400,35 @@ export default class BojuBotPlugin extends Plugin {
 
   showAbout() {
     new AboutModal(this.app, this).open();
+  }
+
+  /**
+   * Shows the post-update modal once per version, gated by the user's
+   * announceUpdates preference. White-labeled installs are skipped
+   * unconditionally — a downstream distributor manages their own update
+   * messaging; this is Scott's release notes and funding links, not theirs.
+   */
+  async announceUpdate(): Promise<void> {
+    const currentVersion = this.manifest.version;
+    const lastAnnounced = this.settings.lastAnnouncedVersion;
+    if (lastAnnounced === currentVersion) return;
+
+    // Fresh install — nothing to announce yet, just record the baseline.
+    if (!lastAnnounced) {
+      this.settings.lastAnnouncedVersion = currentVersion;
+      await this.saveSettings();
+      return;
+    }
+
+    if (isWhiteLabeled(this.brand)) return;
+
+    const pref = this.settings.announceUpdates;
+    if (pref === 'none') return;
+    if (pref === 'major' && !isMinorOrMajorBump(lastAnnounced, currentVersion)) return;
+
+    this.settings.lastAnnouncedVersion = currentVersion;
+    await this.saveSettings();
+    new UpdateModal(this.app, currentVersion, lastAnnounced).open();
   }
 
   async loadSettings() {
