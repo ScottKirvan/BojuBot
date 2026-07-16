@@ -754,12 +754,19 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             })
         );
       if (hideable) {
+        // '' means explicitly hidden; the field itself looks the same (blank)
+        // whether hidden or just unset, so the icon is the only visible cue —
+        // it must reflect current state, not just always offer to hide.
+        const label = name.replace(' link', '');
+        const isHidden = this.plugin.settings.brand?.links?.[key] === '';
         setting.addExtraButton((btn) =>
           btn
-            .setIcon('eye-off')
-            .setTooltip(`Hide the ${name.replace(' link', '')} card`)
+            .setIcon(isHidden ? 'eye' : 'eye-off')
+            .setTooltip(isHidden ? `Restore the default ${label} link` : `Hide the ${label} card`)
             .onClick(async () => {
-              ensureLinks()[key] = '';
+              const links = ensureLinks();
+              if (isHidden) delete links[key];
+              else links[key] = '';
               await saveBrand();
               this.display();
             })
