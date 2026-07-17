@@ -71,13 +71,13 @@ jobs:
       project_name: "BojuBot"
       project_context: "BojuBot is an Obsidian plugin. More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code."
       header: |
-        ## 👾 BojuBot 👾
+        ## 👾 BojuBot for Obsidian 👾
 
         More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code
 
-      footer: |
-        ---
-        🫶❤️[Support this project](https://www.scottkirvan.com/ScottKirvan/sponsor.html) · 📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md) · 📋 [Changelog](https://github.com/ScottKirvan/BojuBot/blob/main/notes/CHANGELOG.md)
+        🫶❤️[Support this project](https://buymeacoffee.com/scottkirvan) · 📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md) · 📋 [Changelog](https://github.com/ScottKirvan/BojuBot/blob/main/notes/CHANGELOG.md)
+
+      changelog_path: ""
     secrets: inherit
 
   update-changelog-prs:
