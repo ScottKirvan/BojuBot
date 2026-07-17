@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
 import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
+import sponsorImageUrl from '../assets/media/sk_watercolor_300_circle.png';
 
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
@@ -21,7 +22,7 @@ import { BOJU_PREFIX, neutralizeTriggers } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
 import { CLAUDE_MODELS, ClaudeModel } from './settings';
-import { resolveExportFolder } from './brand';
+import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import {
   StoredSession,
@@ -74,7 +75,19 @@ const TOOL_ICONS: Record<string, string> = {
   todoread: 'check-square',
 };
 
+// Show the sponsorship welcome variant every Nth new-session creation.
+const SPONSOR_MESSAGE_INTERVAL = 10;
+// Only show it if there's been session activity within this window — otherwise a
+// single new session after a long absence could still land on a matching modulo.
+const SPONSOR_RECENCY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const SPONSOR_MESSAGE = `**Thank you for using BojuBot!**
 
+My name is Scott, and I'm BojuBot's author. It looks like you use the plugin regularly! I hope it's making your life easier and saving you some time.
+
+If so, please consider buying me a coffee (or asking your company to sponsor my work).
+
+Everything helps cover my monthly server and devtool costs, so I can keep BojuBot running and create more free software.`;
+const BMAC_URL = 'https://buymeacoffee.com/scottkirvan';
 
 /** Escape characters that would break pseudo-XML attribute parsing in bojubot-context tags. */
 function escapeAttr(value: string): string {
@@ -671,6 +684,10 @@ export class ClaudeView extends ItemView {
     this._primeAttachments = prime?.primeAttachments ?? [];
     this._primeInitialInstructions = prime?.initialInstructions ?? '';
     this._primeSuppressVaultContext = prime?.suppressVaultContext ?? false;
+    // Counted before the 'session:new' event fires (below) so renderWelcomeScreen
+    // sees the up-to-date count when it decides whether to show the sponsor variant.
+    this.plugin.settings.sessionCreationCount += 1;
+    void this.plugin.saveSettings();
     this.coordinator.startNewSession(prime ? { name: prime.name, cwd: prime.cwd, suppressVaultContext: prime.suppressVaultContext } : undefined);
     // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
     this.updatePermissionIcon();
@@ -1226,18 +1243,56 @@ export class ClaudeView extends ItemView {
       header.createSpan({ cls: 'bojubot-welcome-model', text: activeModel.displayName });
     }
 
-    // Centered body: sprite + greeting + tip
-    const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
-    const sprite = body.createEl('img', { cls: 'bojubot-welcome-sprite', attr: { alt: brandName, src: this.brandImageSrc(this.plugin.brand.sprite, spriteUrl) } });
-    sprite.draggable = false;
-    sprite.title = `About ${brandName}`;
-    sprite.addEventListener('click', () => new AboutModal(this.app, this.plugin).open());
-    body.createEl('p', { cls: 'bojubot-welcome-greeting', text: greetingText });
-    body.createEl('p', { cls: 'bojubot-welcome-tip', text: tip });
-
-    // Recent sessions footer
+    // Recent sessions — loaded here (not just at the footer below) because the
+    // sponsor-variant recency check needs it too.
     const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
       .filter(s => s.id !== this.coordinator.sessionFileId);
+
+    // Centered body: sprite + greeting + tip, or (periodically) a sponsorship message
+    const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
+    const hasRecentActivity = sessions.some(s => Date.now() - new Date(s.updatedAt).getTime() <= SPONSOR_RECENCY_WINDOW_MS);
+    const showSponsorMessage = !isWhiteLabeled(this.plugin.brand)
+      && !this.plugin.settings.hideSponsorshipMessages
+      && this.plugin.settings.sessionCreationCount > 0
+      && this.plugin.settings.sessionCreationCount % SPONSOR_MESSAGE_INTERVAL === 0
+      && hasRecentActivity;
+
+    if (showSponsorMessage) {
+      body.addClass('bojubot-welcome-sponsor');
+      const sponsorImg = body.createEl('img', { cls: 'bojubot-welcome-sponsor-image', attr: { alt: brandName, src: sponsorImageUrl } });
+      sponsorImg.draggable = false;
+      const message = body.createDiv({ cls: 'bojubot-welcome-sponsor-message' });
+      void MarkdownRenderer.render(this.app, SPONSOR_MESSAGE, message, '', this);
+
+      const bmacBtn = body.createEl('a', { cls: 'bojubot-welcome-bmac-btn', href: BMAC_URL });
+      bmacBtn.setAttr('target', '_blank');
+      bmacBtn.setAttr('rel', 'noopener');
+      setIcon(bmacBtn.createSpan({ cls: 'bojubot-welcome-bmac-icon' }), 'coffee');
+      bmacBtn.createSpan({ text: 'Buy me a coffee' });
+
+      const donatedRow = body.createDiv({ cls: 'bojubot-welcome-sponsor-donated' });
+      const checkbox = donatedRow.createEl('input', { attr: { type: 'checkbox', id: 'bojubot-sponsor-donated' } });
+      donatedRow.createEl('label', {
+        text: "I already donated. Please don't show this again.",
+        attr: { for: 'bojubot-sponsor-donated' },
+      });
+      checkbox.addEventListener('change', () => {
+        if (!checkbox.checked) return;
+        this.plugin.settings.hideSponsorshipMessages = true;
+        void this.plugin.saveSettings();
+        donatedRow.empty();
+        donatedRow.createSpan({ cls: 'bojubot-welcome-sponsor-thankyou', text: 'Thank You!' });
+      });
+    } else {
+      const sprite = body.createEl('img', { cls: 'bojubot-welcome-sprite', attr: { alt: brandName, src: this.brandImageSrc(this.plugin.brand.sprite, spriteUrl) } });
+      sprite.draggable = false;
+      sprite.title = `About ${brandName}`;
+      sprite.addEventListener('click', () => new AboutModal(this.app, this.plugin).open());
+      body.createEl('p', { cls: 'bojubot-welcome-greeting', text: greetingText });
+      body.createEl('p', { cls: 'bojubot-welcome-tip', text: tip });
+    }
+
+    // Recent sessions footer
     if (sessions.length > 0) {
       const recent = welcome.createDiv({ cls: 'bojubot-welcome-recent' });
       recent.createEl('p', { cls: 'bojubot-welcome-recent-label', text: 'Recent sessions' });
