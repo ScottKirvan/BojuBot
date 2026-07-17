@@ -123,7 +123,9 @@ BojuBot doesn't stop at the edges of your vault. Given proper permissions (which
 
 BojuBot is free, open source, and built in spare time. If it's useful:
 
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/ScottKirvan?style=social)](https://github.com/sponsors/ScottKirvan)
+**Sponsor BojuBot**
+
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&slug=scottkirvan&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://buymeacoffee.com/scottkirvan)
 
 ---
 
