@@ -2,6 +2,8 @@ import { App, Modal, Plugin, sanitizeHTMLToDom, setIcon } from 'obsidian';
 import logoDataUrl from '../../assets/media/logo.png';
 import { activeBrand, isWhiteLabeled, DEFAULT_BRAND, ResolvedBrand } from '../brand';
 
+const BMAC_URL = 'https://buymeacoffee.com/scottkirvan';
+
 // Inline SVG — no file import, no runtime string replacement, attributes set directly.
 // stroke-width="4" matches Lucide's visual weight at this viewBox size (48×48 vs Lucide's 24×24).
 const DISCORD_SVG = `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"
@@ -57,6 +59,17 @@ function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
       desc: 'Source code, issues, and release notes.',
       label: 'View',
       href: links.source,
+    });
+  }
+  // Scott's own funding link, not a brand.links field — never surfaced on a
+  // white-labeled build, same reasoning as the welcome-screen sponsor message.
+  if (!isWhiteLabeled(brand)) {
+    items.push({
+      icon: 'heart',
+      title: 'Buy Me A Coffee',
+      desc: 'Show your love by supporting BojuBot and the author.',
+      label: 'Buy',
+      href: BMAC_URL,
     });
   }
   return items;
