@@ -5,3 +5,20 @@
 html {
   zoom: 0.875;
 }
+
+/* Tighten the gap between the home page's after-features content
+   (e.g. the sponsor block) and the site footer. VPHome itself carries
+   a 96-128px bottom margin independent of the vp-doc container's own
+   padding, which is the actual source of the large gap. */
+.VPHome .vp-doc.container {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.VPHome {
+  margin-bottom: 24px !important;
+}
+
+.VPFooter {
+  padding-top: 12px !important;
+}
