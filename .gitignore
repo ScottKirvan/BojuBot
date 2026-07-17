@@ -34,3 +34,4 @@ bojubot-debug.log
 cortex-debug.log
 obsidibot-debug.log
 *.dead
+docs/.vitepress/dist/*
