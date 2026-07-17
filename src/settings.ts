@@ -4,7 +4,7 @@ import type { PermissionMode } from './ClaudeProcess';
 export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
-import { BrandConfig, brandName, DEFAULT_BRAND } from './brand';
+import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
 
 export interface ClaudeModel {
   id: string;
@@ -84,6 +84,10 @@ export interface BojuBotSettings {
   userLabel: string;
   /** Claude model ID passed via --model at spawn time. Empty = Claude default (Sonnet). */
   defaultModel: string;
+  /** Count of new-session creations (not sessions saved). Drives the periodic sponsorship welcome variant. */
+  sessionCreationCount: number;
+  /** User opt-out of the periodic sponsorship welcome variant. Always hidden/off on white-labeled installs regardless of this value. */
+  hideSponsorshipMessages: boolean;
   /**
    * Optional white-label branding (display name, icon, art, greetings, links).
    * Absent → the stock BojuBot identity, byte-for-byte. Always read through
@@ -122,6 +126,8 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   minimalMode: false,
   userLabel: '',
   defaultModel: '',
+  sessionCreationCount: 0,
+  hideSponsorshipMessages: false,
 };
 
 export class BojuBotSettingsTab extends PluginSettingTab {
@@ -654,6 +660,23 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.plugin.reconfigureLogger();
           })
       );
+
+    // Periodic welcome-screen sponsorship message — never shown, and the
+    // toggle never surfaced, on white-labeled installs (a downstream
+    // distributor manages their own funding messaging, not Scott's).
+    if (!isWhiteLabeled(this.plugin.brand)) {
+      new Setting(containerEl)
+        .setName('Hide sponsorship messages')
+        .setDesc('BojuBot occasionally swaps the welcome screen for a short message about supporting the project. Turn this on to never see it.')
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.hideSponsorshipMessages)
+            .onChange(async (value) => {
+              this.plugin.settings.hideSponsorshipMessages = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    }
 
     // ── Brand ──────────────────────────────────────────────────────────────
     // Everything here is optional. Blank fields fall back to the stock BojuBot

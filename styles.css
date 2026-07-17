@@ -733,6 +733,72 @@
   line-height: 1.5;
 }
 
+.bojubot-welcome-sponsor-image {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.bojubot-welcome-sponsor-message {
+  font-size: 0.85em;
+  color: var(--text-normal);
+  text-align: center;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.bojubot-welcome-sponsor-message p {
+  margin: 0 0 0.6em;
+}
+
+.bojubot-welcome-sponsor-message p:last-child {
+  margin-bottom: 0;
+}
+
+.bojubot-welcome-bmac-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  background: #FFDD00;
+  color: #000000;
+  font-size: 0.9em;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.bojubot-welcome-bmac-btn:hover {
+  background: #FFE84D;
+  text-decoration: none;
+}
+
+.bojubot-welcome-bmac-icon {
+  display: flex;
+  color: #000000;
+}
+
+.bojubot-welcome-sponsor-donated {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bojubot-welcome-sponsor-donated label {
+  font-size: 0.78em;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.bojubot-welcome-sponsor-thankyou {
+  font-size: 1em;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
 .bojubot-welcome-recent {
   width: 100%;
   padding-top: 8px;
