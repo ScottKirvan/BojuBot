@@ -756,7 +756,7 @@
   margin-bottom: 0;
 }
 
-.bojubot-welcome-bmac-btn {
+.bojubot-welcome-kofi-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -771,12 +771,12 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.bojubot-welcome-bmac-btn:hover {
+.bojubot-welcome-kofi-btn:hover {
   background: #FFE84D;
   text-decoration: none;
 }
 
-.bojubot-welcome-bmac-icon {
+.bojubot-welcome-kofi-icon {
   display: flex;
   color: #000000;
 }

@@ -18,7 +18,7 @@ import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProc
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { BOJU_PREFIX, neutralizeTriggers } from './constants';
+import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens } from './utils/logger';
 import { CLAUDE_MODELS, ClaudeModel } from './settings';
@@ -87,7 +87,6 @@ My name is Scott, and I'm BojuBot's author. It looks like you use the plugin reg
 If so, please consider buying me a coffee (or asking your company to sponsor my work).
 
 Everything helps cover my monthly server and devtool costs, so I can keep BojuBot running and create more free software.`;
-const BMAC_URL = 'https://buymeacoffee.com/scottkirvan';
 
 /** Escape characters that would break pseudo-XML attribute parsing in bojubot-context tags. */
 function escapeAttr(value: string): string {
@@ -1264,11 +1263,11 @@ export class ClaudeView extends ItemView {
       const message = body.createDiv({ cls: 'bojubot-welcome-sponsor-message' });
       void MarkdownRenderer.render(this.app, SPONSOR_MESSAGE, message, '', this);
 
-      const bmacBtn = body.createEl('a', { cls: 'bojubot-welcome-bmac-btn', href: BMAC_URL });
-      bmacBtn.setAttr('target', '_blank');
-      bmacBtn.setAttr('rel', 'noopener');
-      setIcon(bmacBtn.createSpan({ cls: 'bojubot-welcome-bmac-icon' }), 'coffee');
-      bmacBtn.createSpan({ text: 'Buy me a coffee' });
+      const kofiBtn = body.createEl('a', { cls: 'bojubot-welcome-kofi-btn', href: KOFI_URL });
+      kofiBtn.setAttr('target', '_blank');
+      kofiBtn.setAttr('rel', 'noopener');
+      setIcon(kofiBtn.createSpan({ cls: 'bojubot-welcome-kofi-icon' }), 'coffee');
+      kofiBtn.createSpan({ text: 'Buy me a coffee' });
 
       const donatedRow = body.createDiv({ cls: 'bojubot-welcome-sponsor-donated' });
       const checkbox = donatedRow.createEl('input', { attr: { type: 'checkbox', id: 'bojubot-sponsor-donated' } });

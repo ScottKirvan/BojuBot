@@ -14,6 +14,14 @@ export const ACTION_PREFIX = BOJU_PREFIX;
 export const QUERY_PREFIX = BOJU_PREFIX;
 
 /**
+ * Scott's funding link — not a brand.links field, so it's not overridable via
+ * config. Also hardcoded (necessarily, since they can't import TS) in
+ * manifest.json's fundingUrl and docs/index.md's sponsor block; keep those two
+ * in sync by hand if this ever changes.
+ */
+export const KOFI_URL = 'https://ko-fi.com/scottkirvan';
+
+/**
  * Neutralize trigger prefixes in vault-sourced content before injecting it into the prompt.
  * Prevents a malicious note from causing Claude to reproduce a live action/query line.
  *
