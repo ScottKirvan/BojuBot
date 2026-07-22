@@ -6,6 +6,9 @@
   "description": "Claude Code chat panel, skills, and vault-aware AI — fully integrated and native to your vault.",
   "author": "Scott Kirvan",
   "authorUrl": "https://github.com/ScottKirvan",
-  "fundingUrl": "https://ko-fi.com/scottkirvan",
+  "fundingUrl": {
+    "GitHub Sponsors": "https://github.com/sponsors/ScottKirvan",
+    "Ko-Fi": "https://ko-fi.com/ScottKirvan"
+  },
   "isDesktopOnly": true
 }
