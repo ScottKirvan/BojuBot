@@ -528,6 +528,20 @@
   flex-shrink: 0;
 }
 
+.bojubot-session-tokens {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.bojubot-session-tokens-context {
+  font-size: 0.75em;
+  color: var(--text-faint);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .bojubot-export-btn,
 .bojubot-rename-btn {
   background: none;

@@ -52,3 +52,8 @@ export const logv = (...args: unknown[]) => { if (verbosity === 'verbose') write
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
+
+/** Compact display form for a token count, e.g. 850 → "850", 2100 → "2.1k". */
+export function formatTokenCount(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}

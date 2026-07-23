@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
+import { estimateTokens } from './logger';
 
 export interface StoredSession {
   id: string;
@@ -149,6 +150,11 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   contexts?: InjectedContext[];
+}
+
+/** Sum of estimated tokens across a session's messages — used for the session size display. */
+export function estimateSessionTokens(messages: ChatMessage[]): number {
+  return messages.reduce((total, msg) => total + estimateTokens(msg.content), 0);
 }
 
 /** Reverse of ClaudeView's escapeAttr — decode HTML entities in context tag attribute values. */

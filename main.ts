@@ -130,7 +130,7 @@ export default class BojuBotPlugin extends Plugin {
       id: 'show-session-history',
       name: 'Show session history',
       callback: () => {
-        this.showSessionHistory();
+        void this.showSessionHistory();
       }
     });
 
@@ -325,11 +325,11 @@ export default class BojuBotPlugin extends Plugin {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
     if (existing.length) {
       const view = existing[0].view as ClaudeView;
-      view.showSessionHistory();
+      void view.showSessionHistory();
     } else {
       void this.activateView().then(() => {
         const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (leaves.length) (leaves[0].view as ClaudeView).showSessionHistory();
+        if (leaves.length) void (leaves[0].view as ClaudeView).showSessionHistory();
       });
     }
   }
