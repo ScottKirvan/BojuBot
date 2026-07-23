@@ -46,7 +46,7 @@ Check `.obsidian/plugins/bojubot/bojubot-debug.log` (or the path configured in s
 
 ## Logging
 
-BojuBot writes a debug log by default to `.obsidian/plugins/bojubot/bojubot-debug.log` — inside the plugin folder, not your vault, so it won't appear in Obsidian's file browser or your git history.
+Debug logging is **off by default**. Turn it on via **Settings → BojuBot → Enable debug log** — it takes effect immediately, no restart needed. Once enabled, BojuBot writes to `.obsidian/plugins/bojubot/bojubot-debug.log` — inside the plugin folder, not your vault, so it won't appear in Obsidian's file browser or your git history.
 
 Each Obsidian launch appends a `--- BojuBot log started ---` marker so you can find session boundaries. Delete the file manually to clear it.
 

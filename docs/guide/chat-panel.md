@@ -6,6 +6,29 @@ Claude has access to your full vault — it can read, write, create, move, and o
 
 ---
 
+## Welcome Screen
+
+Starting a new session (or opening the panel with no active conversation) shows a welcome screen instead of an empty chat: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. Click the mascot to open the [About dialog](#about-dialog).
+
+Occasionally (periodically, based on how many sessions you've started, and only if you've used BojuBot recently) the welcome screen instead shows a short message about supporting the project, with a link and a "Don't show this again" checkbox. Turn it off permanently anytime via **Settings → Hide sponsorship messages**.
+
+---
+
+## About Dialog
+
+Open via the welcome screen mascot, the Command Palette (**BojuBot: About**), or **Settings → BojuBot**. Shows the installed version and a set of link cards:
+
+| Card              | Links to                                                       |
+| ----------------- | --------------------------------------------------------------- |
+| **Documentation** | This guide                                                       |
+| **Discord**       | The community server                                             |
+| **GitHub**        | Source code, issues, and release notes                          |
+| **Buy me a coffee** | Ko-fi support link (hidden on white-labeled installs)          |
+
+On a white-labeled install (custom display name set — see [Branding](./settings.md#branding)), a small "Based on BojuBot by Scott Kirvan · MIT" credit line appears below the cards. This isn't configurable — it's how upstream attribution is preserved regardless of branding.
+
+---
+
 ## Attaching Context
 
 Attached items appear in a bar above the input field. Click **×** to remove an item, or the **pin icon** to keep it attached for every subsequent message in the session.
@@ -110,6 +133,31 @@ You can manage the full list in **Settings → BojuBot → UI Bridge & Commands*
 | Deny + Don't ask again                        | Added to denylist — future attempts silently blocked      |
 | Command in **denylist**                       | Silently blocked (add to allowlist to re-enable)          |
 | Prompt mode off                               | Unlisted commands hard-blocked with an explanatory notice |
+
+---
+
+## Opening & Navigating Files
+
+Claude can open a note directly in your workspace as part of its response — for example, after creating or finding something you'll want to look at:
+
+| Behavior             | What happens                                          |
+| --------------------- | ------------------------------------------------------ |
+| Open in current pane  | Replaces what you're currently viewing                 |
+| Open in a split       | Side-by-side, doesn't disturb your current view        |
+| Open in a new tab     | Stacked tab — doesn't replace or split anything         |
+| Jump to a heading     | Opens the file and scrolls to a specific heading        |
+
+All of these are immediate — no confirmation needed — and Claude posts a short notice each time, so you always know what changed.
+
+---
+
+## Other Actions
+
+A few smaller things Claude can do as part of a conversation:
+
+- **Change how it addresses you (or itself)** — just say so, e.g. *"Call me Alex from now on"* or *"I'd rather you go by a different name."* Persists across sessions.
+- **Request permission** — if a task genuinely needs a capability your current permission mode blocks (e.g. Bash access in Standard mode), Claude can ask instead of giving up silently. You decide via the denial card on your next message — see [Permission Denials](./permissions.md#permission-denials).
+- **Open Settings** or **the quick switcher** — Claude asks first in chat text, waits for you to confirm, then acts on your next message. Never fires without that round-trip.
 
 ---
 

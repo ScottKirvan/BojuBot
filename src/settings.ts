@@ -621,7 +621,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Enable debug log')
-      .setDesc('Write a debug log file to your vault. Useful for troubleshooting. Takes effect on next Obsidian restart.')
+      .setDesc('Write a debug log file to your vault. Useful for troubleshooting. Takes effect immediately.')
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.logEnabled)

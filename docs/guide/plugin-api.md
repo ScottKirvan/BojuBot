@@ -87,8 +87,17 @@ coordinator.sessionId        // Claude's internal session ID (used for --resume)
 coordinator.sessionFileId    // JSON storage file ID
 coordinator.sessionTitle     // current session title
 coordinator.sessionCreatedAt // ISO timestamp
+coordinator.sessionCwd       // working directory override, if one was set (Prime Session)
 
 coordinator.getEffectivePermissionMode() // 'standard' | 'readonly' | 'full' | 'restricted'
+```
+
+### Syncing an external rename
+
+If your plugin renames a session's underlying storage outside of BojuBot's own Session Manager, call `renameActiveSession` so the chat header and active-session export reflect it immediately rather than waiting for a reload:
+
+```typescript
+coordinator.renameActiveSession(sessionFileId, newTitle); // no-op if sessionFileId isn't the active session
 ```
 
 ## Subscribing and unsubscribing

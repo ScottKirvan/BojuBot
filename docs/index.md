@@ -38,7 +38,7 @@ features:
 
   - icon: 🔒
     title: Permission modes
-    details: Choose Standard, Read-only, or Full Access per session. Blocked operations surface a clear denial card with a one-click upgrade option.
+    details: Choose Chat only, Read-only, Standard, or Full Access per session. Blocked operations surface a clear denial card with a one-click upgrade option.
 
   - icon: 🔌
     title: No API key needed
