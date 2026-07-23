@@ -71,6 +71,33 @@ Use `{{id}}` in the prompt body to reference field values. After submission:
 - **Note fields** are added as context attachments (shown as badges above the input, just like @-mention). The `{{id}}` token is stripped from the body — the note content arrives via the attachment, not inline text.
 - Unresolved tokens (optional fields left blank) are stripped cleanly. No visible `{{placeholder}}` tokens appear in the output.
 
+### Handling optional parameters
+
+Interpolation only strips the `{{id}}` token itself — any static label text you wrote around it stays. If an optional `textarea` param is left blank, a body like:
+
+```
+**Additional instructions:** {{extra_notes}}
+```
+
+leaves a dangling `**Additional instructions:**` with nothing after it. It's harmless, but noisy, and can read like a cut-off instruction to Claude.
+
+Wrap optional parameters in XML-style tags instead:
+
+```
+<extra_instructions>
+{{extra_notes}}
+</extra_instructions>
+```
+
+Claude treats XML-like tags as semantic containers, so this pattern handles both cases cleanly:
+
+- **Empty** — Claude sees a clearly-bounded empty block and ignores it.
+- **Populated** — the user's content is unambiguously scoped, so it can't blend into the skill's own surrounding instructions.
+
+This matters most for free-text fields (`input`, `textarea`) where the user might paste in dense or instruction-like text. Use it for any optional parameter, not just the ones that happen to be empty most of the time.
+
+**Keep internal protocol details out of skill bodies.** Skills intended for general use should describe actions in plain language ("open the file in Obsidian") and let Claude's system context handle the mechanics — don't embed UI Bridge trigger syntax (`@@BOJU ...`) directly in a skill prompt body.
+
 ## Execution modes
 
 | `autorun` | `params` | Behaviour                                          |
