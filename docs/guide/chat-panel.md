@@ -113,6 +113,15 @@ You can manage the full list in **Settings → BojuBot → UI Bridge & Commands*
 
 ---
 
+## File Operations
+
+Claude can rename, move, and delete vault files through Obsidian's own API rather than the filesystem directly — so wikilinks and embeds pointing at the file update automatically instead of breaking.
+
+- **Delete** moves the file to trash per your vault's configured trash preference (system trash or `.trash/` folder) — it's not a permanent delete.
+- Requires **Standard** or **Full access** permission mode. In Chat only or Read only mode these are no-ops — the current mode doesn't allow vault writes, so nothing happens (with a notice explaining why).
+
+---
+
 ## Example Prompts
 
 ```
