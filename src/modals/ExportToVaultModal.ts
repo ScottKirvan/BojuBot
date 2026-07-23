@@ -22,7 +22,7 @@ export class ExportToVaultModal extends Modal {
       attr: { type: 'text', value: this.defaultPath },
     });
 
-    const checkboxRow = contentEl.createDiv({ cls: 'bojubot-export-checkbox-row' });
+    const checkboxRow = contentEl.createDiv({ cls: 'bojubot-checkbox-row' });
     const checkbox = checkboxRow.createEl('input', {
       attr: { type: 'checkbox', id: 'bojubot-open-after' },
     });

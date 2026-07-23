@@ -40,6 +40,8 @@ When you first open BojuBot, a setup dialog offers three options:
 - **Create blank template** — Gives you a pre-structured file with placeholder sections to fill in yourself.
 - **Skip** — Skips setup for now. You can relaunch it any time via **BojuBot: Open context file** from the palette — if the file doesn't exist yet, the setup dialog reopens automatically.
 
+Check **Open context file after creation** in the dialog to have it opened for you as soon as it's ready, whichever of the first two options you pick.
+
 ### What to put in it
 
 ```markdown

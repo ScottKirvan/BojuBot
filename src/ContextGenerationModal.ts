@@ -124,6 +124,16 @@ export class ContextGenerationModal extends Modal {
       this.app.workspace.detachLeavesOfType(VIEW_TYPE_CLAUDE);
     }, { capture: true });
 
+    const checkboxRow = contentEl.createDiv({ cls: 'bojubot-checkbox-row' });
+    const openAfterCheckbox = checkboxRow.createEl('input', {
+      attr: { type: 'checkbox', id: 'bojubot-open-context-after' },
+    });
+    openAfterCheckbox.checked = false;
+    checkboxRow.createEl('label', {
+      text: 'Open context file after creation',
+      attr: { for: 'bojubot-open-context-after' },
+    });
+
     const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
 
     const generateBtn = btnRow.createEl('button', {
@@ -132,17 +142,19 @@ export class ContextGenerationModal extends Modal {
     });
     generateBtn.addEventListener('click', () => {
       this.settled = true;
+      const openAfter = openAfterCheckbox.checked;
       this.close();
       new UserIntroModal(this.app, (intro, contextFiles) => {
-        void this.generateContextFile(intro, contextFiles);
+        void this.generateContextFile(intro, contextFiles, openAfter);
       }).open();
     });
 
     const blankBtn = btnRow.createEl('button', { text: 'Create blank template' });
     blankBtn.addEventListener('click', () => {
       this.settled = true;
+      const openAfter = openAfterCheckbox.checked;
       this.close();
-      void this.createBlankTemplate();
+      void this.createBlankTemplate(openAfter);
     });
 
     const skipBtn = btnRow.createEl('button', { text: 'Skip' });
@@ -189,7 +201,7 @@ export class ContextGenerationModal extends Modal {
     }
   }
 
-  private async generateContextFile(userIntro: string, contextFiles: string[] = []) {
+  private async generateContextFile(userIntro: string, contextFiles: string[] = [], openAfter: boolean = false) {
     log('ContextGenerationModal: spawning background generation');
 
     // Reuse the same session-start context injection every normal session gets
@@ -291,7 +303,12 @@ export class ContextGenerationModal extends Modal {
         if (cancelled) return;
         const exists = this.app.vault.getFileByPath(this.contextFilePath);
         if (exists) {
-          new Notice(`${brandName()}: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
+          if (openAfter) {
+            void this.app.workspace.getLeaf(false).openFile(exists);
+            new Notice(`${brandName()}: context file created at "${this.contextFilePath}".`);
+          } else {
+            new Notice(`${brandName()}: context file created at "${this.contextFilePath}". Open it in Obsidian to review and edit.`);
+          }
         } else {
           new Notice(`${brandName()}: generation finished but "${this.contextFilePath}" was not found. You may need to create it manually.`);
         }
@@ -304,7 +321,7 @@ export class ContextGenerationModal extends Modal {
     });
   }
 
-  private async createBlankTemplate() {
+  private async createBlankTemplate(openAfter: boolean) {
     const today = new Date().toISOString().slice(0, 10);
     const stub = [
       '# Vault Context',
@@ -325,8 +342,9 @@ export class ContextGenerationModal extends Modal {
     ].join('\n');
 
     try {
-      await this.app.vault.create(this.contextFilePath, stub);
+      const file = await this.app.vault.create(this.contextFilePath, stub);
       new Notice(`${brandName()}: created blank context file at "${this.contextFilePath}".`);
+      if (openAfter) await this.app.workspace.getLeaf(false).openFile(file);
     } catch (err) {
       log('ContextGenerationModal: failed to create blank template:', err);
       new Notice(`${brandName()}: failed to create context file. Check the debug log.`);
