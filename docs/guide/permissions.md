@@ -21,11 +21,7 @@ The default for new sessions is set in **Settings → BojuBot → Permission mod
 
 Chat only is designed for conversations where you want Claude to reason and suggest, but not touch your vault. Claude can see any context you explicitly hand it — @-mentioned notes, file attachments, clipboard pastes — and can fetch web URLs and search the web. It cannot browse, read, or modify vault files on its own.
 
-The vault folder tree is not injected at session start in this mode, so Claude has no map of your vault structure.
-
-::: info Known limitation
-Claude is spawned with your vault root as its working directory, so it is technically aware of the vault path even in Chat only mode. Obscuring this is tracked as a future improvement.
-:::
+The vault folder tree is not injected at session start in this mode, so Claude has no map of your vault structure. Claude is also spawned in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
 
 ---
 

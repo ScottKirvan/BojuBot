@@ -19,7 +19,7 @@ import { EventEmitter } from 'node:events';
 
 import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir } from '../src/utils/sessionStorage';
 import { estimateTokens } from '../src/utils/logger';
-import { parseStreamOutput, permissionArgs } from '../src/ClaudeProcess';
+import { parseStreamOutput, permissionArgs, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
@@ -281,6 +281,31 @@ describe('permissionArgs', () => {
   test('no mode ever includes dangerously-skip-permissions', () => {
     for (const mode of ['standard', 'readonly', 'full', 'restricted'] as const) {
       assert.ok(!permissionArgs(mode).some(a => a.includes('dangerously')));
+    }
+  });
+});
+
+describe('resolveSpawnCwd', () => {
+  test('restricted mode spawns in a neutral temp dir, never the vault root', () => {
+    const cwd = resolveSpawnCwd('restricted', undefined, '/path/to/vault');
+    assert.notEqual(cwd, '/path/to/vault');
+    assert.equal(cwd, tmpdir());
+  });
+
+  test('restricted mode ignores a custom session cwd too — still the neutral temp dir', () => {
+    const cwd = resolveSpawnCwd('restricted', '/path/to/vault/subfolder', '/path/to/vault');
+    assert.equal(cwd, tmpdir());
+  });
+
+  test('standard/readonly/full use the session cwd override when set', () => {
+    for (const mode of ['standard', 'readonly', 'full'] as const) {
+      assert.equal(resolveSpawnCwd(mode, '/custom/cwd', '/path/to/vault'), '/custom/cwd');
+    }
+  });
+
+  test('standard/readonly/full fall back to the vault root with no override', () => {
+    for (const mode of ['standard', 'readonly', 'full'] as const) {
+      assert.equal(resolveSpawnCwd(mode, undefined, '/path/to/vault'), '/path/to/vault');
     }
   });
 });
