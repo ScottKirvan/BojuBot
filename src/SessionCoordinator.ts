@@ -4,6 +4,7 @@ import {
   spawnClaude,
   parseStreamOutput,
   killProcess,
+  resolveSpawnCwd,
   PermissionMode,
   PermissionDenial,
   TokenUsage,
@@ -276,7 +277,7 @@ export class SessionCoordinator {
       proc = spawnClaude({
         binaryPath: binary,
         prompt: '/compact',
-        vaultRoot: this._sessionCwd ?? this.host.getVaultRoot(),
+        vaultRoot: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
@@ -319,7 +320,7 @@ export class SessionCoordinator {
       proc = spawnClaude({
         binaryPath: binary,
         prompt,
-        vaultRoot: this._sessionCwd ?? this.host.getVaultRoot(),
+        vaultRoot: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
