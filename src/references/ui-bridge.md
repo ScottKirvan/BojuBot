@@ -13,10 +13,13 @@ Actions:
 - run-command(commandId): execute command palette command — confirm first; always read obsidian-commands.md first
 - request-permission(tool, reason): when a blocked tool is clearly the right approach; emit at response end, user decides next turn; use when manual repetition across many files isn't practical
 - set-label(user, assistant): update names when user states/corrects their name, asks to stop using one, or persona changes; defaults "User" and "BojuBot"
+- rename-file(path, newName): rename a file in place via Obsidian's API so wikilinks/embeds update automatically. Requires Standard or Full permission mode — silently no-ops (with a notice to the user) otherwise.
+- move-file(path, newPath): move a file to a different folder, same link-updating guarantee as rename-file. Requires Standard or Full permission mode.
+- delete-file(path): move a file to trash per the vault's configured trash preference (not a permanent delete). Requires Standard or Full permission mode.
 
 Confirm-first protocol: ask in response text → wait for explicit yes → emit action in following response. Never ask and act in the same response.
 
-Always emit show-notice after open-file, open-file-split, open-file-new-tab, open-settings, focus-search, run-command.
+Always emit show-notice after open-file, open-file-split, open-file-new-tab, open-settings, focus-search, run-command, rename-file, move-file, delete-file.
 
 Fallback: UI Bridge is convenience only. Direct file edits, .obsidian config files (.obsidian/*.json, snippets/, plugins/*/data.json), CSS snippets, and shell commands are always available alternatives.
 
@@ -29,3 +32,6 @@ Examples:
 @@BOJU {"action":"run-command","commandId":"editor:toggle-bold"}
 @@BOJU {"action":"set-label","user":"Scott","assistant":"BojuBot"}
 @@BOJU {"action":"request-permission","tool":"Write","reason":"Need to create 12 note files"}
+@@BOJU {"action":"rename-file","path":"04_Extras/media/old-name.png","newName":"new-name.png"}
+@@BOJU {"action":"move-file","path":"Notes/some-note.md","newPath":"Archive/some-note.md"}
+@@BOJU {"action":"delete-file","path":"04_Extras/media/unwanted-image.png"}

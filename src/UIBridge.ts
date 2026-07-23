@@ -1,6 +1,7 @@
 import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { brandName } from './brand';
+import { canWrite, PermissionMode } from './ClaudeProcess';
 export { BOJU_PREFIX } from './constants';
 export { BojuBotAction, extractActions } from './utils/actionParser';
 import type { BojuBotAction } from './utils/actionParser';
@@ -14,6 +15,11 @@ interface UIBridgeInternal {
 }
 
 export interface UIBridgeOptions {
+  /** Session's current effective permission mode — gates file-mutating actions
+   *  (rename-file, move-file, delete-file), which run through this side-channel
+   *  rather than Claude Code's own tool permissions and so aren't otherwise
+   *  subject to Read only / Chat only's "no writes" guarantee. */
+  permissionMode?: PermissionMode;
   commandAllowlist?: string[];
   commandDenylist?: string[];
   /** If true, prompt when Claude tries a command not in the allowlist. If false, hard-block it. */
@@ -124,6 +130,7 @@ export function promptPermissionRequest(app: App, tool: string, reason: string):
  */
 export async function executeAction(app: App, action: BojuBotAction, options: UIBridgeOptions = {}): Promise<void> {
   const {
+    permissionMode,
     commandAllowlist = [],
     commandDenylist = [],
     confirmUnlistedCommands = true,
@@ -164,6 +171,54 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       } else {
         warn('UIBridge: open-file-new-tab — file not found:', action.path);
       }
+      break;
+    }
+
+    case 'rename-file': {
+      if (!canWrite(permissionMode)) {
+        warn('UIBridge: rename-file — blocked, permission mode has no write access:', permissionMode);
+        new Notice(`${brandName()}: Claude tried to rename a file, but the current permission mode doesn't allow vault writes.`, 6000);
+        break;
+      }
+      const file = app.vault.getFileByPath(action.path as string);
+      const newName = action.newName as string | undefined;
+      if (!file || !newName) {
+        warn('UIBridge: rename-file — file not found or missing newName:', action.path);
+        break;
+      }
+      const newPath = file.parent ? `${file.parent.path}/${newName}` : newName;
+      await app.fileManager.renameFile(file, newPath);
+      break;
+    }
+
+    case 'move-file': {
+      if (!canWrite(permissionMode)) {
+        warn('UIBridge: move-file — blocked, permission mode has no write access:', permissionMode);
+        new Notice(`${brandName()}: Claude tried to move a file, but the current permission mode doesn't allow vault writes.`, 6000);
+        break;
+      }
+      const file = app.vault.getFileByPath(action.path as string);
+      const newPath = action.newPath as string | undefined;
+      if (!file || !newPath) {
+        warn('UIBridge: move-file — file not found or missing newPath:', action.path);
+        break;
+      }
+      await app.fileManager.renameFile(file, newPath);
+      break;
+    }
+
+    case 'delete-file': {
+      if (!canWrite(permissionMode)) {
+        warn('UIBridge: delete-file — blocked, permission mode has no write access:', permissionMode);
+        new Notice(`${brandName()}: Claude tried to delete a file, but the current permission mode doesn't allow vault writes.`, 6000);
+        break;
+      }
+      const file = app.vault.getFileByPath(action.path as string);
+      if (!file) {
+        warn('UIBridge: delete-file — file not found:', action.path);
+        break;
+      }
+      await app.fileManager.trashFile(file);
       break;
     }
 

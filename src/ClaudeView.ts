@@ -867,6 +867,7 @@ export class ClaudeView extends ItemView {
 
   private bridgeOptions() {
     return {
+      permissionMode: this.coordinator.getEffectivePermissionMode(),
       commandAllowlist: this.plugin.settings.commandAllowlist,
       commandDenylist: this.plugin.settings.commandDenylist,
       confirmUnlistedCommands: this.plugin.settings.confirmUnlistedCommands,
