@@ -65,7 +65,7 @@ function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
   if (!isWhiteLabeled(brand)) {
     items.push({
       icon: 'heart',
-      title: 'Buy Me A Coffee',
+      title: 'Buy me a coffee',
       desc: 'Show your love by supporting BojuBot and the author.',
       label: 'Buy',
       href: KOFI_URL,
