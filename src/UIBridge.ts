@@ -156,6 +156,17 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       break;
     }
 
+    case 'open-file-new-tab': {
+      const file = app.vault.getFileByPath(action.path as string);
+      if (file) {
+        const leaf = app.workspace.getLeaf('tab');
+        await leaf.openFile(file);
+      } else {
+        warn('UIBridge: open-file-new-tab — file not found:', action.path);
+      }
+      break;
+    }
+
     case 'navigate-heading': {
       const file = app.vault.getFileByPath(action.path as string);
       if (file) {
