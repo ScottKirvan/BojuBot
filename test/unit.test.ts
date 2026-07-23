@@ -1028,6 +1028,47 @@ function makeTestHost(sessionsDir: string): SessionCoordinatorHost {
   };
 }
 
+describe('SessionCoordinator renameActiveSession', () => {
+  test('updates sessionTitle and fires session:updated when the renamed session is active', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession();
+      const activeId = coordinator.sessionFileId!;
+
+      const updates: Array<{ title?: string }> = [];
+      coordinator.on('session:updated', (u) => updates.push(u));
+
+      coordinator.renameActiveSession(activeId, 'Renamed Session');
+
+      assert.equal(coordinator.sessionTitle, 'Renamed Session');
+      assert.equal(updates.length, 1);
+      assert.equal(updates[0].title, 'Renamed Session');
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+
+  test('is a no-op when the renamed session is not the active one', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession();
+      const originalTitle = coordinator.sessionTitle;
+
+      const updates: unknown[] = [];
+      coordinator.on('session:updated', (u) => updates.push(u));
+
+      coordinator.renameActiveSession('some-other-session-id', 'Should Not Apply');
+
+      assert.equal(coordinator.sessionTitle, originalTitle);
+      assert.equal(updates.length, 0);
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+});
+
 describe('SessionCoordinator reentrancy guard', () => {
   test('send() rejects a new turn while one is already in flight, and allows one after it clears', async () => {
     const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));

@@ -703,9 +703,7 @@ export class ClaudeView extends ItemView {
     }, () => {
       this.inputEl?.focus();
     }, this.coordinator.sessionFileId, (session) => {
-      if (session.id === this.coordinator.sessionFileId) {
-        this.updateSessionStatus();
-      }
+      this.coordinator.renameActiveSession(session.id, session.title);
     }, (session) => {
       void this.exportSessionToVault(session);
     }, sessionsDir).open();
