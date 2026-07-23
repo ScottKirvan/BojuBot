@@ -1,37 +1,48 @@
 # Commands
 
-Press **Ctrl+P** (Windows/Linux) or **Cmd+P** (Mac) to open the Command Palette and search for any of the following:
+Press **Ctrl+P** (Windows/Linux) or **Cmd+P** (Mac) to open the Command Palette and search for any of the following.
+
+::: info Command ID format
+Obsidian namespaces every plugin command as `<plugin-id>:<command-id>`. BojuBot's plugin ID is `bojubot`, so **BojuBot: Open agent panel** has the full ID `bojubot:open-agent` — that's the string to reference from a hotkey config, `run-command`, or another plugin (Templater, QuickAdd, Commander, etc.). The tables below show the ID without the `bojubot:` prefix for brevity.
+:::
 
 ## Panel & Navigation
 
-| Command                           | ID                             | Description                                                                           |
-| --------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------- |
-| **BojuBot: Open agent panel**     | `open-bojubot-agent`           | Opens or focuses the chat panel. Also available via the wave icon in the left ribbon. |
-| **BojuBot: Toggle BojuBot panel** | `toggle-bojubot-panel`         | Quickly hide or show the chat panel without closing it.                               |
-| **BojuBot: Show session history** | `show-bojubot-session-history` | Show all saved sessions and resume a previous conversation.                           |
+| Command                           | ID                      | Description                                                                            |
+| ---------------------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
+| **BojuBot: Open agent panel**     | `open-agent`            | Opens or focuses the chat panel. Also available via the ribbon icon.                    |
+| **BojuBot: Toggle panel**         | `toggle-panel`          | Quickly hide or show the chat panel without closing it.                                 |
+| **BojuBot: Show session history** | `show-session-history`  | Show all saved sessions and resume a previous conversation.                             |
+| **BojuBot: Focus chat input**     | `focus-input`           | Open the BojuBot panel and place the cursor in the chat input. Good for hotkey binding.  |
 
 ## Session Management
 
-| Command                            | ID                      | Description                                                                              |
-| ---------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
-| **BojuBot: New session**           | `new-bojubot-session`   | Start a fresh conversation. The current session is saved automatically.                  |
-| **BojuBot: Clear current session** | `clear-bojubot-session` | Clear all messages from the current session. Context is re-injected on the next message. |
+| Command                             | ID                        | Description                                                                              |
+| ------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
+| **BojuBot: New session**            | `new-session`             | Start a fresh conversation. The current session is saved automatically.                 |
+| **BojuBot: Clear current session**  | `clear-session`           | Clear all messages from the current session. Context is re-injected on the next message. |
+| **BojuBot: Switch model**           | `switch-model`            | Open the model picker. Switching starts a new session — see [Model Indicator](./chat-panel#model-indicator). |
+| **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to switch the active permission mode (Chat only / Read only / Standard / Full access). Takes effect on the next message. |
+
+## Context & Memory
+
+| Command                                | ID                    | Description                                                                                                                        |
+| ----------------------------------------| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **BojuBot: Open context file**         | `open-context-file`   | Open `_claude-context.md` (or your configured path) for editing.                                                                   |
+| **BojuBot: Refresh session context**   | `refresh-context`     | Re-inject the context file, command allowlist, and frontmatter into the active session. Queued and sent with your next message.    |
+| **BojuBot: Audit memory file**         | `audit-memory-file`   | Starts a new session and asks Claude to review your context file for prompt-injection-style content — instructions or directives that look out of place, encoded/obfuscated text, or anything a third party may have slipped in. Run this if autonomous memory is on and you want a sanity check. |
+| **BojuBot: Send selection as context** | `send-selection`      | Highlight text in any note, then run this command to attach it as context.                                                         |
 
 ## Communication & Settings
 
-| Command                                | ID                               | Description                                                                                                                            |
-| -------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **BojuBot: Export conversation**       | `export-bojubot-conversation`    | Copy the current conversation as markdown to the clipboard.                                                                            |
-| **BojuBot: Export session to vault**   | `export-bojubot-to-vault`        | Save the current conversation as a vault note. Prompts for a path (defaults to configured Export folder).                              |
-| **BojuBot: Copy last response**        | `copy-bojubot-last-response`     | Copy Claude's last response to the clipboard.                                                                                          |
-| **BojuBot: Change permission mode**    | `change-bojubot-permission-mode` | Open a picker to switch the active permission mode (Chat only / Read only / Standard / Full access). Takes effect on the next message. |
-| **BojuBot: Open settings**             | `open-bojubot-settings`          | Jump directly to the BojuBot settings panel.                                                                                           |
-| **BojuBot: Send selection as context** | `send-selection-to-bojubot`      | Highlight text in any note, then run this command to attach it as context.                                                             |
-| **BojuBot: Focus chat input**          | `focus-bojubot-input`            | Open the BojuBot panel and place the cursor in the chat input. Good for hotkey binding.                                                |
-| **BojuBot: Open context file**         | `open-bojubot-context-file`      | Open `_claude-context.md` (or your configured path) for editing.                                                                       |
-| **BojuBot: Refresh session context**   | `refresh-bojubot-context`        | Re-inject the context file, command allowlist, and frontmatter into the active session. Queued and sent with your next message.        |
-| **BojuBot: About BojuBot**             | `show-bojubot-about`             | Show version info and links.                                                                                                           |
-| **BojuBot: Reload skills**             | `reload-bojubot-skills`          | Re-scan the skills folder and update Ctrl+P registrations. Run this after adding or removing skill files.                              |
+| Command                               | ID                     | Description                                                                    |
+| ---------------------------------------| ------------------------ | --------------------------------------------------------------------------------- |
+| **BojuBot: Export conversation**      | `export-conversation`  | Copy the current conversation as markdown to the clipboard.                    |
+| **BojuBot: Export session to vault**  | `export-to-vault`      | Save the current conversation as a vault note. Prompts for a path (defaults to configured Export folder). |
+| **BojuBot: Copy last response**       | `copy-last-response`   | Copy Claude's last response to the clipboard.                                  |
+| **BojuBot: Open settings**            | `open-settings`        | Jump directly to the BojuBot settings panel.                                   |
+| **BojuBot: About**                    | `show-about`           | Show version info and links — see [About Dialog](./chat-panel#about-dialog).  |
+| **BojuBot: Reload skills**            | `reload-skills`        | Re-scan the skills folder and update Ctrl+P registrations. Run this after adding or removing skill files. |
 
 ## Skills API
 

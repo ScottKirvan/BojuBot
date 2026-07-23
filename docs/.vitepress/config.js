@@ -48,6 +48,7 @@ export default {
           { text: 'Commands', link: '/guide/commands' },
           { text: 'Settings', link: '/guide/settings' },
           { text: 'Permissions', link: '/guide/permissions' },
+          { text: 'Plugin API', link: '/guide/plugin-api' },
         ]
       },
       {
