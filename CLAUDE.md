@@ -10,7 +10,7 @@ BojuBot is not limited to features that involve Claude Code directly. Obsidian-n
 - `proc.stdin.end()` closes stdin so claude doesn't hang waiting for more input
 - Flags: `--output-format stream-json --verbose --print` + permission-mode args (see below)
 - Permission modes map to CLI args via `permissionArgs()` in `ClaudeProcess.ts`:
-  - **Standard** (default): `--permission-mode acceptEdits`
+  - **Standard** (default): `--permission-mode acceptEdits --disallowedTools Bash`
   - **Read-only**: `--permission-mode default --allowedTools Read,Glob,Grep,WebFetch,WebSearch`
   - **Full**: `--permission-mode bypassPermissions`
   - **Restricted** (planned #154): `--permission-mode default --allowedTools Write,WebFetch,WebSearch` + vault tree injection suppressed

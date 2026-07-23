@@ -243,6 +243,13 @@ describe('permissionArgs', () => {
     assert.ok(!args.some(a => a.includes('bypass') || a.includes('dangerously')));
   });
 
+  test('standard → explicitly disallows Bash rather than relying on acceptEdits semantics', () => {
+    const args = permissionArgs('standard');
+    const idx = args.indexOf('--disallowedTools');
+    assert.ok(idx !== -1);
+    assert.ok(args[idx + 1].split(',').includes('Bash'));
+  });
+
   test('readonly → default mode + allowedTools', () => {
     const args = permissionArgs('readonly');
     assert.ok(args.includes('default'));
