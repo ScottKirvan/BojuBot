@@ -19,6 +19,7 @@ class ConfirmDeleteModal extends Modal {
   onClose() { this.contentEl.empty(); }
 }
 import { StoredSession, saveSession, canResumeLocally, deleteSession } from '../utils/sessionStorage';
+import { formatTokenCount } from '../utils/logger';
 
 export class SessionListModal extends Modal {
   sessions: StoredSession[];
@@ -31,6 +32,10 @@ export class SessionListModal extends Modal {
   onDismiss: () => void;
   onRename: (session: StoredSession) => void;
   onExportToVault: (session: StoredSession) => void;
+  /** Estimated tokens in each session's local message history, keyed by session.id. Omitted for sessions with no locally-cached transcript (New / Remote). */
+  sessionTokens: Map<string, number>;
+  /** Estimated tokens a brand-new session would inject at start, under current settings. */
+  contextTokens: number;
   listContainer: HTMLElement | null = null;
   private draggedId: string | null = null;
   private isFiltering = false;
@@ -46,6 +51,8 @@ export class SessionListModal extends Modal {
     onRename: (session: StoredSession) => void = () => { },
     onExportToVault: (session: StoredSession) => void = () => { },
     sessionsDir?: string,
+    sessionTokens: Map<string, number> = new Map(),
+    contextTokens = 0,
   ) {
     super(app);
     this.vaultRoot = vaultRoot;
@@ -58,6 +65,8 @@ export class SessionListModal extends Modal {
     this.onRename = onRename;
     this.onExportToVault = onExportToVault;
     this.activeSessionFileId = activeSessionFileId;
+    this.sessionTokens = sessionTokens;
+    this.contextTokens = contextTokens;
   }
 
   onOpen() {
@@ -210,6 +219,23 @@ export class SessionListModal extends Modal {
       item.createEl('span', { text: 'New', cls: 'bojubot-session-new-badge' });
     } else if (!resumable) {
       item.createEl('span', { text: 'Remote', cls: 'bojubot-session-remote-badge' });
+    }
+
+    const tokens = this.sessionTokens.get(session.id);
+    if (tokens !== undefined) {
+      const tokensEl = item.createEl('span', {
+        cls: 'bojubot-session-tokens',
+        text: `${formatTokenCount(tokens)} tokens`,
+      });
+      tokensEl.title = "Estimated tokens in this session's saved message history";
+
+      if (this.contextTokens > 0) {
+        const contextEl = item.createEl('span', {
+          cls: 'bojubot-session-tokens-context',
+          text: ` (+${formatTokenCount(this.contextTokens)} ctx)`,
+        });
+        contextEl.title = 'Estimated context (vault tree, context file, orientation, etc.) a brand-new session would inject at start, under current settings — not a record of what this session actually received.';
+      }
     }
 
     const actionsDiv = item.createEl('div', { cls: 'bojubot-session-actions' });

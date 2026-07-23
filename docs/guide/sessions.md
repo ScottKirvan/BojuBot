@@ -41,6 +41,8 @@ Open the session manager by clicking the **session name** in the panel toolbar, 
 | **Reorder**          | Drag the ⠿ grip handle up or down                             |
 | **Filter**           | Type in the search box at the top                             |
 
+Sessions with a locally-cached transcript show an estimated token count (e.g. "2.1k tokens"), with a "+context" figure alongside it — the estimated size of the context (vault tree, context file, orientation, etc.) a brand-new session would inject at start under your current settings. Sessions with no local transcript (New / Remote) show neither. Hover either number for details.
+
 ## Active Session
 
 The currently open session is marked with an accent-coloured left border and bold title.

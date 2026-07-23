@@ -20,7 +20,7 @@ import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
-import { log, estimateTokens } from './utils/logger';
+import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { CLAUDE_MODELS, ClaudeModel } from './settings';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
@@ -33,6 +33,7 @@ import {
   resolveSessionsDir,
   canResumeLocally,
   loadSessionMessages,
+  estimateSessionTokens,
 } from './utils/sessionStorage';
 import { SessionListModal } from './modals/SessionListModal';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
@@ -272,10 +273,9 @@ export class ClaudeView extends ItemView {
       this._activeTurnEls.turnOutputTokens += usage.outputTokens;
       this._activeTurnEls.turnInputTokens = Math.max(this._activeTurnEls.turnInputTokens, usage.inputTokens);
       this._activeTurnEls.turnCacheTokens = Math.max(this._activeTurnEls.turnCacheTokens, usage.cacheReadTokens);
-      const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
       const { turnOutputTokens, turnInputTokens, turnCacheTokens } = this._activeTurnEls;
-      const parts = [`${fmt(turnOutputTokens)} out`, `${fmt(turnInputTokens)} in`];
-      if (turnCacheTokens > 0) parts.push(`${fmt(turnCacheTokens)} cached`);
+      const parts = [`${formatTokenCount(turnOutputTokens)} out`, `${formatTokenCount(turnInputTokens)} in`];
+      if (turnCacheTokens > 0) parts.push(`${formatTokenCount(turnCacheTokens)} cached`);
       tokenStatsEl.setText(parts.join(' · '));
       tokenStatsEl.show();
     });
@@ -380,7 +380,7 @@ export class ClaudeView extends ItemView {
 
     const toolbar = root.createDiv({ cls: 'bojubot-toolbar' });
     this.sessionStatusEl = toolbar.createSpan({ cls: 'bojubot-session-status', text: 'New session' });
-    this.sessionStatusEl.addEventListener('click', () => this.showSessionHistory());
+    this.sessionStatusEl.addEventListener('click', () => void this.showSessionHistory());
     this.sessionStatusEl.title = 'Click to see session history';
 
     const newSessionBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
@@ -692,10 +692,19 @@ export class ClaudeView extends ItemView {
     this.updatePermissionIcon();
   }
 
-  showSessionHistory() {
+  async showSessionHistory() {
     const vaultRoot = this.plugin.getVaultRoot();
     const sessionsDir = this.getSessionsDir();
     const sessions = loadAllSessions(vaultRoot, sessionsDir, this.app.vault.configDir);
+
+    const sessionTokens = new Map<string, number>();
+    for (const session of sessions) {
+      if (!session.claudeSessionId || !canResumeLocally(session.claudeSessionId)) continue;
+      const messages = loadSessionMessages(session.claudeSessionId);
+      if (messages.length > 0) sessionTokens.set(session.id, estimateSessionTokens(messages));
+    }
+    const contextTokens = await this.estimateFreshContextTokens();
+
     new SessionListModal(this.app, vaultRoot, sessions, (session) => {
       void this.loadSession(session);
     }, () => {
@@ -706,7 +715,35 @@ export class ClaudeView extends ItemView {
       this.coordinator.renameActiveSession(session.id, session.title);
     }, (session) => {
       void this.exportSessionToVault(session);
-    }, sessionsDir).open();
+    }, sessionsDir, sessionTokens, contextTokens).open();
+  }
+
+  /**
+   * Estimated size of the context that would be injected if a brand-new session
+   * started right now (orientation, vault tree, context file, etc.) — used to show
+   * "+context" alongside each session's own message-history token count in the
+   * Session Manager. This is a current-settings estimate, not a record of what was
+   * actually injected historically — sessions only get this once, at creation, and
+   * settings may have changed since. Best-effort: returns 0 if context can't be built.
+   */
+  private async estimateFreshContextTokens(): Promise<number> {
+    try {
+      const effectiveMode = this.coordinator.getEffectivePermissionMode();
+      const ctx = new ContextManager(
+        this.app,
+        this.plugin.settings.contextFilePath,
+        this.plugin.settings.autonomousMemory,
+        effectiveMode === 'restricted' ? 0 : this.plugin.settings.vaultTreeDepth,
+        this.plugin.settings.commandAllowlist,
+        effectiveMode,
+        this.plugin.settings.contextFileSizeCapTokens,
+        this.plugin.settings.minimalMode,
+      );
+      const context = await ctx.buildSessionContext();
+      return estimateTokens(context);
+    } catch {
+      return 0;
+    }
   }
 
   /** Build export markdown from DOM messages (active session). */
@@ -1303,7 +1340,7 @@ export class ClaudeView extends ItemView {
       });
       if (sessions.length > 3) {
         const more = recent.createEl('span', { cls: 'bojubot-welcome-recent-more', text: 'More…' });
-        more.addEventListener('click', () => this.showSessionHistory());
+        more.addEventListener('click', () => void this.showSessionHistory());
       }
     }
   }
@@ -1967,7 +2004,7 @@ export class ClaudeView extends ItemView {
         category: 'Session',
         name: 'Show history',
         description: 'Browse and resume past sessions',
-        action: () => this.showSessionHistory(),
+        action: () => void this.showSessionHistory(),
       },
       {
         category: 'Session',

@@ -17,8 +17,8 @@ import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir } from '../src/utils/sessionStorage';
-import { estimateTokens } from '../src/utils/logger';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, ChatMessage } from '../src/utils/sessionStorage';
+import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { extractActions } from '../src/utils/actionParser';
@@ -101,6 +101,33 @@ describe('estimateTokens', () => {
   test('longer text scales linearly', () => {
     const text = 'a'.repeat(400);
     assert.equal(estimateTokens(text), 100);
+  });
+});
+
+describe('formatTokenCount', () => {
+  test('below 1000 shown as a plain integer', () => {
+    assert.equal(formatTokenCount(0), '0');
+    assert.equal(formatTokenCount(850), '850');
+    assert.equal(formatTokenCount(999), '999');
+  });
+
+  test('1000 and above shown as one decimal "k"', () => {
+    assert.equal(formatTokenCount(1000), '1.0k');
+    assert.equal(formatTokenCount(2100), '2.1k');
+    assert.equal(formatTokenCount(15750), '15.8k');
+  });
+});
+
+describe('estimateSessionTokens', () => {
+  const msg = (content: string): ChatMessage => ({ role: 'user', content, timestamp: '2024-01-01T00:00:00Z' });
+
+  test('empty message list → 0', () => {
+    assert.equal(estimateSessionTokens([]), 0);
+  });
+
+  test('sums estimateTokens across every message', () => {
+    const messages = [msg('a'.repeat(400)), msg('b'.repeat(40))];
+    assert.equal(estimateSessionTokens(messages), estimateTokens('a'.repeat(400)) + estimateTokens('b'.repeat(40)));
   });
 });
 
