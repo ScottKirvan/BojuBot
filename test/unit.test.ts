@@ -19,7 +19,7 @@ import { EventEmitter } from 'node:events';
 
 import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir } from '../src/utils/sessionStorage';
 import { estimateTokens } from '../src/utils/logger';
-import { parseStreamOutput, permissionArgs, resolveSpawnCwd } from '../src/ClaudeProcess';
+import { parseStreamOutput, permissionArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
@@ -372,6 +372,22 @@ describe('permission picker mode table', () => {
       const args = permissionArgs(entry.mode);
       assert.ok(Array.isArray(args) && args.length > 0, `permissionArgs('${entry.mode}') returned no args`);
     }
+  });
+});
+
+describe('canWrite', () => {
+  test('standard and full allow writes', () => {
+    assert.equal(canWrite('standard'), true);
+    assert.equal(canWrite('full'), true);
+  });
+
+  test('readonly and restricted do not allow writes', () => {
+    assert.equal(canWrite('readonly'), false);
+    assert.equal(canWrite('restricted'), false);
+  });
+
+  test('undefined mode does not allow writes', () => {
+    assert.equal(canWrite(undefined), false);
   });
 });
 

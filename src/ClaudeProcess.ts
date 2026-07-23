@@ -47,6 +47,17 @@ export function resolveSpawnCwd(mode: PermissionMode, sessionCwd: string | undef
   return sessionCwd ?? vaultRoot;
 }
 
+/**
+ * True when the effective permission mode allows vault writes (Standard or Full).
+ * Used to gate UI Bridge file-mutating actions (rename-file, move-file,
+ * delete-file), which run through that side-channel rather than Claude Code's
+ * own tool permissions and so aren't otherwise subject to Read only / Chat
+ * only's "no writes" guarantee.
+ */
+export function canWrite(permissionMode?: PermissionMode): boolean {
+  return permissionMode === 'standard' || permissionMode === 'full';
+}
+
 // ---------------------------------------------------------------------------
 // Binary detection
 // ---------------------------------------------------------------------------
