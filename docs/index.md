@@ -45,20 +45,6 @@ features:
     details: BojuBot rides your existing Claude Pro or Max subscription via the Claude Code CLI. No separate billing, no extra configuration.
 ---
 
-<div align="center" style="margin-top: 3rem; margin-bottom: 2rem;">
-  <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;">
-    Enjoying the project? Consider supporting development:
-  </p>
-  <div style="display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap;">
-  <a href="https://ko-fi.com/ScottKirvan" target="_blank">
-    <img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support on Ko-fi"  width="160"  />
-  </a> &nbsp; &nbsp;
-  <a href="https://github.com/sponsors/ScottKirvan" target="_blank">
-    <img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github" height="36" />
-  </a>
-</div>
-</div>
-
 <!-- Begin Sponsors -->
 
 <div align="center" style="margin-top: 3rem; margin-bottom: 2rem;">
