@@ -197,6 +197,19 @@ export class SessionCoordinator {
     log('New session placeholder created:', sessionId, cwd ? `cwd=${cwd}` : '');
   }
 
+  /**
+   * Syncs the in-memory title when a session is renamed elsewhere (e.g. the Session
+   * Manager). The header and active-session vault export both read cached coordinator
+   * state, not disk, so without this they'd keep showing the pre-rename title until
+   * the session was reloaded.
+   */
+  renameActiveSession(sessionFileId: string, newTitle: string): void {
+    if (sessionFileId !== this._sessionFileId) return;
+    this._sessionTitle = newTitle;
+    this._hasCustomTitle = true;
+    this.emit('session:updated', { title: newTitle, sessionId: this._sessionId });
+  }
+
   async loadSession(session: StoredSession): Promise<void> {
     this._placeholderSessionId = undefined;
     this._sessionId = session.claudeSessionId || undefined;
