@@ -29,7 +29,7 @@ export function permissionArgs(mode: PermissionMode): string[] {
       return ['--permission-mode', 'bypassPermissions'];
     case 'standard':
     default:
-      return ['--permission-mode', 'acceptEdits'];
+      return ['--permission-mode', 'acceptEdits', '--disallowedTools', 'Bash'];
   }
 }
 
