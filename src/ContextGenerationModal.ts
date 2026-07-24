@@ -55,7 +55,7 @@ class ContextGenerationProgressModal extends Modal {
     if (!this.settled) {
       // Generation is still running and the user tried to dismiss via Escape or
       // clicking outside — reopen immediately rather than letting them proceed.
-      activeWindow.setTimeout(() => this.open(), 0);
+      window.setTimeout(() => this.open(), 0);
     }
   }
 }
@@ -170,7 +170,7 @@ export class ContextGenerationModal extends Modal {
     if (!this.settled) {
       // Easy to fat-finger away via Escape or an outside click before even reading
       // it — reopen instead of silently losing the offer to set up a context file.
-      activeWindow.setTimeout(() => this.open(), 0);
+      window.setTimeout(() => this.open(), 0);
     }
   }
 
@@ -382,11 +382,11 @@ class UserIntroModal extends Modal {
 
     // ── Additional context files (optional) ──────────────────────────────
     const filesSection = contentEl.createDiv({ cls: 'bojubot-intro-files-section' });
-    filesSection.createEl('div', {
+    filesSection.createDiv({
       text: 'Additional context files (optional)',
       cls: 'bojubot-intro-files-label',
     });
-    filesSection.createEl('div', {
+    filesSection.createDiv({
       text: 'Add any files Claude should read before generating — e.g. An existing Claude.md, project notes, or style guides.',
       cls: 'bojubot-intro-files-desc',
     });
@@ -420,7 +420,7 @@ class UserIntroModal extends Modal {
     const cancelBtn = btnRow.createEl('button', { text: 'Cancel' });
     cancelBtn.addEventListener('click', () => this.close());
 
-    activeWindow.setTimeout(() => ta.focus(), 50);
+    window.setTimeout(() => ta.focus(), 50);
   }
 
   private renderChips() {

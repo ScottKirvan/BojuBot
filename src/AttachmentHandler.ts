@@ -74,7 +74,7 @@ export class AttachmentHandler {
   }
 
   openFilePicker(): void {
-    const input = activeDocument.createElement('input');
+    const input = createEl('input');
     input.type = 'file';
     input.onchange = async () => {
       const f = input.files?.[0];

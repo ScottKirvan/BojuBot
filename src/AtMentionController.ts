@@ -68,7 +68,7 @@ export class AtMentionController {
   /** Call from textarea 'blur' event. */
   handleBlur(): void {
     // Delay so mousedown on a dropdown item fires before the dropdown hides.
-    activeWindow.setTimeout(() => this.hide(), 150);
+    window.setTimeout(() => this.hide(), 150);
   }
 
   /**

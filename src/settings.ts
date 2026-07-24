@@ -570,8 +570,8 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           });
           const label = row.createEl('label', { cls: 'bojubot-command-name' });
           label.htmlFor = `bojubot-cmd-orphan-${id}`;
-          label.createEl('span', { text: id, cls: 'bojubot-command-orphan-id' });
-          label.createEl('span', { text: ' — not found', cls: 'bojubot-command-orphan-badge' });
+          label.createSpan({ text: id, cls: 'bojubot-command-orphan-id' });
+          label.createSpan({ text: ' — not found', cls: 'bojubot-command-orphan-badge' });
         }
       }
 

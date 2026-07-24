@@ -97,8 +97,8 @@ export class AboutModal extends Modal {
     const logoImg = header.createEl('img', { cls: 'bojubot-about-logo' });
     logoImg.src = logoSrc;
     logoImg.alt = brand.name;
-    header.createEl('div', { text: brand.name, cls: 'bojubot-about-name' });
-    header.createEl('div', {
+    header.createDiv({ text: brand.name, cls: 'bojubot-about-name' });
+    header.createDiv({
       text: `Version ${this.plugin.manifest.version}`,
       cls: 'bojubot-about-version',
     });
@@ -115,8 +115,8 @@ export class AboutModal extends Modal {
       }
 
       const text = row.createDiv({ cls: 'bojubot-about-item-text' });
-      text.createEl('div', { text: item.title, cls: 'bojubot-about-item-title' });
-      text.createEl('div', { text: item.desc, cls: 'bojubot-about-item-desc' });
+      text.createDiv({ text: item.title, cls: 'bojubot-about-item-title' });
+      text.createDiv({ text: item.desc, cls: 'bojubot-about-item-desc' });
 
       const btn = row.createEl('a', {
         text: item.label,

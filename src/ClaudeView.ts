@@ -475,7 +475,7 @@ export class ClaudeView extends ItemView {
     });
     this.updatePermissionIcon();
 
-    this.modelIndicatorEl = inputToolbar.createEl('span', { cls: 'bojubot-model-indicator' });
+    this.modelIndicatorEl = inputToolbar.createSpan({ cls: 'bojubot-model-indicator' });
     this.modelIndicatorEl.title = 'Switch model';
     this.modelIndicatorEl.addEventListener('click', () => this.openModelPicker());
     this.updateModelIndicator();
@@ -1339,7 +1339,7 @@ export class ClaudeView extends ItemView {
         item.addEventListener('click', () => void this.loadSession(session));
       });
       if (sessions.length > 3) {
-        const more = recent.createEl('span', { cls: 'bojubot-welcome-recent-more', text: 'More…' });
+        const more = recent.createSpan({ cls: 'bojubot-welcome-recent-more', text: 'More…' });
         more.addEventListener('click', () => void this.showSessionHistory());
       }
     }
@@ -1431,7 +1431,7 @@ export class ClaudeView extends ItemView {
             : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
           cls: 'bojubot-setup-error',
         });
-        activeWindow.setTimeout(() => err.remove(), 6000);
+        window.setTimeout(() => err.remove(), 6000);
       }
     });
   }
@@ -1553,7 +1553,7 @@ export class ClaudeView extends ItemView {
     copyBtn.addEventListener('click', () => {
       void navigator.clipboard.writeText(code).then(() => {
         copyBtn.setText('Copied!');
-        activeWindow.setTimeout(() => copyBtn.setText('Copy'), 2000);
+        window.setTimeout(() => copyBtn.setText('Copy'), 2000);
       });
     });
   }
@@ -1575,7 +1575,7 @@ export class ClaudeView extends ItemView {
         this.closeAttachPopover();
       }
     };
-    activeWindow.setTimeout(() => activeDocument.addEventListener('click', this.attachClickOutside), 0);
+    window.setTimeout(() => activeDocument.addEventListener('click', this.attachClickOutside), 0);
   }
 
   private closeAttachPopover() {
@@ -2134,7 +2134,7 @@ class AttachUrlModal extends Modal {
       if (e.key === 'Enter') { const v = input.value.trim(); if (v) { this.onSubmit(v); this.close(); } }
       if (e.key === 'Escape') this.close();
     });
-    activeWindow.setTimeout(() => input.focus(), 50);
+    window.setTimeout(() => input.focus(), 50);
   }
   onClose() { this.contentEl.empty(); }
 }
