@@ -55,20 +55,20 @@ export class PrimeSessionModal extends Modal {
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Session name', cls: 'bojubot-param-label' });
-      field.createEl('div', { text: 'Leave blank to use the first message as title', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'Leave blank to use the first message as title', cls: 'bojubot-param-desc' });
       const input = field.createEl('input', {
         cls: 'bojubot-param-input',
         attr: { type: 'text', placeholder: 'E.g. Screenplay review — act 2' },
       });
       input.addEventListener('input', () => { this.name = input.value; });
-      activeWindow.setTimeout(() => input.focus(), 50);
+      window.setTimeout(() => input.focus(), 50);
     }
 
     // ── Working directory ─────────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Working directory (cwd)', cls: 'bojubot-param-label' });
-      field.createEl('div', { text: 'Absolute path Claude runs in. Leave blank to use vault root.', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'Absolute path Claude runs in. Leave blank to use vault root.', cls: 'bojubot-param-desc' });
       const row = field.createDiv({ cls: 'bojubot-prime-cwd-row' });
       const input = row.createEl('input', {
         cls: 'bojubot-param-input bojubot-prime-cwd-input',
@@ -101,7 +101,7 @@ export class PrimeSessionModal extends Modal {
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Initial instructions', cls: 'bojubot-param-label' });
-      field.createEl('div', { text: 'System prompt injected at session start. Leave blank for none.', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'System prompt injected at session start. Leave blank for none.', cls: 'bojubot-param-desc' });
       const ta = field.createEl('textarea', {
         cls: 'bojubot-param-textarea',
         attr: { placeholder: 'E.g. You are reviewing screenplay drafts in this folder. Focus on structure and pacing.' },
@@ -116,7 +116,7 @@ export class PrimeSessionModal extends Modal {
       const cb = row.createEl('input', { attr: { type: 'checkbox' } });
       cb.checked = true;
       row.createSpan({ text: 'Include vault context', cls: 'bojubot-param-label bojubot-prime-toggle-label' });
-      field.createEl('div', { text: 'Vault tree, _Claude-context.md, and pinned notes. Uncheck for focused sessions.', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'Vault tree, _Claude-context.md, and pinned notes. Uncheck for focused sessions.', cls: 'bojubot-param-desc' });
       cb.addEventListener('change', () => { this.suppressVaultContext = !cb.checked; });
     }
 
@@ -171,7 +171,7 @@ export class PrimeSessionModal extends Modal {
   // ── Attachment helpers ────────────────────────────────────────────────────
 
   private pickFile(): void {
-    const input = activeDocument.createElement('input');
+    const input = createEl('input');
     input.type = 'file';
     input.onchange = async () => {
       const f = input.files?.[0];
@@ -222,7 +222,7 @@ export class PrimeSessionModal extends Modal {
 
     // Insert before the attach list
     if (this.attachListEl) container.insertBefore(row, this.attachListEl);
-    activeWindow.setTimeout(() => input.focus(), 20);
+    window.setTimeout(() => input.focus(), 20);
   }
 
   private renderAttachments(): void {

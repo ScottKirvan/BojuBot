@@ -145,7 +145,7 @@ export class SessionListModal extends Modal {
     const item = list.createEl('li', { cls });
 
     // Drag handle (hidden while filtering)
-    const grip = item.createEl('span', { cls: 'bojubot-session-drag-handle' });
+    const grip = item.createSpan({ cls: 'bojubot-session-drag-handle' });
     setIcon(grip, 'grip-vertical');
     if (this.isFiltering) grip.addClass('bojubot-invisible');
 
@@ -210,27 +210,27 @@ export class SessionListModal extends Modal {
         this.rerenderList();
       });
     }
-    const titleEl = item.createEl('span', { text: session.title, cls: 'bojubot-session-title' });
-    item.createEl('span', {
+    const titleEl = item.createSpan({ text: session.title, cls: 'bojubot-session-title' });
+    item.createSpan({
       text: new Date(session.updatedAt).toLocaleString(),
       cls: 'bojubot-session-date',
     });
     if (isNew) {
-      item.createEl('span', { text: 'New', cls: 'bojubot-session-new-badge' });
+      item.createSpan({ text: 'New', cls: 'bojubot-session-new-badge' });
     } else if (!resumable) {
-      item.createEl('span', { text: 'Remote', cls: 'bojubot-session-remote-badge' });
+      item.createSpan({ text: 'Remote', cls: 'bojubot-session-remote-badge' });
     }
 
     const tokens = this.sessionTokens.get(session.id);
     if (tokens !== undefined) {
-      const tokensEl = item.createEl('span', {
+      const tokensEl = item.createSpan({
         cls: 'bojubot-session-tokens',
         text: `${formatTokenCount(tokens)} tokens`,
       });
       tokensEl.title = "Estimated tokens in this session's saved message history";
 
       if (this.contextTokens > 0) {
-        const contextEl = item.createEl('span', {
+        const contextEl = item.createSpan({
           cls: 'bojubot-session-tokens-context',
           text: ` (+${formatTokenCount(this.contextTokens)} ctx)`,
         });
@@ -238,7 +238,7 @@ export class SessionListModal extends Modal {
       }
     }
 
-    const actionsDiv = item.createEl('div', { cls: 'bojubot-session-actions' });
+    const actionsDiv = item.createDiv({ cls: 'bojubot-session-actions' });
     const exportBtn = actionsDiv.createEl('button', { cls: 'bojubot-export-btn' });
     setIcon(exportBtn, 'download');
     exportBtn.title = 'Save to vault';

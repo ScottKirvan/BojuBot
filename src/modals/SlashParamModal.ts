@@ -63,7 +63,7 @@ export class SlashParamModal extends Modal {
       const fieldEl = form.createDiv({ cls: 'bojubot-param-field' });
       fieldEl.createEl('label', { text: param.label, cls: 'bojubot-param-label' });
       if (param.description) {
-        fieldEl.createEl('div', { text: param.description, cls: 'bojubot-param-desc' });
+        fieldEl.createDiv({ text: param.description, cls: 'bojubot-param-desc' });
       }
 
       if (param.type === 'input') {
@@ -121,7 +121,7 @@ export class SlashParamModal extends Modal {
         });
       }
 
-      const errEl = fieldEl.createEl('div', { cls: 'bojubot-param-error' });
+      const errEl = fieldEl.createDiv({ cls: 'bojubot-param-error' });
       errEl.hide();
       errorEls[param.id] = errEl;
     }
