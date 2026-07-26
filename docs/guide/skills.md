@@ -96,7 +96,7 @@ Claude treats XML-like tags as semantic containers, so this pattern handles both
 
 This matters most for free-text fields (`input`, `textarea`) where the user might paste in dense or instruction-like text. Use it for any optional parameter, not just the ones that happen to be empty most of the time.
 
-**Keep internal protocol details out of skill bodies.** Skills intended for general use should describe actions in plain language ("open the file in Obsidian") and let Claude's system context handle the mechanics — don't embed UI Bridge trigger syntax (`@@BOJU ...`) directly in a skill prompt body.
+**Keep internal protocol details out of skill bodies.** Skills intended for general use should describe actions in plain language ("open the file in Obsidian") and let Claude's system context handle the mechanics — don't embed raw UI Bridge trigger syntax directly in a skill prompt body.
 
 ## Execution modes
 
