@@ -222,10 +222,15 @@
   white-space: nowrap;
   flex-shrink: 0;
   user-select: none;
+  margin-left: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
 }
 
 .bojubot-model-indicator:hover {
   color: var(--text-normal);
+  border-color: var(--text-muted);
 }
 
 /* ── Model picker modal ── */

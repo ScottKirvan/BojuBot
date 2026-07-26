@@ -90,6 +90,7 @@ The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects th
 | Claude Haiku   | Fast responses, simple tasks          |
 | Claude Sonnet  | Balanced speed and capability         |
 | Claude Opus    | Complex reasoning and long tasks      |
+| Claude Fable   | Coding-focused, highest reasoning     |
 
 Switching models starts a **new session** — the current conversation cannot continue with a different model. The selected model persists across restarts.
 
