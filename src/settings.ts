@@ -125,7 +125,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   contextFileSizeCapTokens: 0,
   minimalMode: false,
   userLabel: '',
-  defaultModel: '',
+  defaultModel: 'claude-sonnet-4-6',
   sessionCreationCount: 0,
   hideSponsorshipMessages: false,
 };

@@ -61,17 +61,23 @@ export class PermissionPickerModal extends FuzzySuggestModal<ModeOption> {
 }
 
 // ---------------------------------------------------------------------------
-// Icon-click popover (positioned above the toolbar icon)
+// Icon-click popover (positioned above the anchor element)
 // ---------------------------------------------------------------------------
 
-export function openPermissionPopover(
-  plugin: BojuBotPlugin,
-  iconEl: HTMLElement,
+/**
+ * Generic mode-picker popover, decoupled from plugin settings — the caller
+ * decides what happens on selection via `onSelect`. Used both by the toolbar
+ * icon (which writes straight to global settings) and by PrimeSessionModal
+ * (which just captures the choice into local form state).
+ */
+export function openModePickerPopover(
+  anchorEl: HTMLElement,
   currentMode: PermissionMode,
+  onSelect: (mode: PermissionMode) => void,
 ): void {
   activeDocument.querySelector('.bojubot-perm-popover')?.remove();
 
-  const rect = iconEl.getBoundingClientRect();
+  const rect = anchorEl.getBoundingClientRect();
   const popover = activeDocument.body.createDiv({ cls: 'bojubot-perm-popover' });
 
   // Measure after inserting so we get real height; use an estimate for initial placement.
@@ -109,7 +115,7 @@ export function openPermissionPopover(
 
     row.addEventListener('click', () => {
       close();
-      applyPermission(plugin, opt.mode);
+      onSelect(opt.mode);
     });
 
     rows.push(row);
@@ -142,12 +148,12 @@ export function openPermissionPopover(
     } else if (e.key === 'Enter') {
       e.preventDefault();
       close();
-      applyPermission(plugin, PERMISSION_MODES[focusedIndex].mode);
+      onSelect(PERMISSION_MODES[focusedIndex].mode);
     }
   };
 
   const outsideHandler = (e: MouseEvent) => {
-    if (!popover.contains(e.target as Node) && e.target !== iconEl) {
+    if (!popover.contains(e.target as Node) && e.target !== anchorEl) {
       close();
     }
   };
@@ -157,4 +163,12 @@ export function openPermissionPopover(
     activeDocument.addEventListener('keydown', keyHandler, true);
     activeDocument.addEventListener('mousedown', outsideHandler, true);
   }, 0);
+}
+
+export function openPermissionPopover(
+  plugin: BojuBotPlugin,
+  iconEl: HTMLElement,
+  currentMode: PermissionMode,
+): void {
+  openModePickerPopover(iconEl, currentMode, (mode) => applyPermission(plugin, mode));
 }
