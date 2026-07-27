@@ -66,7 +66,7 @@ function statusForTool(tool: string): string {
     case 'Read':
     case 'Glob':
     case 'Grep':
-      return 'Reading your vault…';
+      return 'Scanning vault…';
     case 'Write':
     case 'Edit':
       return 'Writing your context file…';
