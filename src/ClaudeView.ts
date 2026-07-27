@@ -206,6 +206,7 @@ export class ClaudeView extends ItemView {
       this.renderWelcomeScreen();
       this.updateExportBtn();
       this.updateSessionStatus();
+      this.updateModelIndicator();
     });
 
     this.coordinator.on('session:updated', () => {
@@ -388,10 +389,17 @@ export class ClaudeView extends ItemView {
     newSessionBtn.title = 'New session (Shift+click to configure)';
     newSessionBtn.addEventListener('click', (evt) => {
       if (evt.shiftKey) {
+        const customModelsPath = join(
+          this.plugin.getVaultRoot(),
+          this.app.vault.configDir,
+          'plugins', 'bojubot', 'custom-models.json',
+        );
+        const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
         new PrimeSessionModal(
           this.app,
           this.plugin.getVaultRoot(),
           this.app.vault.configDir,
+          allModels,
           (opts) => this.startNewSession(opts),
         ).open();
       } else {
@@ -687,7 +695,14 @@ export class ClaudeView extends ItemView {
     // sees the up-to-date count when it decides whether to show the sponsor variant.
     this.plugin.settings.sessionCreationCount += 1;
     void this.plugin.saveSettings();
-    this.coordinator.startNewSession(prime ? { name: prime.name, cwd: prime.cwd, suppressVaultContext: prime.suppressVaultContext } : undefined);
+    this.coordinator.startNewSession(prime ? {
+      name: prime.name,
+      cwd: prime.cwd,
+      suppressVaultContext: prime.suppressVaultContext,
+      permissionMode: prime.permissionMode,
+      model: prime.model,
+      rawSession: prime.rawSession,
+    } : undefined);
     // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
     this.updatePermissionIcon();
   }
@@ -737,7 +752,7 @@ export class ClaudeView extends ItemView {
         this.plugin.settings.commandAllowlist,
         effectiveMode,
         this.plugin.settings.contextFileSizeCapTokens,
-        this.plugin.settings.minimalMode,
+        this.plugin.settings.minimalMode || this.coordinator.rawSession,
       );
       const context = await ctx.buildSessionContext();
       return estimateTokens(context);
@@ -981,7 +996,7 @@ export class ClaudeView extends ItemView {
       this.plugin.settings.commandAllowlist,
       effectiveMode,
       this.plugin.settings.contextFileSizeCapTokens,
-      this.plugin.settings.minimalMode,
+      this.plugin.settings.minimalMode || this.coordinator.rawSession,
     );
     const context = await ctx.buildSessionContext();
     this.coordinator.setPendingSystemMessage(`[System: Session context refreshed at user request.]\n\n${context}`);
@@ -1002,6 +1017,7 @@ export class ClaudeView extends ItemView {
     this.messagesEl.empty();
     this.updateExportBtn();
     this.updateSessionStatus();
+    this.updateModelIndicator();
 
     if (canResume) {
       const messages = loadSessionMessages(session.claudeSessionId);
@@ -1134,7 +1150,7 @@ export class ClaudeView extends ItemView {
 
     // Prepend open file context so Claude knows what note(s) are visible
     let activeFileNote = '';
-    if (!this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext) {
+    if (!this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext && !this.coordinator.rawSession) {
       const leaves = this.app.workspace.getLeavesOfType('markdown');
       const parents = new Set(leaves.map(l => l.parent));
       const isSplit = parents.size > 1;
@@ -1195,7 +1211,7 @@ export class ClaudeView extends ItemView {
         this.plugin.settings.commandAllowlist,
         sessionMode,
         this.plugin.settings.contextFileSizeCapTokens,
-        this.plugin.settings.minimalMode,
+        this.plugin.settings.minimalMode || this.coordinator.rawSession,
         this._primeSuppressVaultContext,
         this._primeInitialInstructions,
         effectiveCwd,
@@ -1959,7 +1975,8 @@ export class ClaudeView extends ItemView {
 
   private updateModelIndicator() {
     if (!this.modelIndicatorEl) return;
-    const active = CLAUDE_MODELS.find(m => m.id === this.plugin.settings.defaultModel);
+    const effectiveModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel;
+    const active = CLAUDE_MODELS.find(m => m.id === effectiveModel);
     this.modelIndicatorEl.setText(active?.displayName ?? 'Claude Sonnet');
   }
 

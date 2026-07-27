@@ -1,5 +1,7 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile, setIcon } from 'obsidian';
 import type { PendingContext } from '../AttachmentHandler';
+import type { PermissionMode } from '../ClaudeProcess';
+import type { ClaudeModel } from '../settings';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
@@ -11,6 +13,13 @@ export interface PrimeSessionOptions {
   initialInstructions: string;
   suppressVaultContext: boolean;
   primeAttachments: PendingContext[];
+  /** Undefined = use the global default permission mode. */
+  permissionMode?: PermissionMode;
+  /** Undefined = use the global default model. */
+  model?: string;
+  /** Bare Claude Code experience — no BojuBot context injection at all (the
+   *  per-session equivalent of global Minimal mode). */
+  rawSession: boolean;
 }
 
 const TEXT_EXTS = new Set([
@@ -30,6 +39,9 @@ export class PrimeSessionModal extends Modal {
   private suppressVaultContext = false;
   private attachments: PendingContext[] = [];
   private attachListEl: HTMLElement | null = null;
+  private permissionMode: PermissionMode | '' = '';
+  private model = '';
+  private rawSession = false;
   private readonly vaultRoot: string;
   private readonly configDir: string;
 
@@ -37,6 +49,7 @@ export class PrimeSessionModal extends Modal {
     app: App,
     vaultRoot: string,
     configDir: string,
+    private readonly allModels: ClaudeModel[],
     private readonly onSubmit: (opts: PrimeSessionOptions) => void,
   ) {
     super(app);
@@ -97,6 +110,50 @@ export class PrimeSessionModal extends Modal {
       });
     }
 
+    // ── Permission mode ────────────────────────────────────────────────────────
+    {
+      const field = form.createDiv({ cls: 'bojubot-param-field' });
+      field.createEl('label', { text: 'Permission mode', cls: 'bojubot-param-label' });
+      field.createDiv({ text: 'Overrides the global default for this session only.', cls: 'bojubot-param-desc' });
+      const select = field.createEl('select', { cls: 'bojubot-param-input' });
+      const options: Array<{ value: PermissionMode | ''; label: string }> = [
+        { value: '', label: 'Use global default' },
+        { value: 'restricted', label: 'Chat only' },
+        { value: 'readonly', label: 'Read only' },
+        { value: 'standard', label: 'Standard' },
+        { value: 'full', label: 'Full access' },
+      ];
+      for (const opt of options) {
+        select.createEl('option', { text: opt.label, value: opt.value });
+      }
+      select.addEventListener('change', () => {
+        this.permissionMode = select.value as PermissionMode | '';
+      });
+    }
+
+    // ── Model ──────────────────────────────────────────────────────────────────
+    {
+      const field = form.createDiv({ cls: 'bojubot-param-field' });
+      field.createEl('label', { text: 'Model', cls: 'bojubot-param-label' });
+      field.createDiv({ text: 'Overrides the global default for this session only.', cls: 'bojubot-param-desc' });
+      const select = field.createEl('select', { cls: 'bojubot-param-input' });
+      select.createEl('option', { text: 'Use global default', value: '' });
+      for (const m of this.allModels) {
+        select.createEl('option', { text: m.displayName, value: m.id });
+      }
+      select.addEventListener('change', () => { this.model = select.value; });
+    }
+
+    // ── Raw session ────────────────────────────────────────────────────────────
+    {
+      const field = form.createDiv({ cls: 'bojubot-param-field' });
+      const row = field.createEl('label', { cls: 'bojubot-prime-toggle-row' });
+      const cb = row.createEl('input', { attr: { type: 'checkbox' } });
+      row.createSpan({ text: 'Raw Claude Code session', cls: 'bojubot-param-label bojubot-prime-toggle-label' });
+      field.createDiv({ text: 'Bare CLI experience — skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge). Claude Code still reads CLAUDE.md from the working directory on its own.', cls: 'bojubot-param-desc' });
+      cb.addEventListener('change', () => { this.rawSession = cb.checked; });
+    }
+
     // ── Initial instructions ──────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
@@ -155,6 +212,9 @@ export class PrimeSessionModal extends Modal {
         initialInstructions: this.initialInstructions.trim(),
         suppressVaultContext: this.suppressVaultContext,
         primeAttachments: this.attachments,
+        ...(this.permissionMode && { permissionMode: this.permissionMode }),
+        ...(this.model && { model: this.model }),
+        rawSession: this.rawSession,
       });
     });
 

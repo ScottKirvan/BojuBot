@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlink
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { estimateTokens } from './logger';
+import type { PermissionMode } from '../ClaudeProcess';
 
 export interface StoredSession {
   id: string;
@@ -14,6 +15,13 @@ export interface StoredSession {
   assistantLabel?: string;
   cwd?: string;
   suppressVaultContext?: boolean;
+  /** Per-session permission mode override, set via Prime Session. Undefined = use the global default. */
+  permissionMode?: PermissionMode;
+  /** Per-session model override, set via Prime Session. Undefined = use the global default. */
+  model?: string;
+  /** Skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge)
+   *  for a bare Claude Code experience — the per-session equivalent of global Minimal mode. */
+  rawSession?: boolean;
 }
 
 export function getSessionsDir(vaultRoot: string, configDir: string): string {
