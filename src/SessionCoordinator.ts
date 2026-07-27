@@ -100,6 +100,9 @@ export class SessionCoordinator {
   private _sessionCreatedAt: string | undefined;
   private _sessionCwd: string | undefined;
   private _suppressVaultContext = false;
+  private _sessionPermissionMode: PermissionMode | undefined;
+  private _sessionModel: string | undefined;
+  private _rawSession = false;
   private _hasCustomTitle = false;
   private _placeholderSessionId: string | undefined;
   private _permissionOverride: PermissionMode | null = null;
@@ -141,9 +144,14 @@ export class SessionCoordinator {
   get sessionCreatedAt(): string | undefined { return this._sessionCreatedAt; }
   get sessionCwd(): string | undefined { return this._sessionCwd; }
   get suppressVaultContext(): boolean { return this._suppressVaultContext; }
+  get sessionModel(): string | undefined { return this._sessionModel; }
+  get rawSession(): boolean { return this._rawSession; }
 
+  /** Session-level overrides (Prime Session) win over the global default, but a
+   *  runtime denial-card upgrade (setPermissionOverride) always wins over both —
+   *  it represents an explicit in-the-moment decision for the rest of the session. */
   getEffectivePermissionMode(): PermissionMode {
-    return this._permissionOverride ?? this.host.getPermissionMode();
+    return this._permissionOverride ?? this._sessionPermissionMode ?? this.host.getPermissionMode();
   }
 
   setPermissionOverride(mode: PermissionMode | null): void {
@@ -164,7 +172,14 @@ export class SessionCoordinator {
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
-  startNewSession(prime?: { name?: string; cwd?: string; suppressVaultContext?: boolean }): void {
+  startNewSession(prime?: {
+    name?: string;
+    cwd?: string;
+    suppressVaultContext?: boolean;
+    permissionMode?: PermissionMode;
+    model?: string;
+    rawSession?: boolean;
+  }): void {
     this._permissionOverride = null;
     const vaultRoot = this.host.getVaultRoot();
     const now = new Date().toISOString();
@@ -172,6 +187,9 @@ export class SessionCoordinator {
     const title = prime?.name?.trim() || 'Untitled session';
     const cwd = prime?.cwd?.trim() || undefined;
     const suppressVaultContext = prime?.suppressVaultContext ?? false;
+    const permissionMode = prime?.permissionMode;
+    const model = prime?.model?.trim() || undefined;
+    const rawSession = prime?.rawSession ?? false;
 
     const session: StoredSession = {
       id: sessionId,
@@ -181,6 +199,9 @@ export class SessionCoordinator {
       claudeSessionId: '',
       ...(cwd && { cwd }),
       ...(suppressVaultContext && { suppressVaultContext }),
+      ...(permissionMode && { permissionMode }),
+      ...(model && { model }),
+      ...(rawSession && { rawSession }),
     };
 
     saveSessionAtTop(vaultRoot, session, this.host.getSessionsDir(), this.host.getConfigDir());
@@ -191,6 +212,9 @@ export class SessionCoordinator {
     this._sessionCreatedAt = now;
     this._sessionCwd = cwd;
     this._suppressVaultContext = suppressVaultContext;
+    this._sessionPermissionMode = permissionMode;
+    this._sessionModel = model;
+    this._rawSession = rawSession;
     this._hasCustomTitle = !!prime?.name?.trim();
     void this.host.saveLastActiveSessionId(sessionId);
 
@@ -219,6 +243,9 @@ export class SessionCoordinator {
     this._sessionCreatedAt = session.createdAt;
     this._sessionCwd = session.cwd || undefined;
     this._suppressVaultContext = session.suppressVaultContext ?? false;
+    this._sessionPermissionMode = session.permissionMode;
+    this._sessionModel = session.model;
+    this._rawSession = session.rawSession ?? false;
     this._hasCustomTitle = false;
 
     await this.host.saveLastActiveSessionId(session.id);
@@ -280,7 +307,8 @@ export class SessionCoordinator {
         vaultRoot: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
-        permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
+        permissionMode: this.getEffectivePermissionMode(),
+        model: this._sessionModel || this.host.getModel() || undefined,
       });
     } catch (e) {
       onError(`Failed to start claude: ${e}`);
@@ -323,8 +351,8 @@ export class SessionCoordinator {
         vaultRoot: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
-        permissionMode: this._permissionOverride ?? this.host.getPermissionMode(),
-        model: this.host.getModel() || undefined,
+        permissionMode: this.getEffectivePermissionMode(),
+        model: this._sessionModel || this.host.getModel() || undefined,
       });
       this._activeProc = proc;
     } catch (e) {
@@ -423,6 +451,9 @@ export class SessionCoordinator {
         claudeSessionId: sessionId,
         ...(this._sessionCwd && { cwd: this._sessionCwd }),
         ...(this._suppressVaultContext && { suppressVaultContext: true }),
+        ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
+        ...(this._sessionModel && { model: this._sessionModel }),
+        ...(this._rawSession && { rawSession: true }),
       }, sessionsDir);
       const placeholderId = this._placeholderSessionId;
       this._placeholderSessionId = undefined;
@@ -445,6 +476,9 @@ export class SessionCoordinator {
         claudeSessionId: sessionId,
         ...(this._sessionCwd && { cwd: this._sessionCwd }),
         ...(this._suppressVaultContext && { suppressVaultContext: true }),
+        ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
+        ...(this._sessionModel && { model: this._sessionModel }),
+        ...(this._rawSession && { rawSession: true }),
       }, sessionsDir);
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
       log('Session saved:', sessionId, this._sessionTitle);
@@ -460,6 +494,9 @@ export class SessionCoordinator {
         claudeSessionId: this._sessionId,
         ...(this._sessionCwd && { cwd: this._sessionCwd }),
         ...(this._suppressVaultContext && { suppressVaultContext: true }),
+        ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
+        ...(this._sessionModel && { model: this._sessionModel }),
+        ...(this._rawSession && { rawSession: true }),
       }, sessionsDir);
     }
   }

@@ -1173,6 +1173,73 @@ describe('SessionCoordinator reentrancy guard', () => {
   });
 });
 
+describe('SessionCoordinator session-level overrides (Prime Session)', () => {
+  test('startNewSession with permissionMode/model/rawSession stores them on the coordinator', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession({ permissionMode: 'full', model: 'claude-opus-5', rawSession: true });
+
+      assert.equal(coordinator.getEffectivePermissionMode(), 'full', 'session override beats host default (standard)');
+      assert.equal(coordinator.sessionModel, 'claude-opus-5');
+      assert.equal(coordinator.rawSession, true);
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+
+  test('omitted overrides fall back to host defaults', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession();
+
+      assert.equal(coordinator.getEffectivePermissionMode(), 'standard', 'falls back to host.getPermissionMode()');
+      assert.equal(coordinator.sessionModel, undefined);
+      assert.equal(coordinator.rawSession, false);
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+
+  test('runtime setPermissionOverride (denial-card upgrade) wins over the session-level override', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession({ permissionMode: 'readonly', rawSession: false });
+      assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+
+      coordinator.setPermissionOverride('full');
+      assert.equal(coordinator.getEffectivePermissionMode(), 'full', 'runtime override always wins');
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+
+  test('loadSession restores permissionMode, model, and rawSession from a StoredSession', async () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      await coordinator.loadSession({
+        id: 'restored-1',
+        title: 'Restored session',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        claudeSessionId: '',
+        permissionMode: 'restricted',
+        model: 'claude-haiku-4-5',
+        rawSession: true,
+      });
+
+      assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+      assert.equal(coordinator.sessionModel, 'claude-haiku-4-5');
+      assert.equal(coordinator.rawSession, true);
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // resolveBrand — pure brand-config resolver
 // ---------------------------------------------------------------------------
