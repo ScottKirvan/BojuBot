@@ -7,7 +7,7 @@ export default {
   extends: DefaultTheme,
   Layout() {
     return h(DefaultTheme.Layout, null, {
-      'home-hero-before': () => h(VersionBadge),
+      'home-hero-info-before': () => h(VersionBadge),
     })
   },
 }
