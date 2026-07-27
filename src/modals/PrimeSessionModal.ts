@@ -2,7 +2,7 @@ import { App, FuzzySuggestModal, Modal, Notice, TFile, setIcon } from 'obsidian'
 import type { PendingContext } from '../AttachmentHandler';
 import type { PermissionMode } from '../ClaudeProcess';
 import type { ClaudeModel } from '../settings';
-import { PERMISSION_MODES, renderRow } from './PermissionPickerModal';
+import { PERMISSION_MODES, openModePickerPopover } from './PermissionPickerModal';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
@@ -120,18 +120,23 @@ export class PrimeSessionModal extends Modal {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Permission mode', cls: 'bojubot-param-label' });
       field.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
-      const list = field.createDiv({ cls: 'bojubot-prime-perm-list' });
-      const rows: HTMLElement[] = [];
-      for (const opt of PERMISSION_MODES) {
-        const row = list.createDiv({ cls: 'bojubot-perm-row bojubot-prime-perm-row' });
-        renderRow(row, opt, opt.mode === this.permissionMode);
-        row.addEventListener('click', () => {
-          this.permissionMode = opt.mode;
-          for (const r of rows) r.removeClass('bojubot-perm-row--active');
-          row.addClass('bojubot-perm-row--active');
+      const btn = field.createEl('button', { cls: 'bojubot-param-input bojubot-prime-perm-btn', attr: { type: 'button' } });
+      const renderBtn = () => {
+        btn.empty();
+        const opt = PERMISSION_MODES.find(o => o.mode === this.permissionMode) ?? PERMISSION_MODES[2];
+        const iconEl = btn.createSpan({ cls: `bojubot-prime-perm-btn-icon ${opt.colorClass}` });
+        setIcon(iconEl, opt.icon);
+        btn.createSpan({ cls: 'bojubot-prime-perm-btn-label', text: opt.label });
+        const chevronEl = btn.createSpan({ cls: 'bojubot-prime-perm-btn-chevron' });
+        setIcon(chevronEl, 'chevron-down');
+      };
+      renderBtn();
+      btn.addEventListener('click', () => {
+        openModePickerPopover(btn, this.permissionMode, (mode) => {
+          this.permissionMode = mode;
+          renderBtn();
         });
-        rows.push(row);
-      }
+      });
     }
 
     // ── Model ──────────────────────────────────────────────────────────────────

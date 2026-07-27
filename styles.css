@@ -1637,17 +1637,39 @@
   background: var(--background-modifier-hover);
 }
 
-.bojubot-prime-perm-list {
+.bojubot-prime-perm-btn {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  padding: 4px;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
 }
 
-.bojubot-prime-perm-row:hover {
+.bojubot-prime-perm-btn:hover {
   background: var(--background-modifier-hover);
+}
+
+.bojubot-prime-perm-btn-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bojubot-prime-perm-btn-label {
+  flex: 1;
+}
+
+.bojubot-prime-perm-btn-chevron {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
 }
 
 .bojubot-prime-toggle-row {
