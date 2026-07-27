@@ -19,6 +19,11 @@ export const CLAUDE_MODELS: ClaudeModel[] = [
   { id: 'claude-fable-5', displayName: 'Claude Fable 5', description: 'Most capable — coding-focused, highest reasoning' },
 ];
 
+/** Falls back to this when settings.defaultModel is unset — covers both fresh
+ *  installs and installs with an empty string already persisted from before
+ *  this default existed (DEFAULT_SETTINGS alone only helps fresh installs). */
+export const DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
+
 export interface BojuBotSettings {
   binaryPath: string;
   contextFilePath: string;
@@ -125,7 +130,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   contextFileSizeCapTokens: 0,
   minimalMode: false,
   userLabel: '',
-  defaultModel: 'claude-sonnet-4-6',
+  defaultModel: DEFAULT_MODEL_ID,
   sessionCreationCount: 0,
   hideSponsorshipMessages: false,
 };
