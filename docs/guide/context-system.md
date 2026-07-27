@@ -143,9 +143,9 @@ You can use `bojubot-instructions` to tell Claude not to modify a file — e.g. 
 
 ---
 
-## 6. Session Setup (Shift+click)
+## 6. Custom Session (Shift+click)
 
-When you **Shift+click** the **+** button to prime a session before it starts, two additional context options become available:
+When you **Shift+click** the **+** button to customize a session before it starts, two additional context options become available:
 
 **Initial instructions** — a free-text system prompt you supply at session creation. Injected as a `## Session instructions` block after all vault layers. It takes effect on the first turn and is cached with `--resume`, so it's not re-charged on subsequent turns.
 
@@ -155,7 +155,7 @@ When you **Shift+click** the **+** button to prime a session before it starts, t
 A typical code-project session: set cwd to your repo, uncheck vault context, add a `CLAUDE.md` or README as an attachment, and write a brief role instruction. Claude starts with exactly what it needs and nothing extra.
 :::
 
-See [Sessions → Starting a new session](./sessions.md) for the full session setup dialog reference.
+See [Sessions → Starting a new session](./sessions.md) for the full Custom Session dialog reference.
 
 ---
 

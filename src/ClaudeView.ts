@@ -6,7 +6,7 @@ import sponsorImageUrl from '../assets/media/sk_watercolor_300_circle.png';
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
-import { PrimeSessionModal, PrimeSessionOptions } from './modals/PrimeSessionModal';
+import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
 import { openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
@@ -143,10 +143,10 @@ export class ClaudeView extends ItemView {
   private currentUserLabel = 'User';
   private currentAssistantLabel = 'BojuBot';
 
-  // Prime session state — held for the first turn only, cleared on session:new
-  private _primeAttachments: PendingContext[] = [];
-  private _primeInitialInstructions = '';
-  private _primeSuppressVaultContext = false;
+  // Custom session state — held for the first turn only, cleared on session:new
+  private _customAttachments: PendingContext[] = [];
+  private _customInitialInstructions = '';
+  private _customSuppressVaultContext = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
@@ -201,7 +201,7 @@ export class ClaudeView extends ItemView {
       this.currentUserLabel = 'User';
       this.currentAssistantLabel = this.plugin.brand.name;
       this.attachmentHandler.reset();
-      // Prime state is set before this event fires — don't clear it here
+      // Custom session state is set before this event fires — don't clear it here
       this.messagesEl.empty();
       this.renderWelcomeScreen();
       this.updateExportBtn();
@@ -395,7 +395,7 @@ export class ClaudeView extends ItemView {
           'plugins', 'bojubot', 'custom-models.json',
         );
         const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
-        new PrimeSessionModal(
+        new CustomSessionModal(
           this.app,
           this.plugin.getVaultRoot(),
           this.app.vault.configDir,
@@ -689,21 +689,21 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  startNewSession(prime?: PrimeSessionOptions) {
-    this._primeAttachments = prime?.primeAttachments ?? [];
-    this._primeInitialInstructions = prime?.initialInstructions ?? '';
-    this._primeSuppressVaultContext = prime?.suppressVaultContext ?? false;
+  startNewSession(custom?: CustomSessionOptions) {
+    this._customAttachments = custom?.customAttachments ?? [];
+    this._customInitialInstructions = custom?.initialInstructions ?? '';
+    this._customSuppressVaultContext = custom?.suppressVaultContext ?? false;
     // Counted before the 'session:new' event fires (below) so renderWelcomeScreen
     // sees the up-to-date count when it decides whether to show the sponsor variant.
     this.plugin.settings.sessionCreationCount += 1;
     void this.plugin.saveSettings();
-    this.coordinator.startNewSession(prime ? {
-      name: prime.name,
-      cwd: prime.cwd,
-      suppressVaultContext: prime.suppressVaultContext,
-      permissionMode: prime.permissionMode,
-      model: prime.model,
-      rawSession: prime.rawSession,
+    this.coordinator.startNewSession(custom ? {
+      name: custom.name,
+      cwd: custom.cwd,
+      suppressVaultContext: custom.suppressVaultContext,
+      permissionMode: custom.permissionMode,
+      model: custom.model,
+      rawSession: custom.rawSession,
     } : undefined);
     // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
     this.updatePermissionIcon();
@@ -1188,9 +1188,9 @@ export class ClaudeView extends ItemView {
     }
 
     if (isNewSession) {
-      // Inject prime attachments before the user prompt (same format as regular attachments)
-      if (this._primeAttachments.length > 0) {
-        const primeBlock = this._primeAttachments
+      // Inject custom-session attachments before the user prompt (same format as regular attachments)
+      if (this._customAttachments.length > 0) {
+        const customBlock = this._customAttachments
           .map((c: PendingContext) => {
             if (c.type === 'url') return `<bojubot-context type="url" url="${escapeAttr(c.text)}"></bojubot-context>`;
             if (c.type === 'image') return `<bojubot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</bojubot-context>`;
@@ -1198,8 +1198,8 @@ export class ClaudeView extends ItemView {
             return `<bojubot-context type="attachment" source="${escapeAttr(c.source)}">${neutralizeTriggers(c.text)}</bojubot-context>`;
           })
           .join('\n\n');
-        finalPrompt = `${primeBlock}\n\n${finalPrompt}`;
-        this._primeAttachments = [];
+        finalPrompt = `${customBlock}\n\n${finalPrompt}`;
+        this._customAttachments = [];
       }
 
       const sessionMode = this.coordinator.getEffectivePermissionMode();
@@ -1214,13 +1214,13 @@ export class ClaudeView extends ItemView {
         sessionMode,
         this.plugin.settings.contextFileSizeCapTokens,
         this.plugin.settings.minimalMode || this.coordinator.rawSession,
-        this._primeSuppressVaultContext,
-        this._primeInitialInstructions,
+        this._customSuppressVaultContext,
+        this._customInitialInstructions,
         effectiveCwd,
         vaultRoot,
       );
-      this._primeSuppressVaultContext = false;
-      this._primeInitialInstructions = '';
+      this._customSuppressVaultContext = false;
+      this._customInitialInstructions = '';
       const context = await ctx.buildSessionContext();
       if (ctx.needsCompaction) statusEl.textContent = 'Compacting memory…';
       const promptTokens = estimateTokens(finalPrompt);

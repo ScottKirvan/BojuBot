@@ -1171,7 +1171,7 @@ describe('SessionCoordinator reentrancy guard', () => {
   });
 });
 
-describe('SessionCoordinator session-level overrides (Prime Session)', () => {
+describe('SessionCoordinator session-level overrides (Custom Session)', () => {
   test('startNewSession with permissionMode/model/rawSession stores them on the coordinator', () => {
     const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
     try {

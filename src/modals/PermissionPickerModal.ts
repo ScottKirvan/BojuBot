@@ -67,7 +67,7 @@ export class PermissionPickerModal extends FuzzySuggestModal<ModeOption> {
 /**
  * Generic mode-picker popover, decoupled from plugin settings — the caller
  * decides what happens on selection via `onSelect`. Used both by the toolbar
- * icon (which writes straight to global settings) and by PrimeSessionModal
+ * icon (which writes straight to global settings) and by CustomSessionModal
  * (which just captures the choice into local form state).
  */
 export function openModePickerPopover(

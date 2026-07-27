@@ -22,7 +22,7 @@ Windows 11. Use PowerShell for all shell commands. `npm` and `git` are available
   - `main.ts` — plugin entry, 16 commands
   - `src/ClaudeView.ts` — chat UI and session state
   - `src/ClaudeProcess.ts` — spawn logic
-  - `src/modals/PrimeSessionModal.ts` — pre-session config modal (Shift+click +)
+  - `src/modals/CustomSessionModal.ts` — custom session config modal (Shift+click +)
   - `src/UIBridge.ts` — @@BOJU protocol
   - `src/utils/sessionStorage.ts` — session CRUD
   - `src/utils/logger.ts` — logging (`log('error'|'info'|'debug', ...)`)

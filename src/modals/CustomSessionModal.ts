@@ -8,12 +8,12 @@ import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
 import { log } from '../utils/logger';
 
-export interface PrimeSessionOptions {
+export interface CustomSessionOptions {
   name: string;
   cwd: string;
   initialInstructions: string;
   suppressVaultContext: boolean;
-  primeAttachments: PendingContext[];
+  customAttachments: PendingContext[];
   /** Always set — pre-filled from the global default, editable before submit. */
   permissionMode: PermissionMode;
   /** Always set — pre-filled from the global default, editable before submit. */
@@ -33,7 +33,7 @@ const IMAGE_EXTS = new Set([
   'tiff', 'heic', 'heif', 'avif',
 ]);
 
-export class PrimeSessionModal extends Modal {
+export class CustomSessionModal extends Modal {
   private name = '';
   private cwd = '';
   private initialInstructions = '';
@@ -53,7 +53,7 @@ export class PrimeSessionModal extends Modal {
     private readonly allModels: ClaudeModel[],
     defaultPermissionMode: PermissionMode,
     defaultModel: string,
-    private readonly onSubmit: (opts: PrimeSessionOptions) => void,
+    private readonly onSubmit: (opts: CustomSessionOptions) => void,
   ) {
     super(app);
     this.vaultRoot = vaultRoot;
@@ -87,14 +87,14 @@ export class PrimeSessionModal extends Modal {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Working directory (cwd)', cls: 'bojubot-param-label' });
       field.createDiv({ text: 'Absolute path Claude runs in. Leave blank to use vault root.', cls: 'bojubot-param-desc' });
-      const row = field.createDiv({ cls: 'bojubot-prime-cwd-row' });
+      const row = field.createDiv({ cls: 'bojubot-custom-session-cwd-row' });
       const input = row.createEl('input', {
-        cls: 'bojubot-param-input bojubot-prime-cwd-input',
+        cls: 'bojubot-param-input bojubot-custom-session-cwd-input',
         attr: { type: 'text', placeholder: 'E.g. C:\\projects\\my-repo' },
       });
       input.addEventListener('input', () => { this.cwd = input.value; });
 
-      const pickBtn = row.createEl('button', { cls: 'bojubot-prime-cwd-btn', attr: { type: 'button' } });
+      const pickBtn = row.createEl('button', { cls: 'bojubot-custom-session-cwd-btn', attr: { type: 'button' } });
       setIcon(pickBtn, 'folder-open');
       pickBtn.title = 'Browse…';
       pickBtn.addEventListener('click', () => {
@@ -120,14 +120,14 @@ export class PrimeSessionModal extends Modal {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Permission mode', cls: 'bojubot-param-label' });
       field.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
-      const btn = field.createEl('button', { cls: 'bojubot-param-input bojubot-prime-perm-btn', attr: { type: 'button' } });
+      const btn = field.createEl('button', { cls: 'bojubot-param-input bojubot-custom-session-perm-btn', attr: { type: 'button' } });
       const renderBtn = () => {
         btn.empty();
         const opt = PERMISSION_MODES.find(o => o.mode === this.permissionMode) ?? PERMISSION_MODES[2];
-        const iconEl = btn.createSpan({ cls: `bojubot-prime-perm-btn-icon ${opt.colorClass}` });
+        const iconEl = btn.createSpan({ cls: `bojubot-custom-session-perm-btn-icon ${opt.colorClass}` });
         setIcon(iconEl, opt.icon);
-        btn.createSpan({ cls: 'bojubot-prime-perm-btn-label', text: opt.label });
-        const chevronEl = btn.createSpan({ cls: 'bojubot-prime-perm-btn-chevron' });
+        btn.createSpan({ cls: 'bojubot-custom-session-perm-btn-label', text: opt.label });
+        const chevronEl = btn.createSpan({ cls: 'bojubot-custom-session-perm-btn-chevron' });
         setIcon(chevronEl, 'chevron-down');
       };
       renderBtn();
@@ -155,9 +155,9 @@ export class PrimeSessionModal extends Modal {
     // ── Raw session ────────────────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
-      const row = field.createEl('label', { cls: 'bojubot-prime-toggle-row' });
+      const row = field.createEl('label', { cls: 'bojubot-custom-session-toggle-row' });
       const cb = row.createEl('input', { attr: { type: 'checkbox' } });
-      row.createSpan({ text: 'Raw Claude Code session', cls: 'bojubot-param-label bojubot-prime-toggle-label' });
+      row.createSpan({ text: 'Raw Claude Code session', cls: 'bojubot-param-label bojubot-custom-session-toggle-label' });
       field.createDiv({ text: 'Bare CLI experience — skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge). Claude Code still reads CLAUDE.md from the working directory on its own.', cls: 'bojubot-param-desc' });
       cb.addEventListener('change', () => { this.rawSession = cb.checked; });
     }
@@ -177,10 +177,10 @@ export class PrimeSessionModal extends Modal {
     // ── Vault context toggle ──────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
-      const row = field.createEl('label', { cls: 'bojubot-prime-toggle-row' });
+      const row = field.createEl('label', { cls: 'bojubot-custom-session-toggle-row' });
       const cb = row.createEl('input', { attr: { type: 'checkbox' } });
       cb.checked = true;
-      row.createSpan({ text: 'Include vault context', cls: 'bojubot-param-label bojubot-prime-toggle-label' });
+      row.createSpan({ text: 'Include vault context', cls: 'bojubot-param-label bojubot-custom-session-toggle-label' });
       field.createDiv({ text: 'Vault tree, _Claude-context.md, and pinned notes. Uncheck for focused sessions.', cls: 'bojubot-param-desc' });
       cb.addEventListener('change', () => { this.suppressVaultContext = !cb.checked; });
     }
@@ -190,18 +190,18 @@ export class PrimeSessionModal extends Modal {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Context attachments', cls: 'bojubot-param-label' });
 
-      const btnRow = field.createDiv({ cls: 'bojubot-prime-attach-btns' });
+      const btnRow = field.createDiv({ cls: 'bojubot-custom-session-attach-btns' });
 
-      const fileBtn = btnRow.createEl('button', { text: '+ file', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
+      const fileBtn = btnRow.createEl('button', { text: '+ file', cls: 'bojubot-custom-session-attach-btn', attr: { type: 'button' } });
       fileBtn.addEventListener('click', () => this.pickFile());
 
-      const noteBtn = btnRow.createEl('button', { text: '+ note', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
+      const noteBtn = btnRow.createEl('button', { text: '+ note', cls: 'bojubot-custom-session-attach-btn', attr: { type: 'button' } });
       noteBtn.addEventListener('click', () => this.pickNote());
 
-      const urlBtn = btnRow.createEl('button', { text: '+ URL', cls: 'bojubot-prime-attach-btn', attr: { type: 'button' } });
+      const urlBtn = btnRow.createEl('button', { text: '+ URL', cls: 'bojubot-custom-session-attach-btn', attr: { type: 'button' } });
       urlBtn.addEventListener('click', () => this.promptUrl(field));
 
-      this.attachListEl = field.createDiv({ cls: 'bojubot-prime-attach-list' });
+      this.attachListEl = field.createDiv({ cls: 'bojubot-custom-session-attach-list' });
       this.renderAttachments();
     }
 
@@ -219,7 +219,7 @@ export class PrimeSessionModal extends Modal {
         cwd: this.cwd.trim(),
         initialInstructions: this.initialInstructions.trim(),
         suppressVaultContext: this.suppressVaultContext,
-        primeAttachments: this.attachments,
+        customAttachments: this.attachments,
         permissionMode: this.permissionMode,
         model: this.model,
         rawSession: this.rawSession,
@@ -268,10 +268,10 @@ export class PrimeSessionModal extends Modal {
 
   private promptUrl(container: HTMLElement): void {
     // Inline URL input that appears below the buttons
-    const existing = container.querySelector('.bojubot-prime-url-row');
+    const existing = container.querySelector('.bojubot-custom-session-url-row');
     if (existing) { (existing as HTMLElement).focus(); return; }
 
-    const row = container.createDiv({ cls: 'bojubot-prime-url-row' });
+    const row = container.createDiv({ cls: 'bojubot-custom-session-url-row' });
     const input = row.createEl('input', {
       cls: 'bojubot-param-input',
       attr: { type: 'text', placeholder: 'HTTPS://…' },
@@ -298,7 +298,7 @@ export class PrimeSessionModal extends Modal {
     if (!el) return;
     el.empty();
     for (const ctx of this.attachments) {
-      const row = el.createDiv({ cls: 'bojubot-prime-attach-row' });
+      const row = el.createDiv({ cls: 'bojubot-custom-session-attach-row' });
       const iconEl = row.createSpan({ cls: 'bojubot-pending-context-icon' });
       setIcon(iconEl, ctx.type === 'image' ? 'image' : ctx.type === 'pdf' ? 'file-text' : ctx.type === 'url' ? 'link' : 'paperclip');
       row.createSpan({ cls: 'bojubot-pending-context-label', text: ctx.source });

@@ -44,7 +44,7 @@ export class ContextManager {
     private contextFileSizeCapTokens: number = 0,
     private minimalMode: boolean = false,
     private suppressVaultContext: boolean = false,
-    private primeInstructions: string = '',
+    private customInstructions: string = '',
     private cwd: string = '',
     private vaultRoot: string = '',
   ) { }
@@ -216,14 +216,14 @@ export class ContextManager {
       }
     }
 
-    // Layer 6: Prime instructions (user-supplied session setup prompt; always injected when present)
-    if (this.primeInstructions.trim()) {
-      const primeBlock = `## Session instructions\n${this.primeInstructions.trim()}`;
-      parts.push(primeBlock);
-      layerBreakdown['prime-instructions'] = {
-        text: primeBlock,
-        chars: primeBlock.length,
-        tokens: estimateTokens(primeBlock),
+    // Layer 6: Custom-session instructions (user-supplied session setup prompt; always injected when present)
+    if (this.customInstructions.trim()) {
+      const customBlock = `## Session instructions\n${this.customInstructions.trim()}`;
+      parts.push(customBlock);
+      layerBreakdown['custom-instructions'] = {
+        text: customBlock,
+        chars: customBlock.length,
+        tokens: estimateTokens(customBlock),
       };
     }
 
@@ -238,7 +238,7 @@ export class ContextManager {
     // Log breakdown
     const totalTokens = estimateTokens(fullContext);
     log('=== CONTEXT INJECTION BREAKDOWN (first turn of session) ===');
-    if (this.suppressVaultContext) log('  [vault context suppressed by prime options]');
+    if (this.suppressVaultContext) log('  [vault context suppressed by custom session options]');
     for (const [layer, data] of Object.entries(layerBreakdown)) {
       log(`  ${layer}: ${data.chars} chars, ~${data.tokens} tokens`);
     }

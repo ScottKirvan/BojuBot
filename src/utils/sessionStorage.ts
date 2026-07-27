@@ -15,9 +15,9 @@ export interface StoredSession {
   assistantLabel?: string;
   cwd?: string;
   suppressVaultContext?: boolean;
-  /** Per-session permission mode override, set via Prime Session. Undefined = use the global default. */
+  /** Per-session permission mode override, set via Custom Session. Undefined = use the global default. */
   permissionMode?: PermissionMode;
-  /** Per-session model override, set via Prime Session. Undefined = use the global default. */
+  /** Per-session model override, set via Custom Session. Undefined = use the global default. */
   model?: string;
   /** Skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge)
    *  for a bare Claude Code experience — the per-session equivalent of global Minimal mode. */
