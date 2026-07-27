@@ -10,8 +10,8 @@ Click the **+** button in the toolbar to start a new session with default settin
 |---|---|
 | **Session name** | Pre-fills the title instead of waiting for auto-naming from the first message. Leave blank to use the default. |
 | **Working directory** | Sets the directory Claude runs in (useful for code projects outside the vault). The folder browser opens at your vault root. Leave blank to use the vault root. |
-| **Permission mode** | Overrides the global default permission mode for this session only. Leave on "Use global default" to inherit whatever mode is set in the toolbar/settings. |
-| **Model** | Overrides the global default model for this session only. Leave on "Use global default" to inherit the model set in settings. |
+| **Permission mode** | Pre-filled with your current global default (with its colored icon), so you can see exactly what you're starting from. Click a different mode to pin this session to it instead. |
+| **Model** | Pre-filled with your current global default model. Pick a different one to pin this session to it instead. |
 | **Raw Claude Code session** | Skips *all* BojuBot context injection — no orientation, vault tree, context file, active-note note, or UI Bridge. Claude Code still reads `CLAUDE.md` from the working directory on its own, exactly as it would from a terminal. This is the per-session equivalent of the global Minimal mode setting. |
 | **Initial instructions** | A system prompt injected at session start — role, focus, standing rules. Leave blank for none. |
 | **Include vault context** | Checked by default. Uncheck to suppress the vault tree, `_claude-context.md`, and pinned notes — useful for focused code sessions where Obsidian-specific context is noise. The system orientation (permission mode, tools) is always injected regardless. Ignored when "Raw Claude Code session" is on, since that already suppresses everything. |

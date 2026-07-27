@@ -400,6 +400,8 @@ export class ClaudeView extends ItemView {
           this.plugin.getVaultRoot(),
           this.app.vault.configDir,
           allModels,
+          this.plugin.settings.permissionMode,
+          this.plugin.settings.defaultModel,
           (opts) => this.startNewSession(opts),
         ).open();
       } else {
