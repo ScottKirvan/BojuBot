@@ -95,4 +95,5 @@ jobs:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
       project_name: "BojuBot"
       emoji: "👾"
+      discord_blurb: ${{ needs.improve-release-notes.outputs.discord_blurb }}
     secrets: inherit
