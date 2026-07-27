@@ -69,7 +69,7 @@ jobs:
     with:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
       project_name: "BojuBot"
-      project_context: "BojuBot is an Obsidian plugin. More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code."
+      project_context: "BojuBot is an Obsidian plugin that brings AI conversation directly into a personal notes vault. Most users are writers, researchers, and everyday thinkers who want help brainstorming, editing prose, and working through ideas — the plugin handles the technical complexity so they can focus on their work. Some changes target power users, developers, or anyone customizing or distributing BojuBot; when a change is clearly for that audience, write the explanation in terms of what they specifically gain."
       header: |
         ## 👾 BojuBot for Obsidian 👾
 
@@ -95,4 +95,5 @@ jobs:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
       project_name: "BojuBot"
       emoji: "👾"
+      discord_blurb: ${{ needs.improve-release-notes.outputs.discord_blurb }}
     secrets: inherit
