@@ -2,7 +2,7 @@ import { App, FuzzySuggestModal, setIcon } from 'obsidian';
 import type BojuBotPlugin from '../../main';
 import type { PermissionMode } from '../ClaudeProcess';
 
-interface ModeOption {
+export interface ModeOption {
   mode: PermissionMode;
   icon: string;
   colorClass: string;
@@ -23,7 +23,7 @@ function applyPermission(plugin: BojuBotPlugin, mode: PermissionMode): void {
   plugin.notifyPermissionChanged();
 }
 
-function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean): void {
+export function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean): void {
   if (isCurrent) el.addClass('bojubot-perm-row--active');
   const iconEl = el.createDiv({ cls: `bojubot-perm-row-icon ${opt.colorClass}` });
   setIcon(iconEl, opt.icon);

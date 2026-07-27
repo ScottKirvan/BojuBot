@@ -2,6 +2,7 @@ import { App, FuzzySuggestModal, Modal, Notice, TFile, setIcon } from 'obsidian'
 import type { PendingContext } from '../AttachmentHandler';
 import type { PermissionMode } from '../ClaudeProcess';
 import type { ClaudeModel } from '../settings';
+import { PERMISSION_MODES, renderRow } from './PermissionPickerModal';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
@@ -13,10 +14,10 @@ export interface PrimeSessionOptions {
   initialInstructions: string;
   suppressVaultContext: boolean;
   primeAttachments: PendingContext[];
-  /** Undefined = use the global default permission mode. */
-  permissionMode?: PermissionMode;
-  /** Undefined = use the global default model. */
-  model?: string;
+  /** Always set — pre-filled from the global default, editable before submit. */
+  permissionMode: PermissionMode;
+  /** Always set — pre-filled from the global default, editable before submit. */
+  model: string;
   /** Bare Claude Code experience — no BojuBot context injection at all (the
    *  per-session equivalent of global Minimal mode). */
   rawSession: boolean;
@@ -39,8 +40,8 @@ export class PrimeSessionModal extends Modal {
   private suppressVaultContext = false;
   private attachments: PendingContext[] = [];
   private attachListEl: HTMLElement | null = null;
-  private permissionMode: PermissionMode | '' = '';
-  private model = '';
+  private permissionMode: PermissionMode;
+  private model: string;
   private rawSession = false;
   private readonly vaultRoot: string;
   private readonly configDir: string;
@@ -50,11 +51,15 @@ export class PrimeSessionModal extends Modal {
     vaultRoot: string,
     configDir: string,
     private readonly allModels: ClaudeModel[],
+    defaultPermissionMode: PermissionMode,
+    defaultModel: string,
     private readonly onSubmit: (opts: PrimeSessionOptions) => void,
   ) {
     super(app);
     this.vaultRoot = vaultRoot;
     this.configDir = configDir;
+    this.permissionMode = defaultPermissionMode;
+    this.model = defaultModel;
   }
 
   onOpen() {
@@ -114,32 +119,30 @@ export class PrimeSessionModal extends Modal {
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Permission mode', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'Overrides the global default for this session only.', cls: 'bojubot-param-desc' });
-      const select = field.createEl('select', { cls: 'bojubot-param-input' });
-      const options: Array<{ value: PermissionMode | ''; label: string }> = [
-        { value: '', label: 'Use global default' },
-        { value: 'restricted', label: 'Chat only' },
-        { value: 'readonly', label: 'Read only' },
-        { value: 'standard', label: 'Standard' },
-        { value: 'full', label: 'Full access' },
-      ];
-      for (const opt of options) {
-        select.createEl('option', { text: opt.label, value: opt.value });
+      field.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
+      const list = field.createDiv({ cls: 'bojubot-prime-perm-list' });
+      const rows: HTMLElement[] = [];
+      for (const opt of PERMISSION_MODES) {
+        const row = list.createDiv({ cls: 'bojubot-perm-row bojubot-prime-perm-row' });
+        renderRow(row, opt, opt.mode === this.permissionMode);
+        row.addEventListener('click', () => {
+          this.permissionMode = opt.mode;
+          for (const r of rows) r.removeClass('bojubot-perm-row--active');
+          row.addClass('bojubot-perm-row--active');
+        });
+        rows.push(row);
       }
-      select.addEventListener('change', () => {
-        this.permissionMode = select.value as PermissionMode | '';
-      });
     }
 
     // ── Model ──────────────────────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Model', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'Overrides the global default for this session only.', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
       const select = field.createEl('select', { cls: 'bojubot-param-input' });
-      select.createEl('option', { text: 'Use global default', value: '' });
       for (const m of this.allModels) {
-        select.createEl('option', { text: m.displayName, value: m.id });
+        const opt = select.createEl('option', { text: m.displayName, value: m.id });
+        if (m.id === this.model) opt.selected = true;
       }
       select.addEventListener('change', () => { this.model = select.value; });
     }
@@ -212,8 +215,8 @@ export class PrimeSessionModal extends Modal {
         initialInstructions: this.initialInstructions.trim(),
         suppressVaultContext: this.suppressVaultContext,
         primeAttachments: this.attachments,
-        ...(this.permissionMode && { permissionMode: this.permissionMode }),
-        ...(this.model && { model: this.model }),
+        permissionMode: this.permissionMode,
+        model: this.model,
         rawSession: this.rawSession,
       });
     });

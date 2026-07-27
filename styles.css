@@ -1637,6 +1637,19 @@
   background: var(--background-modifier-hover);
 }
 
+.bojubot-prime-perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.bojubot-prime-perm-row:hover {
+  background: var(--background-modifier-hover);
+}
+
 .bojubot-prime-toggle-row {
   display: flex;
   align-items: center;
