@@ -270,11 +270,9 @@ describe('permissionArgs', () => {
     assert.ok(!args.some(a => a.includes('bypass') || a.includes('dangerously')));
   });
 
-  test('standard → explicitly disallows Bash rather than relying on acceptEdits semantics', () => {
+  test('standard → does not use --disallowedTools (would remove Bash from the tool list entirely, breaking the deny-and-log flow the denial card depends on)', () => {
     const args = permissionArgs('standard');
-    const idx = args.indexOf('--disallowedTools');
-    assert.ok(idx !== -1);
-    assert.ok(args[idx + 1].split(',').includes('Bash'));
+    assert.ok(!args.includes('--disallowedTools'));
   });
 
   test('readonly → default mode + allowedTools', () => {
