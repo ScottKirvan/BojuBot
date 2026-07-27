@@ -21,7 +21,7 @@ import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMess
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL } from './constants';
 import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
-import { CLAUDE_MODELS, ClaudeModel } from './settings';
+import { CLAUDE_MODELS, ClaudeModel, DEFAULT_MODEL_ID } from './settings';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import {
@@ -158,7 +158,7 @@ export class ClaudeView extends ItemView {
       getConfigDir: () => this.app.vault.configDir,
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
-      getModel: () => this.plugin.settings.defaultModel,
+      getModel: () => this.plugin.settings.defaultModel || DEFAULT_MODEL_ID,
       getSessionsDir: () => this.getSessionsDir(),
       saveLastActiveSessionId: async (id) => {
         this.plugin.settings.lastActiveSessionId = id;
@@ -401,7 +401,7 @@ export class ClaudeView extends ItemView {
           this.app.vault.configDir,
           allModels,
           this.plugin.settings.permissionMode,
-          this.plugin.settings.defaultModel,
+          this.plugin.settings.defaultModel || DEFAULT_MODEL_ID,
           (opts) => this.startNewSession(opts),
         ).open();
       } else {
@@ -1291,7 +1291,7 @@ export class ClaudeView extends ItemView {
     headerLogo.draggable = false;
     header.createSpan({ cls: 'bojubot-welcome-header-name', text: brandName });
     header.createSpan({ cls: 'bojubot-welcome-version', text: `v${this.plugin.manifest.version}` });
-    const activeModel = CLAUDE_MODELS.find(m => m.id === this.plugin.settings.defaultModel);
+    const activeModel = CLAUDE_MODELS.find(m => m.id === (this.plugin.settings.defaultModel || DEFAULT_MODEL_ID));
     if (activeModel) {
       header.createSpan({ cls: 'bojubot-welcome-model', text: activeModel.displayName });
     }
@@ -1977,7 +1977,7 @@ export class ClaudeView extends ItemView {
 
   private updateModelIndicator() {
     if (!this.modelIndicatorEl) return;
-    const effectiveModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel;
+    const effectiveModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel || DEFAULT_MODEL_ID;
     const active = CLAUDE_MODELS.find(m => m.id === effectiveModel);
     this.modelIndicatorEl.setText(active?.displayName ?? 'Claude Sonnet');
   }
@@ -1990,7 +1990,7 @@ export class ClaudeView extends ItemView {
     );
     const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
 
-    new ModelPickerModal(this.app, this.plugin.settings.defaultModel, allModels, (model) => {
+    new ModelPickerModal(this.app, this.plugin.settings.defaultModel || DEFAULT_MODEL_ID, allModels, (model) => {
       const previous = this.plugin.settings.defaultModel;
       this.plugin.settings.defaultModel = model.id;
       void this.plugin.saveSettings().then(() => {
