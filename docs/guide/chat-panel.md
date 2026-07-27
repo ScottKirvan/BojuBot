@@ -1,41 +1,32 @@
 # Chat Panel
 
-The chat panel opens as a sidebar. Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. The "Send on Enter" behaviour can be toggled in **Settings → BojuBot**.
+The chat panel opens as a sidebar. Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. 
 
-Claude has access to your full vault — it can read, write, create, move, and organize notes. The vault root is Claude's working directory.
+If you would prefer to exclusively use the **Up Arrow** icon to send messages rather than the **Enter** key, the "Send on Enter" behavior can be toggled in **Settings → BojuBot → Send On Enter**.
+
+In **Standard** permissions mode, Claude has access to your full vault — it can read, write, create, move, and organize notes. The vault root is Claude's working directory.  You can confirm this by typing, "What is your current working directory?"
 
 ---
 
 ## Welcome Screen
 
-Starting a new session (or opening the panel with no active conversation) shows a welcome screen instead of an empty chat: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. Click the mascot to open the [About dialog](#about-dialog).
+Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. Click the mascot to open the [About dialog](#about-dialog).
 
-Occasionally (periodically, based on how many sessions you've started, and only if you've used BojuBot recently) the welcome screen instead shows a short message about supporting the project, with a link and a "Don't show this again" checkbox. Turn it off permanently anytime via **Settings → Hide sponsorship messages**.
-
+![](images/new_session_window.png)
 ---
 
 ## About Dialog
 
-Open via the welcome screen mascot, the Command Palette (**BojuBot: About**), or **Settings → BojuBot**. Shows the installed version and a set of link cards:
-
-| Card              | Links to                                                       |
-| ----------------- | --------------------------------------------------------------- |
-| **Documentation** | This guide                                                       |
-| **Discord**       | The community server                                             |
-| **GitHub**        | Source code, issues, and release notes                          |
-| **Buy me a coffee** | Ko-fi support link (hidden on white-labeled installs)          |
-
-On a white-labeled install (custom display name set — see [Branding](./settings.md#branding)), a small "Based on BojuBot by Scott Kirvan · MIT" credit line appears below the cards. This isn't configurable — it's how upstream attribution is preserved regardless of branding.
-
----
+Open the **About DIalog** by clicking the **About BojuBot** icon in the toolbar, or by using the the **BojuBot: About** command. 
+ 
+ ![](images/about_dialog.png)
 
 ## Attaching Context
 
 Attached items appear in a bar above the input field. Click **×** to remove an item, or the **pin icon** to keep it attached for every subsequent message in the session.
-
 ### @-mention a note
 
-Type `@` anywhere in the input to open an autocomplete dropdown. The currently open note is pre-selected — press **Enter** immediately to attach it. Start typing to filter by name. Press **↑ / ↓** to navigate, **Enter** or **Tab** to select, **Escape** to dismiss. The full contents of the selected note are prepended to your message.
+Type `@` anywhere in the input to open an autocomplete dropdown.  Press **Enter** to attach it the highlighted note. Start typing to filter by name. Press **↑ / ↓** to navigate, **Enter** or **Tab** to select, **Escape** to dismiss. The full contents of the selected note are prepended to your message.
 
 Non-Markdown files show their extension in the dropdown. By default all vault files are included. To restrict to specific types, change **@-mention file types** in [Settings](./settings.md).
 
@@ -68,16 +59,11 @@ Highlight text in any open note, then run **BojuBot: Send selection as context**
 
 ## Permission Icon
 
-A **colored icon** in the input toolbar shows the current permission mode at a glance:
+Click the colored **Permission Icon** in the input toolbar to open a quick picker and switch the permissions mode:
 
-| Icon     | Color  | Mode        |
-| -------- | ------ | ----------- |
-| lock     | blue   | Chat only   |
-| eye      | green  | Read only   |
-| shield   | yellow | Standard    |
-| triangle | red    | Full access |
+![](images/permissions.png)
 
-Click it to open a quick picker and switch modes. The change takes effect on the next message. See [Permissions](./permissions.md) for details on what each mode allows.
+The change takes effect on the next message. See [Permissions](./permissions.md) for details on what each mode allows.
 
 ---
 
@@ -85,11 +71,12 @@ Click it to open a quick picker and switch modes. The change takes effect on the
 
 The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the active Claude model. Click it to open the model picker and switch to a different model.
 
-| Model          | Best for                              |
-| -------------- | ------------------------------------- |
-| Claude Haiku   | Fast responses, simple tasks          |
-| Claude Sonnet  | Balanced speed and capability         |
-| Claude Opus    | Complex reasoning and long tasks      |
+| Model         | Best for                         |
+| ------------- | -------------------------------- |
+| Claude Haiku  | Fast responses, simple tasks     |
+| Claude Sonnet | Balanced speed and capability    |
+| Claude Opus   | Complex reasoning and long tasks |
+| Claude Fable  | Long-running agents              |
 
 Switching models starts a **new session** — the current conversation cannot continue with a different model. The selected model persists across restarts.
 

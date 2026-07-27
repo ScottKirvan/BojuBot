@@ -34,12 +34,14 @@ Then run `claude` once in your terminal to authenticate — it will open a brows
 
 ---
 
-## Installation
+## Plugin Installation
 
 ### From the Community Plugin Browser
 
-1. Open Obsidian → **Settings → Community Plugins → Browse**
-2. Search for **BojuBot** → click **Install** → **Enable**
+1. Open Obsidian → **Settings → Community Plugins 
+2. If not already enabled, click **Turn On Community Plugins**
+3. Click **Browse**
+4. Search for **BojuBot** → click **Install** → **Enable**
 
 Or open directly in Obsidian: [Add to Obsidian](obsidian://show-plugin?id=bojubot)
 

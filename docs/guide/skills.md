@@ -65,15 +65,15 @@ When `params` is defined, BojuBot shows a modal form before running the skill. E
 
 ### Variable interpolation
 
-Use `{{id}}` in the prompt body to reference field values. After submission:
+Use <code v-pre>{{id}}</code> in the prompt body to reference field values. After submission:
 
 - **Non-note fields** are interpolated inline.
-- **Note fields** are added as context attachments (shown as badges above the input, just like @-mention). The `{{id}}` token is stripped from the body — the note content arrives via the attachment, not inline text.
-- Unresolved tokens (optional fields left blank) are stripped cleanly. No visible `{{placeholder}}` tokens appear in the output.
+- **Note fields** are added as context attachments (shown as badges above the input, just like @-mention). The <code v-pre>{{id}}</code> token is stripped from the body — the note content arrives via the attachment, not inline text.
+- Unresolved tokens (optional fields left blank) are stripped cleanly. No visible <code v-pre>{{placeholder}}</code> tokens appear in the output.
 
 ### Handling optional parameters
 
-Interpolation only strips the `{{id}}` token itself — any static label text you wrote around it stays. If an optional `textarea` param is left blank, a body like:
+Interpolation only strips the <code v-pre>{{id}}</code> token itself — any static label text you wrote around it stays. If an optional `textarea` param is left blank, a body like:
 
 ```
 **Additional instructions:** {{extra_notes}}

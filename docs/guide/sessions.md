@@ -37,6 +37,7 @@ Like the working directory, these three overrides are saved in the session JSON 
 
 Open the session manager by clicking the **session name** in the panel toolbar, or via **BojuBot: Show session history** in the Command Palette.
 
+![](images/session_manager.png)
 ## Actions
 
 | Action               | How                                                           |

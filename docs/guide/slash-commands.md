@@ -12,6 +12,9 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 `/` only triggers the menu when preceded by a space or at the start of the input. Typing `and/or` or `https://...` never opens the menu.
 :::
 
+> tip
+`/` only triggers the menu when preceded by a space or at the start of the input. Typing `and/or` or `https://...` never opens the menu.
+
 ## Built-in commands
 
 | Category    | Command           | What it does                             |

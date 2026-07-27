@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "BojuBot"
-  text: "Claude lives in your vault"
-  tagline: An Obsidian plugin that puts a full Claude Code agent at your fingertips — reading, writing, and organizing your notes with you.
+  text: "보주봇"
+  tagline: More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code.
   image:
     src: /logo.png
     alt: BojuBot
