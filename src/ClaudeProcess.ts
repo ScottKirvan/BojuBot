@@ -29,7 +29,24 @@ export function permissionArgs(mode: PermissionMode): string[] {
       return ['--permission-mode', 'bypassPermissions'];
     case 'standard':
     default:
-      return ['--permission-mode', 'acceptEdits', '--disallowedTools', 'Bash'];
+      // Deliberately NOT `--disallowedTools Bash` — that removes Bash from the
+      // model's tool list entirely, so it can never be attempted, denied, or
+      // logged. Real usage showed that's worse than the plain acceptEdits
+      // behavior below: Claude attempts Bash, the CLI can't get interactive
+      // confirmation in --print mode, denies it, and *that* denial is what
+      // populates permission_denials and drives the denial card (with its
+      // "Allow full access for this session" retry). Confirmed by direct
+      // testing that --disallowedTools silently breaks that whole flow —
+      // no attempt means nothing to deny, so the card never appears and the
+      // user has no signal beyond a plain "not available" text response.
+      //
+      // This does mean "cannot: Bash" in the orientation text is an emergent
+      // consequence of acceptEdits' current behavior, not something BojuBot
+      // enforces directly — if a future Claude Code release changes what
+      // acceptEdits auto-accepts, this could silently drift. Flagging that
+      // here (see #291) rather than "fixing" it, since the fix regressed a
+      // working user-facing flow for a hypothetical future risk.
+      return ['--permission-mode', 'acceptEdits'];
   }
 }
 
