@@ -4,7 +4,7 @@
 
 Click the **+** button in the toolbar to start a new session with default settings.
 
-**Shift+click +** to open the **session setup** dialog and configure the session before it starts:
+**Shift+click +** to open a **Custom Session** dialog and configure the session before it starts:
 
 | Field | What it does |
 |---|---|
@@ -23,7 +23,7 @@ Empty fields fall back to normal defaults — you can fill in one field and leav
 Shift+click is a common power-user shortcut in browsers and file managers for "do the thing, but with options." Normal click stays fast; Shift+click unlocks the full setup.
 :::
 
-::: info Primed cwd persists
+::: info Custom cwd persists
 The working directory you set is saved in the session JSON and used on every turn, including when you resume the session after a restart. Claude always runs in the directory you picked.
 :::
 

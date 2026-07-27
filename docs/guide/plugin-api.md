@@ -87,7 +87,7 @@ coordinator.sessionId        // Claude's internal session ID (used for --resume)
 coordinator.sessionFileId    // JSON storage file ID
 coordinator.sessionTitle     // current session title
 coordinator.sessionCreatedAt // ISO timestamp
-coordinator.sessionCwd       // working directory override, if one was set (Prime Session)
+coordinator.sessionCwd       // working directory override, if one was set (Custom Session)
 
 coordinator.getEffectivePermissionMode() // 'standard' | 'readonly' | 'full' | 'restricted'
 ```

@@ -1612,18 +1612,18 @@
   margin-top: 20px;
 }
 
-/* ── Prime session modal extras ── */
-.bojubot-prime-cwd-row {
+/* ── Custom session modal extras ── */
+.bojubot-custom-session-cwd-row {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-.bojubot-prime-cwd-input {
+.bojubot-custom-session-cwd-input {
   flex: 1;
 }
 
-.bojubot-prime-cwd-btn {
+.bojubot-custom-session-cwd-btn {
   flex-shrink: 0;
   padding: 4px 8px;
   cursor: pointer;
@@ -1633,11 +1633,11 @@
   color: var(--text-normal);
 }
 
-.bojubot-prime-cwd-btn:hover {
+.bojubot-custom-session-cwd-btn:hover {
   background: var(--background-modifier-hover);
 }
 
-.bojubot-prime-perm-btn {
+.bojubot-custom-session-perm-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1645,11 +1645,11 @@
   text-align: left;
 }
 
-.bojubot-prime-perm-btn:hover {
+.bojubot-custom-session-perm-btn:hover {
   background: var(--background-modifier-hover);
 }
 
-.bojubot-prime-perm-btn-icon {
+.bojubot-custom-session-perm-btn-icon {
   flex-shrink: 0;
   width: 16px;
   height: 16px;
@@ -1658,11 +1658,11 @@
   justify-content: center;
 }
 
-.bojubot-prime-perm-btn-label {
+.bojubot-custom-session-perm-btn-label {
   flex: 1;
 }
 
-.bojubot-prime-perm-btn-chevron {
+.bojubot-custom-session-perm-btn-chevron {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
@@ -1672,24 +1672,24 @@
   color: var(--text-muted);
 }
 
-.bojubot-prime-toggle-row {
+.bojubot-custom-session-toggle-row {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
 }
 
-.bojubot-prime-toggle-label {
+.bojubot-custom-session-toggle-label {
   margin: 0;
 }
 
-.bojubot-prime-attach-btns {
+.bojubot-custom-session-attach-btns {
   display: flex;
   gap: 6px;
   margin-bottom: 8px;
 }
 
-.bojubot-prime-attach-btn {
+.bojubot-custom-session-attach-btn {
   padding: 3px 10px;
   font-size: 0.85em;
   cursor: pointer;
@@ -1699,17 +1699,17 @@
   color: var(--text-normal);
 }
 
-.bojubot-prime-attach-btn:hover {
+.bojubot-custom-session-attach-btn:hover {
   background: var(--background-modifier-hover);
 }
 
-.bojubot-prime-attach-list {
+.bojubot-custom-session-attach-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.bojubot-prime-attach-row {
+.bojubot-custom-session-attach-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1719,14 +1719,14 @@
   font-size: 0.85em;
 }
 
-.bojubot-prime-url-row {
+.bojubot-custom-session-url-row {
   display: flex;
   gap: 6px;
   margin-bottom: 6px;
   align-items: center;
 }
 
-.bojubot-prime-url-row .bojubot-param-input {
+.bojubot-custom-session-url-row .bojubot-param-input {
   flex: 1;
 }
 

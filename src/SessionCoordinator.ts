@@ -147,7 +147,7 @@ export class SessionCoordinator {
   get sessionModel(): string | undefined { return this._sessionModel; }
   get rawSession(): boolean { return this._rawSession; }
 
-  /** Session-level overrides (Prime Session) win over the global default, but a
+  /** Session-level overrides (Custom Session) win over the global default, but a
    *  runtime denial-card upgrade (setPermissionOverride) always wins over both —
    *  it represents an explicit in-the-moment decision for the rest of the session. */
   getEffectivePermissionMode(): PermissionMode {
@@ -172,7 +172,7 @@ export class SessionCoordinator {
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
-  startNewSession(prime?: {
+  startNewSession(custom?: {
     name?: string;
     cwd?: string;
     suppressVaultContext?: boolean;
@@ -184,12 +184,12 @@ export class SessionCoordinator {
     const vaultRoot = this.host.getVaultRoot();
     const now = new Date().toISOString();
     const sessionId = now.replace(/[:.]/g, '-');
-    const title = prime?.name?.trim() || 'Untitled session';
-    const cwd = prime?.cwd?.trim() || undefined;
-    const suppressVaultContext = prime?.suppressVaultContext ?? false;
-    const permissionMode = prime?.permissionMode;
-    const model = prime?.model?.trim() || undefined;
-    const rawSession = prime?.rawSession ?? false;
+    const title = custom?.name?.trim() || 'Untitled session';
+    const cwd = custom?.cwd?.trim() || undefined;
+    const suppressVaultContext = custom?.suppressVaultContext ?? false;
+    const permissionMode = custom?.permissionMode;
+    const model = custom?.model?.trim() || undefined;
+    const rawSession = custom?.rawSession ?? false;
 
     const session: StoredSession = {
       id: sessionId,
@@ -215,7 +215,7 @@ export class SessionCoordinator {
     this._sessionPermissionMode = permissionMode;
     this._sessionModel = model;
     this._rawSession = rawSession;
-    this._hasCustomTitle = !!prime?.name?.trim();
+    this._hasCustomTitle = !!custom?.name?.trim();
     void this.host.saveLastActiveSessionId(sessionId);
 
     this.emit('session:new', session);
