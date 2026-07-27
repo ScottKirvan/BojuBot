@@ -7,6 +7,45 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.6.0](https://github.com/ScottKirvan/BojuBot/compare/3.5.0...3.6.0) (2026-07-27)
+
+
+### Features
+
+* add Buy Me A Coffee link to the About modal ([aca95ed](https://github.com/ScottKirvan/BojuBot/commit/aca95edffc1b5b11d59ba343342f5b040617be98))
+* add manual preview-release-notes workflow ([7a45b61](https://github.com/ScottKirvan/BojuBot/commit/7a45b615b2df911253d033e5d5b0c9c68616c378))
+* add permission mode, model, and raw-session overrides to Prime Session ([378e5d7](https://github.com/ScottKirvan/BojuBot/commit/378e5d77e875d5bf1311235b34615b5b35787a66))
+* add rename-file, move-file, delete-file UI Bridge actions ([a4c9f52](https://github.com/ScottKirvan/BojuBot/commit/a4c9f52c235aeb8500a880724da18dc1e146d873))
+* periodic sponsorship message on the welcome screen ([12bbd71](https://github.com/ScottKirvan/BojuBot/commit/12bbd71e8f2416c3985e3496d7ce046929b5f0ee))
+* show current version as a badge above the docs home page hero ([516c131](https://github.com/ScottKirvan/BojuBot/commit/516c13103e92e6882aac0d4c9719038ebad7e493))
+* show estimated session size in tokens in the Session Manager ([6d4ed0d](https://github.com/ScottKirvan/BojuBot/commit/6d4ed0d9660d1aff1aaed3916b2c964b099b5d3c))
+
+
+### Bug Fixes
+
+* access Electron APIs via activeWindow.require, not bare require() ([35ae301](https://github.com/ScottKirvan/BojuBot/commit/35ae3010b558d45c70b88cb83f6b1959f2daefb3))
+* add a one-way toggle to lock the Brand settings section ([0cc5ef8](https://github.com/ScottKirvan/BojuBot/commit/0cc5ef8b67fb57fa8f0bb5b0029559e9112715a6))
+* add open-after-creation checkbox to context file setup dialog ([03cbe62](https://github.com/ScottKirvan/BojuBot/commit/03cbe62d97cb0c6ca37a09fa63dc9fb379c67776))
+* add open-file-new-tab UIBridge action ([c1de7b1](https://github.com/ScottKirvan/BojuBot/commit/c1de7b1cd154268f6fc5fe6e77d33970170db9b5))
+* bring obsidianmd lint + type defs current, fix resulting warnings ([e4863cb](https://github.com/ScottKirvan/BojuBot/commit/e4863cbd7953fb0851cc2b5462f80902f0dcbd21))
+* collapse Prime Session's permission mode field into a real dropdown ([a28f5a3](https://github.com/ScottKirvan/BojuBot/commit/a28f5a34a9fd076a5b1b72170206ef26874d06ec))
+* drop misleading 'no way back' line from Lock branding description ([ab15032](https://github.com/ScottKirvan/BojuBot/commit/ab15032f24400df732fe8ba5639159d61d59b9d7))
+* enforce standard mode's Bash restriction via --disallowedTools ([697c8dd](https://github.com/ScottKirvan/BojuBot/commit/697c8dd79627caecf812c54260cb0a224ff2938f))
+* fall back to Sonnet everywhere defaultModel is read, not just at settings init ([e54d55b](https://github.com/ScottKirvan/BojuBot/commit/e54d55bf5ff002317d72b2f62c4f3b17720c4376))
+* match Lucide's version badge slot, layout, and styles ([bf2eea6](https://github.com/ScottKirvan/BojuBot/commit/bf2eea6686751eebb19b63b218c11e0fb481fa54))
+* neutralize skill bodies before they become prompt or input text ([6517297](https://github.com/ScottKirvan/BojuBot/commit/6517297099c097d4a843739c7c720646642443e2))
+* pass discord_blurb from release notes to discord notify ([040dd7f](https://github.com/ScottKirvan/BojuBot/commit/040dd7fa62cad087e6e9b0db874c9d579fc5ce4f))
+* propagate session rename to chat header and active-session export ([3641df3](https://github.com/ScottKirvan/BojuBot/commit/3641df31d660886ab732e615c6f22996b8947a3b))
+* reframe project_context toward everyday users with per-audience rule ([c61f199](https://github.com/ScottKirvan/BojuBot/commit/c61f1996849b668211f4e8cedb3c181dbedf8b5f))
+* rename the Brand settings heading to Branding ([4fe553d](https://github.com/ScottKirvan/BojuBot/commit/4fe553da39f8b36127c6093bdf14c2a1a30eae23))
+* revert Standard mode's --disallowedTools Bash (regresses the denial-card flow) ([8e83a55](https://github.com/ScottKirvan/BojuBot/commit/8e83a5589c8d3e1dcbff5424a81abb5f12b9d20c))
+* show colored icons and resolved defaults in Prime Session's mode/model pickers ([933641a](https://github.com/ScottKirvan/BojuBot/commit/933641a1f6560762a9a4abbd12b62b637a346b5e))
+* spawn Chat only mode in a neutral temp dir, not the vault root ([e8bb84b](https://github.com/ScottKirvan/BojuBot/commit/e8bb84b8bab690875f30f0d7f1369fd3989560c7))
+* stop vault content from leaking into Chat only mode ([f473890](https://github.com/ScottKirvan/BojuBot/commit/f473890366df9309ccfaf39a56579665448508f5))
+* support live filtering while typing an inline slash command ([d645b85](https://github.com/ScottKirvan/BojuBot/commit/d645b85ef26ee0551210536452050c5c6c7618ef))
+* tighten wording on the Lock branding setting description ([234d794](https://github.com/ScottKirvan/BojuBot/commit/234d794e71446574941bb1b94086691aec8b6caf))
+* update release notes header and footer to match new messaging ([2399a9a](https://github.com/ScottKirvan/BojuBot/commit/2399a9a23b6cd5dfb50cc8879b1763ed6823ea69))
+
 ## [3.5.0](https://github.com/ScottKirvan/BojuBot/compare/3.4.2...3.5.0) (2026-07-16)
 
 
