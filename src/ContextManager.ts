@@ -116,7 +116,11 @@ export class ContextManager {
       tokens: estimateTokens(orientation),
     };
 
-    if (!this.suppressVaultContext) {
+    // Chat only (restricted) mode's "no vault access" guarantee must hold even
+    // when nothing was explicitly attached — layers 1-5 below include vault
+    // content (context file, pinned notes, per-file instructions) that could
+    // otherwise leak details established in other, non-restricted sessions.
+    if (!this.suppressVaultContext && this.permissionMode !== 'restricted') {
       // Layer 1: Vault tree (folder/file names only — no content)
       const tree = buildVaultTree(this.app.vault, this.vaultTreeDepth);
       if (tree) {
