@@ -1,4 +1,4 @@
-# BojuBot (보주봇) [![starline](https://starlines.qoo.monster/assets/ScottKirvan/BojuBot)](https://github.com/qoomon/starline)
+﻿# BojuBot (보주봇) [![starline](https://raw.githubusercontent.com/ScottKirvan/BojuBot/refs/heads/starlines/ScottKirvan/BojuBot/starline.svg)](https://github.com/qoomon/starlines)
 
 <div align="center">
   <img src="assets/media/logo.png" alt="BojuBot logo" width="200" height="auto" />
