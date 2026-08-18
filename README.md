@@ -11,6 +11,9 @@
     <a href="https://github.com/ScottKirvan/BojuBot/stargazers"><img src="https://img.shields.io/github/stars/ScottKirvan/BojuBot" alt="stars" /></a>
     <a href="https://github.com/ScottKirvan/BojuBot/issues/"><img src="https://img.shields.io/github/issues/ScottKirvan/BojuBot" alt="open issues" /></a>
     <a href="https://github.com/ScottKirvan/BojuBot/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/ScottKirvan/BojuBot.svg" alt="license" /></a>
+    <a href="https://github.com/ScottKirvan/BojuBot"><img
+    src="https://badges.pufler.dev/visits/ScottKirvan/BojuBot" /></a>
+      
   </p>
 
   <h4>
