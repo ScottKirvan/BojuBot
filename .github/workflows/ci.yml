@@ -7,6 +7,10 @@ on:
     branches: [main]
 
 jobs:
+  actionlint:
+    name: Lint workflows
+    uses: ScottKirvan/.github/.github/workflows/reusable-actionlint.yml@main
+
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
