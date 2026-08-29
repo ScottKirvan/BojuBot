@@ -7,6 +7,20 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.7.0](https://github.com/ScottKirvan/BojuBot/compare/3.6.0...3.7.0) (2026-08-29)
+
+
+### Features
+
+* add pre-release staging workflow, update release pipeline ([350c61a](https://github.com/ScottKirvan/BojuBot/commit/350c61a756f768f15ba278041817366ea7862788))
+
+
+### Bug Fixes
+
+* add actionlint job to CI ([0992f0a](https://github.com/ScottKirvan/BojuBot/commit/0992f0a31f0a9aa10a2512d7b0a8e02c2a4d8725))
+* add changelog link to release and staging footers ([da1c64c](https://github.com/ScottKirvan/BojuBot/commit/da1c64c6a791c86f58c20cb29ed78a7613a36ffe))
+* migrate starline badge to self-hosted GitHub Action ([3c009b6](https://github.com/ScottKirvan/BojuBot/commit/3c009b6a70d2f5b21d6b4c44e30e9b64e02e092b))
+
 ## [3.6.0](https://github.com/ScottKirvan/BojuBot/compare/3.5.0...3.6.0) (2026-07-27)
 
 
