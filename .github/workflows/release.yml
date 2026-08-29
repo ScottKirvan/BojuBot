@@ -122,7 +122,7 @@ jobs:
 
         🫶❤️[Support this project](https://ko-fi.com/ScottKirvan) · 📖 [User Guide](https://www.scottkirvan.com/BojuBot/) · 💬 [Discord](https://discord.gg/TN6XJSNK5Y) · 🐛 [Report a Bug](https://github.com/ScottKirvan/BojuBot/issues/new?template=bug_report.md) · ✨ [Request Feature](https://github.com/ScottKirvan/BojuBot/issues/new?template=feature_request.md) · 📋 [Changelog](https://github.com/ScottKirvan/BojuBot/blob/main/notes/CHANGELOG.md)
 
-      changelog_path: ""
+      changelog_path: "notes/CHANGELOG.md"
     secrets: inherit
 
   update-changelog-prs:
