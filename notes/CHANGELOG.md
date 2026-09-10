@@ -7,6 +7,23 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.7.0](https://github.com/ScottKirvan/BojuBot/compare/3.6.0...3.7.0) (2026-09-07)
+
+
+### Features
+
+* add pre-release staging workflow, update release pipeline ([350c61a](https://github.com/ScottKirvan/BojuBot/commit/350c61a756f768f15ba278041817366ea7862788))
+
+
+### Bug Fixes
+
+* add actionlint job to CI ([0992f0a](https://github.com/ScottKirvan/BojuBot/commit/0992f0a31f0a9aa10a2512d7b0a8e02c2a4d8725))
+* add changelog link to release and staging footers ([da1c64c](https://github.com/ScottKirvan/BojuBot/commit/da1c64c6a791c86f58c20cb29ed78a7613a36ffe))
+* force Vite to bundle bojuvue for SSR instead of externalizing it ([bb8a614](https://github.com/ScottKirvan/BojuBot/commit/bb8a6143cc8d3476f42e70b00b23dad9ea5f987f))
+* import BojuVue components from the base entry, not /vitepress ([7e6818d](https://github.com/ScottKirvan/BojuBot/commit/7e6818d16508e3b4df46d0281ffaef30d30aca14))
+* migrate starline badge to self-hosted GitHub Action ([3c009b6](https://github.com/ScottKirvan/BojuBot/commit/3c009b6a70d2f5b21d6b4c44e30e9b64e02e092b))
+* remove unnecessary type assertion on DEFAULT_GREETINGS ([de3367d](https://github.com/ScottKirvan/BojuBot/commit/de3367d1d16d021b0f9fe4197120658a7cc36f82))
+
 ## [3.6.0](https://github.com/ScottKirvan/BojuBot/compare/3.5.0...3.6.0) (2026-07-27)
 
 
