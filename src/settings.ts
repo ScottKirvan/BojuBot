@@ -14,15 +14,15 @@ export interface ClaudeModel {
 
 export const CLAUDE_MODELS: ClaudeModel[] = [
   { id: 'claude-haiku-4-5', displayName: 'Claude Haiku 4.5', description: 'Fastest — great for quick tasks' },
-  { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', description: 'Balanced speed and capability (default)' },
-  { id: 'claude-opus-4-8', displayName: 'Claude Opus 4.8', description: 'Most capable — best for complex reasoning' },
-  { id: 'claude-fable-5', displayName: 'Claude Fable 5', description: 'Most capable — coding-focused, highest reasoning' },
+  { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', description: 'Balanced speed and capability (default)' },
+  { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', description: 'Most capable — best for complex reasoning' },
+  { id: 'claude-fable-5-1', displayName: 'Claude Fable 5.1', description: 'Most capable — coding-focused, highest reasoning' },
 ];
 
 /** Falls back to this when settings.defaultModel is unset — covers both fresh
  *  installs and installs with an empty string already persisted from before
  *  this default existed (DEFAULT_SETTINGS alone only helps fresh installs). */
-export const DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
+export const DEFAULT_MODEL_ID = 'claude-sonnet-5-5';
 
 export interface BojuBotSettings {
   binaryPath: string;
