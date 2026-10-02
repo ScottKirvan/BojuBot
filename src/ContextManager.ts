@@ -21,8 +21,8 @@ export const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; 
   },
   standard: {
     summary: 'Standard',
-    can: 'read and write vault files and fetch the web',
-    cannot: 'run shell commands (Bash). Request permission if a task genuinely requires it',
+    can: 'read and write vault files, fetch the web, and run read-only shell commands (Bash) such as ls, echo, or git status',
+    cannot: 'run shell commands that change anything (write files, install, delete, download) — those are denied. Request permission if a task genuinely requires one',
   },
   full: {
     summary: 'Full access',

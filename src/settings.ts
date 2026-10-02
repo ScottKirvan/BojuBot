@@ -455,7 +455,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .addDropdown((drop) =>
         drop
           .addOption('restricted', 'Chat only — web access, no file system')
-          .addOption('standard', 'Standard — files + web, no bash (recommended)')
+          .addOption('standard', 'Standard — files + web, read-only shell (recommended)')
           .addOption('readonly', 'Read only — no writes or shell commands')
           .addOption('full', 'Full access — everything including bash')
           .setValue(this.plugin.getEffectivePermissionMode())
