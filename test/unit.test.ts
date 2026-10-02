@@ -509,6 +509,25 @@ describe('permissionArgs with CLI capabilities', () => {
   test('default is never sent once manual is available', () => {
     for (const mode of ALL) assert.ok(!permissionArgs(mode, CAPS_2_1_286).includes('default'), mode);
   });
+
+  test('--permission-prompts none is appended for every mode when the CLI supports it', () => {
+    assert.deepEqual(permissionArgs('standard', CAPS_2_1_286), ['--permission-mode', 'acceptEdits', '--permission-prompts', 'none']);
+    assert.deepEqual(permissionArgs('full', CAPS_2_1_286), ['--permission-mode', 'bypassPermissions', '--permission-prompts', 'none']);
+    assert.deepEqual(permissionArgs('readonly', CAPS_2_1_286), ['--permission-mode', 'manual', '--allowedTools', 'Read,Glob,Grep,WebFetch,WebSearch', '--permission-prompts', 'none']);
+    assert.deepEqual(permissionArgs('restricted', CAPS_2_1_286), ['--permission-mode', 'manual', '--allowedTools', 'WebFetch,WebSearch', '--permission-prompts', 'none']);
+  });
+
+  test('--permission-prompts is never sent when the CLI does not list it', () => {
+    for (const mode of ALL) {
+      assert.ok(!permissionArgs(mode, CAPS_OLD).includes('--permission-prompts'), mode);
+      assert.ok(!permissionArgs(mode).includes('--permission-prompts'), mode);
+    }
+  });
+
+  test('repeated calls do not accumulate flags', () => {
+    permissionArgs('standard', CAPS_2_1_286);
+    assert.equal(permissionArgs('standard', CAPS_2_1_286).filter(a => a === '--permission-prompts').length, 1);
+  });
 });
 
 describe('resolveSpawnCwd', () => {

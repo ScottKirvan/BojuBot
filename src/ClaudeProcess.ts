@@ -6,7 +6,7 @@ import { execSync } from 'child_process';
 import { spawn, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from './utils/logger';
 import { parseApiError, ApiError } from './utils/apiError';
-import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities } from './utils/cliCapabilities';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from './utils/cliCapabilities';
 export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';
 
 export interface PermissionDenial {
@@ -20,6 +20,15 @@ export interface PermissionDenial {
  * failed) the args are exactly what BojuBot has always sent.
  */
 export function permissionArgs(mode: PermissionMode, caps: CliCapabilities = UNKNOWN_CAPABILITIES): string[] {
+  const args = modeArgs(mode, caps);
+  // With `none`, anything that would need an interactive prompt is denied outright
+  // (and reported in permission_denials) rather than left to --print mode's
+  // implicit behavior. Harmless under bypassPermissions, which never prompts.
+  if (has(caps, '--permission-prompts')) args.push('--permission-prompts', 'none');
+  return args;
+}
+
+function modeArgs(mode: PermissionMode, caps: CliCapabilities): string[] {
   // 2.1.286 dropped `default` from the listed choices in favour of `manual` (#352).
   // `default` is still accepted for now, but use the listed name when it's there.
   const askMode = caps.permissionModes.includes('manual') ? 'manual' : 'default';
@@ -41,20 +50,21 @@ export function permissionArgs(mode: PermissionMode, caps: CliCapabilities = UNK
       // Deliberately NOT `--disallowedTools Bash` — that removes Bash from the
       // model's tool list entirely, so it can never be attempted, denied, or
       // logged. Real usage showed that's worse than the plain acceptEdits
-      // behavior below: Claude attempts Bash, the CLI can't get interactive
-      // confirmation in --print mode, denies it, and *that* denial is what
-      // populates permission_denials and drives the denial card (with its
-      // "Allow full access for this session" retry). Confirmed by direct
-      // testing that --disallowedTools silently breaks that whole flow —
+      // behavior below: Claude attempts Bash, the CLI denies it, and *that*
+      // denial is what populates permission_denials and drives the denial card
+      // (with its "Allow full access for this session" retry). Confirmed by
+      // direct testing that --disallowedTools silently breaks that whole flow —
       // no attempt means nothing to deny, so the card never appears and the
       // user has no signal beyond a plain "not available" text response.
       //
-      // This does mean "cannot: Bash" in the orientation text is an emergent
-      // consequence of acceptEdits' current behavior, not something BojuBot
-      // enforces directly — if a future Claude Code release changes what
-      // acceptEdits auto-accepts, this could silently drift. Flagging that
-      // here (see #291) rather than "fixing" it, since the fix regressed a
-      // working user-facing flow for a hypothetical future risk.
+      // The denial is explicit when the CLI supports `--permission-prompts none`
+      // (appended in permissionArgs above, #291): any Bash command acceptEdits
+      // would prompt for is denied instead of relying on --print mode having no
+      // one to ask. The CLI does auto-approve read-only Bash commands it
+      // classifies as safe (e.g. `echo`, `ls`) in acceptEdits, with or without
+      // the flag, so Standard means "no shell commands that change anything",
+      // not "no Bash at all". On older CLIs without the flag, the denial is the
+      // emergent --print-mode behavior described above.
       return ['--permission-mode', 'acceptEdits'];
   }
 }

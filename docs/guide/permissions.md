@@ -7,7 +7,7 @@ BojuBot runs Claude Code as a subprocess and controls what it's allowed to do vi
 | Mode                         | Icon      | What Claude can do                                                                        |
 | ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access. Works with attached context and @-mentions |
-| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch — Bash/shell commands blocked                  |
+| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied |
 | **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes or shell commands                               |
 | **Full access**              | 🔴 warning | Everything, including shell commands (Bash, git, etc.)                                    |
 
@@ -20,6 +20,10 @@ The default for new sessions is set in **Settings → BojuBot → Permission mod
 ::: info Claude Code version detection
 When the plugin loads, BojuBot runs `claude --version` and `claude --help` in the background to see which options your Claude Code CLI supports, and builds its arguments to match. For example, newer CLIs (2.1.286 and later) name the "ask before acting" permission mode `manual` instead of `default`, so Read only and Chat only use `manual` when it's available. If the check fails or hasn't finished yet, BojuBot uses the same arguments it always has. The detected version is shown in the About dialog and under **Claude binary path** in settings.
 :::
+
+### Standard and shell commands
+
+In Standard mode Claude Code accepts file edits automatically and also auto-approves shell commands it classifies as read-only and safe (listing files, printing text, and similar). Any other shell command — anything that could change files or download something, such as `curl -o page.html …` — is denied, and the [denial card](#permission-denials) appears so you can retry with full access. On Claude Code versions that support it, BojuBot passes `--permission-prompts none` so these denials are explicit rather than a side effect of running non-interactively.
 
 ### Chat only
 

@@ -149,7 +149,7 @@ All of these are immediate — no confirmation needed — and Claude posts a sho
 A few smaller things Claude can do as part of a conversation:
 
 - **Change how it addresses you (or itself)** — just say so, e.g. *"Call me Alex from now on"* or *"I'd rather you go by a different name."* Persists across sessions.
-- **Request permission** — if a task genuinely needs a capability your current permission mode blocks (e.g. Bash access in Standard mode), Claude can ask instead of giving up silently. You decide via the denial card on your next message — see [Permission Denials](./permissions.md#permission-denials).
+- **Request permission** — if a task genuinely needs a capability your current permission mode blocks (e.g. a shell command that changes files, which Standard mode denies), Claude can ask instead of giving up silently. You decide via the denial card on your next message — see [Permission Denials](./permissions.md#permission-denials).
 - **Open Settings** or **the quick switcher** — Claude asks first in chat text, waits for you to confirm, then acts on your next message. Never fires without that round-trip.
 
 ---
