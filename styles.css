@@ -167,17 +167,26 @@
   background: var(--background-modifier-hover);
 }
 
-/* ── Icon buttons ── */
-.bojubot-icon-btn {
-  display: flex !important;
+/* ── Icon buttons ──
+   Defeats Obsidian's native <button> chrome (confirmed against the bundled
+   app.css): the base `button` rule sets inline-flex display, non-zero
+   padding and border:0, and `button:not(.clickable-icon)` separately sets
+   background-color + box-shadow at (element+class) specificity — higher
+   than a single class selector alone. Every .bojubot-icon-btn lives inside
+   either .bojubot-toolbar or .bojubot-input-toolbar (see ClaudeView.ts), so
+   chaining onto those wrapper classes reliably out-specifies both of
+   Obsidian's rules without needing !important. */
+.bojubot-toolbar .bojubot-icon-btn,
+.bojubot-input-toolbar .bojubot-icon-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  padding: 0 !important;
-  background: none !important;
-  border: none !important;
-  box-shadow: none !important;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
   border-radius: 4px;
   cursor: pointer;
   color: var(--text-muted);
@@ -189,8 +198,14 @@
   height: 14px;
 }
 
+/* Selector left as a plain single-class compound (not wrapper-chained like
+   the base rule above): it's already at (class + :hover + :not(:disabled))
+   specificity, which beats Obsidian's own `button:hover` rule, and chaining
+   a wrapper class on here would outrank .bojubot-send:hover:not(:disabled)
+   (same specificity today, ordered later in this file to win on purpose)
+   and silently break the Send button's accent hover background. */
 .bojubot-icon-btn:hover:not(:disabled) {
-  background: var(--background-modifier-hover) !important;
+  background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
 
@@ -677,7 +692,12 @@
 }
 
 /* Obsidian hides pre>code until async syntax highlighting adds .is-loaded;
-   that callback may never fire in a custom panel, so force visibility here. */
+   that callback may never fire in a custom panel, so force visibility here.
+   This isn't a specificity fight we can win structurally: Obsidian's own
+   app.css has no CSS rule gating this on .is-loaded at all (confirmed by
+   inspecting the bundled stylesheet) — the hiding comes from the highlighter
+   callback simply never having run, so no selector, however specific, can
+   substitute for forcing the property directly. */
 .bojubot-assistant pre code {
   display: block !important;
 }
@@ -1827,7 +1847,16 @@
 }
 
 /* ── Permission mode icon (input toolbar) ── */
-/* Hard-coded colors so theme variables can't override them. */
+/* Hard-coded colors so theme variables can't override them.
+   A wrapper-class specificity bump can't be verified safe here: these same
+   colorClass names (PermissionPickerModal.ts) are reused on rows rendered
+   inside .bojubot-perm-popover, which is appended straight to
+   activeDocument.body (openModePickerPopover) — outside any BojuBot
+   container we could chain onto — and that exact body-attached context is
+   why this codebase already had to fall back to inline styles to win the
+   cascade there (see the comment in openModePickerPopover). Since these
+   colors must read identically across both that context and arbitrary
+   third-party themes, !important stays the reliable guarantee. */
 /* Restricted (planned): blue padlock */
 .bojubot-perm-restricted .svg-icon {
   color: #60a5fa !important;
@@ -1852,7 +1881,10 @@
   stroke: #ef4444 !important;
 }
 
-/* Thicker strokes so the icon reads clearly at 14 px */
+/* Thicker strokes so the icon reads clearly at 14 px — same cross-context
+   reasoning as above (popover rows appended to document.body), and
+   Obsidian's own app.css varies --icon-stroke per container throughout its
+   codebase, so a plain specificity bump has no stable rule to beat. */
 .bojubot-permission-icon .svg-icon path,
 .bojubot-permission-icon .svg-icon polyline,
 .bojubot-permission-icon .svg-icon line,
