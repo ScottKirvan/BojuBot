@@ -746,7 +746,7 @@ export class ClaudeView extends ItemView {
         break;
       default:
         setIcon(this.permissionIconEl, 'shield');
-        this.permissionIconEl.title = 'Permissions: Standard — files + web, no bash. Click to change.';
+        this.permissionIconEl.title = 'Permissions: Standard — files + web, read-only shell commands. Click to change.';
         this.permissionIconEl.addClass('bojubot-perm-standard');
     }
   }
