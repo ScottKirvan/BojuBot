@@ -29,7 +29,7 @@ Remaining: FrontmatterGuard.ts write-protection (blocked: Claude Code doesn't su
 ## Architectural direction: two-way bridge (#62)
 The vault query protocol (@@BOJU query key, #58) is the first half of the two-way bridge — Claude can now query live vault state (backlinks, outlinks, tags, file-list) on demand. The second half (#62) is a watch/event system: Obsidian pushing vault state changes to Claude proactively. Design #62 as an extension of the existing query infrastructure.
 
-Test vault: `D:\2\deleteme\cortex_test_vault` (junction at `.obsidian/plugins/bojubot` → repo root).
+Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` — both have a junction at `.obsidian/plugins/bojubot` → repo root.
 
 ## Key files
 | File                            | Purpose                                                                                        |
