@@ -282,6 +282,23 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'show-plan-usage',
+      name: 'Show plan usage',
+      callback: () => {
+        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+        if (existing.length) {
+          void this.app.workspace.revealLeaf(existing[0]);
+          (existing[0].view as ClaudeView).showPlanUsage();
+        } else {
+          void this.activateView().then(() => {
+            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+            if (leaves.length) (leaves[0].view as ClaudeView).showPlanUsage();
+          });
+        }
+      },
+    });
+
+    this.addCommand({
       id: 'reload-skills',
       name: 'Reload skills',
       callback: () => {

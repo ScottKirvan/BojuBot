@@ -113,6 +113,14 @@ You can also switch via `/effort` in the slash menu or **BojuBot: Switch effort*
 
 ---
 
+## Plan Usage
+
+Choose **Usage** from the `/` menu (or run **BojuBot: Show plan usage** from the Command Palette) to see how much of your Claude plan you've used — the current session and current week percentages and when they reset, plus Claude Code's breakdown of what's contributing. The report appears as a card in the chat.
+
+Checking usage is free: it runs Claude Code's own `/usage` command in a separate process, so it isn't sent to Claude, doesn't become part of your conversation, and doesn't affect the context gauge. You can check it while Claude is still replying.
+
+---
+
 ## Context Gauge
 
 A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.

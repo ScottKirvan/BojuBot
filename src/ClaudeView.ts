@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type BojuBotPlugin from '../main';
-import { findClaudeBinary, PermissionDenial, PermissionMode } from './ClaudeProcess';
+import { findClaudeBinary, fetchPlanUsage, PermissionDenial, PermissionMode } from './ClaudeProcess';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
@@ -2062,6 +2062,32 @@ export class ClaudeView extends ItemView {
     }
   }
 
+  /**
+   * Show the plan usage report from Claude Code's /usage in a system card.
+   * Runs as a separate throwaway process, so it never touches the conversation,
+   * the session, or the token gauge, and can run alongside an in-progress turn.
+   */
+  showPlanUsage() {
+    const binary = this.plugin.claudeBinaryPath;
+    if (!binary) {
+      this.appendMessage('system', `Claude binary not found. Check ${this.plugin.brand.name} settings.`);
+      return;
+    }
+    this.messagesEl.querySelector('.bojubot-welcome')?.remove();
+    const card = this.appendMessage('system', 'Checking plan usage…');
+    fetchPlanUsage(binary, this.plugin.shellEnv, this.plugin.getVaultRoot(), this.plugin.cliCapabilities)
+      .then((text) => {
+        card.addClass('bojubot-usage-card');
+        card.setText(text);
+        this.scrollToBottom();
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'unknown error';
+        log('showPlanUsage failed:', msg);
+        card.setText(`Couldn't get plan usage: ${msg}`);
+      });
+  }
+
   openEffortPicker() {
     const levels = this.supportedEffortLevels();
     if (levels.length === 0) {
@@ -2128,6 +2154,12 @@ export class ClaudeView extends ItemView {
         description: 'Choose how much thinking Claude does per turn',
         action: () => this.openEffortPicker(),
       }] : []),
+      {
+        category: 'Session',
+        name: 'Usage',
+        description: 'Show how much of your plan limits you have used',
+        action: () => this.showPlanUsage(),
+      },
       {
         category: 'Session',
         name: 'New session',

@@ -7,6 +7,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from './utils/logger';
 import { parseApiError, ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from './utils/cliCapabilities';
+import { extractResultText } from './utils/planUsage';
 export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';
 
 export interface PermissionDenial {
@@ -302,6 +303,29 @@ export function runClaude(
     if (stdin) proc.stdin?.write(stdin, 'utf8');
     proc.stdin?.end();
   });
+}
+
+const USAGE_TIMEOUT_MS = 30_000;
+
+/**
+ * Run `/usage` in a throwaway side process and resolve with its plain-text
+ * report. Never part of a conversation: no --resume, and no saved session when
+ * the CLI supports --no-session-persistence. Rejects with a short message on failure.
+ */
+export async function fetchPlanUsage(
+  binaryPath: string,
+  env: Record<string, string>,
+  cwd: string,
+  caps: CliCapabilities = UNKNOWN_CAPABILITIES,
+): Promise<string> {
+  const args = ['--output-format', 'stream-json', '--verbose', '--print'];
+  if (has(caps, '--no-session-persistence')) args.push('--no-session-persistence');
+  const out = await runClaude(binaryPath, args, cwd, env, USAGE_TIMEOUT_MS, '/usage');
+  const result = extractResultText(out);
+  const text = result?.text.trim() ?? '';
+  if (!result || !text) throw new Error('Claude Code returned no usage information.');
+  if (result.isError) throw new Error(text);
+  return text;
 }
 
 const PROBE_TIMEOUT_MS = 10_000;
