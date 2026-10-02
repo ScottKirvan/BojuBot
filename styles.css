@@ -422,6 +422,20 @@
   font-style: italic;
 }
 
+/* /usage report — system message, but keeps the CLI's line breaks and alignment */
+.bojubot-system.bojubot-usage-card {
+  align-self: stretch;
+  font-style: normal;
+  font-family: var(--font-monospace);
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
 /* Thinking / status indicator */
 .bojubot-status {
   font-style: italic;

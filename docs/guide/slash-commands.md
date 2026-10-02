@@ -24,6 +24,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Session** | Export session    | Save the current session to your vault   |
 | **Session** | Switch model      | Change model; the session continues     |
 | **Session** | Switch effort     | Change effort level (`/effort`); shown only when your Claude Code CLI supports it |
+| **Session** | Usage             | Show how much of your plan's session and weekly limits you've used (`/usage`). Free, and not sent to Claude |
 | **Context** | Attach file       | Add a file, image, or URL to the prompt  |
 | **Context** | Open context file | Edit your persistent vault context       |
 | **Context** | Refresh context   | Re-inject vault context into the session |

@@ -22,6 +22,7 @@ import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
+import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
@@ -1150,6 +1151,47 @@ describe('composeStreamingText', () => {
 
   test('protocol lines in the preview never reach the display', () => {
     assert.equal(composeStreamingText('Done. ', `Opening\n${BOJU_PREFIX}{"act`), 'Done. Opening\n');
+  });
+});
+
+describe('extractResultText', () => {
+  const USAGE_TEXT = 'You are currently using your subscription to power your Claude Code usage\n\n' +
+    'Current session: 54% used · resets Oct 2, 2:59pm (America/Halifax)\n' +
+    'Current week (all models): 34% used · resets Oct 7, 4:59pm (America/Halifax)\n\n' +
+    "What's contributing to your limits usage?";
+  const usageOutput = [
+    JSON.stringify({ type: 'system', subtype: 'init', session_id: 's' }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: USAGE_TEXT }] } }),
+    JSON.stringify({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0, local_command: 'usage', result: USAGE_TEXT }),
+    '',
+  ].join('\n');
+
+  test('returns the result text with its line breaks intact', () => {
+    assert.deepEqual(extractResultText(usageOutput), { text: USAGE_TEXT, isError: false });
+  });
+
+  test('handles CRLF output and non-JSON noise', () => {
+    const noisy = 'Warning: something\r\n' + usageOutput.replace(/\n/g, '\r\n');
+    assert.deepEqual(extractResultText(noisy), { text: USAGE_TEXT, isError: false });
+  });
+
+  test('reports is_error results', () => {
+    const out = JSON.stringify({ type: 'result', is_error: true, result: 'Not logged in' });
+    assert.deepEqual(extractResultText(out), { text: 'Not logged in', isError: true });
+  });
+
+  test('the last result message wins', () => {
+    const out = [
+      JSON.stringify({ type: 'result', result: 'first' }),
+      JSON.stringify({ type: 'result', result: 'second' }),
+    ].join('\n');
+    assert.equal(extractResultText(out)?.text, 'second');
+  });
+
+  test('null when there is no result message or it has no string result', () => {
+    assert.equal(extractResultText(''), null);
+    assert.equal(extractResultText('garbage\n{"type":"assistant"}'), null);
+    assert.equal(extractResultText(JSON.stringify({ type: 'result', result: 42 })), null);
   });
 });
 
