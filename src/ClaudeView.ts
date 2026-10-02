@@ -112,7 +112,12 @@ interface ActiveTurnElements {
   toolRowMap: Map<string, HTMLElement>;
   toolCallCount: number;
   uiBridgeActionCount: number;
+  /** Clean text from complete messages — what the final markdown render uses. */
   accumulated: string;
+  /** Latest text to show while streaming (may include a live preview). */
+  pendingDisplay: string;
+  /** Pending requestAnimationFrame id for the streaming-text write, or null. */
+  textFrame: number | null;
   turnInputTokens: number;
   turnCacheTokens: number;
   turnOutputTokens: number;
@@ -171,6 +176,7 @@ export class ClaudeView extends ItemView {
         await this.plugin.saveSettings();
       },
       isUiBridgeEnabled: () => this.plugin.settings.uiBridgeEnabled,
+      isStreamingEnabled: () => this.plugin.settings.streamPartialMessages,
       getCliCapabilities: () => this.plugin.cliCapabilities,
     });
     this._setupCoordinatorEvents();
@@ -222,13 +228,23 @@ export class ClaudeView extends ItemView {
 
     // ── Turn streaming ───────────────────────────────────────────────────────
 
-    this.coordinator.on('turn:text', (accumulated) => {
-      if (!this._activeTurnEls) return;
-      const { statusEl, streamingTextEl } = this._activeTurnEls;
-      statusEl.remove();
-      this._activeTurnEls.accumulated = accumulated;
-      streamingTextEl.textContent = accumulated;
-      this.scrollToBottom();
+    this.coordinator.on('turn:text', (display, committed) => {
+      const turn = this._activeTurnEls;
+      if (!turn) return;
+      turn.statusEl.remove();
+      // Only complete-message text is kept for the final render; the live
+      // preview is display-only.
+      turn.accumulated = committed;
+      turn.pendingDisplay = display;
+      // Live streaming can fire dozens of deltas per frame — write the DOM (and
+      // scroll, which forces layout) at most once per animation frame.
+      if (turn.textFrame !== null) return;
+      turn.textFrame = window.requestAnimationFrame(() => {
+        turn.textFrame = null;
+        if (this._activeTurnEls !== turn) return; // turn already finished
+        turn.streamingTextEl.textContent = turn.pendingDisplay;
+        this.scrollToBottom();
+      });
     });
 
     this.coordinator.on('turn:action', (action) => {
@@ -303,6 +319,7 @@ export class ClaudeView extends ItemView {
     this.coordinator.on('turn:error', (err) => {
       if (!this._activeTurnEls) return;
       const { statusEl, assistantEl, unlock } = this._activeTurnEls;
+      this.cancelTextFrame(this._activeTurnEls);
       this._activeTurnEls = null;
       statusEl.remove();
       assistantEl.setText(`Process error: ${err}`);
@@ -320,6 +337,7 @@ export class ClaudeView extends ItemView {
         assistantEl, statusEl, toolEventsEl, responseGroupEl,
         toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError,
       } = this._activeTurnEls;
+      this.cancelTextFrame(this._activeTurnEls);
       this._activeTurnEls = null;
 
       statusEl.remove();
@@ -385,6 +403,14 @@ export class ClaudeView extends ItemView {
 
       unlock();
     });
+  }
+
+  /** Drop a pending streaming-text write so it can't land after the turn's final render. */
+  private cancelTextFrame(turn: ActiveTurnElements): void {
+    if (turn.textFrame !== null) {
+      window.cancelAnimationFrame(turn.textFrame);
+      turn.textFrame = null;
+    }
   }
 
   getViewType(): string { return VIEW_TYPE_CLAUDE; }
@@ -1282,7 +1308,7 @@ export class ClaudeView extends ItemView {
 
     this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
-      toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '',
+      toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '', pendingDisplay: '', textFrame: null,
       turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null,
       unlock, isInjectTurn: false,
     };
@@ -1719,7 +1745,7 @@ export class ClaudeView extends ItemView {
 
     this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
-      toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '',
+      toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '', pendingDisplay: '', textFrame: null,
       turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null,
       unlock, isInjectTurn: true,
     };

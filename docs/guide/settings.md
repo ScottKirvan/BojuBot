@@ -9,6 +9,7 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 | **Claude binary path**             | *(auto-detect)* | Full path to the `claude` executable. Leave blank to auto-detect from PATH and common install locations. The description below the field shows the detected Claude Code version (or *unknown* if it couldn't be checked). |
 | **Send on Enter**                  | On      | Press Enter to send. Shift+Enter always inserts a newline.                                                                                                                           |
 | **Resume last session on startup** | On      | Automatically resume the most recent session when the panel opens.                                                                                                                   |
+| **Stream replies as they're written** | On   | Show reply text word by word as Claude writes it, rendered as formatted markdown once each reply is complete. Turn off to get a block at a time. Needs a Claude Code version that supports streaming (`--include-partial-messages`); ignored otherwise. Takes effect on the next message. |
 | **@-mention file types**           | `*` (all vault files) | Comma-separated extensions for the `@` autocomplete dropdown. `*` includes all vault files. To restrict, list extensions explicitly (e.g. `md, pdf, txt`). Add a trailing comma to also match files with no extension (e.g. `md, txt,`). |
 
 ## Context & Memory

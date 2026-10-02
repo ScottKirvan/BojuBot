@@ -25,6 +25,7 @@ import { log } from './utils/logger';
 import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
 import { resolveEffort } from './utils/effort';
+import { composeStreamingText } from './utils/streamPreview';
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -40,6 +41,8 @@ export interface SessionCoordinatorHost {
   getSessionsDir(): string;
   saveLastActiveSessionId(id: string): Promise<void>;
   isUiBridgeEnabled(): boolean;
+  /** Stream reply text as it's generated (--include-partial-messages). Optional — omitted means off. */
+  isStreamingEnabled?(): boolean;
   /** What the installed CLI supports. Optional — omitted (or before the probe
    *  finishes) means unknown, which keeps spawn args at their defaults. */
   getCliCapabilities?(): CliCapabilities;
@@ -72,8 +75,11 @@ export interface SessionCoordinatorEvents {
   'session:updated': [updates: { title?: string; sessionId?: string }];
   /** Fired when a Claude turn begins (process spawned). */
   'turn:start': [];
-  /** Fired on each text chunk; `accumulated` is the full clean text so far. */
-  'turn:text': [accumulated: string];
+  /** Fired on each text chunk. `accumulated` is the text to display so far — the
+   *  committed text plus any live preview of the block being generated (with
+   *  @@BOJU lines filtered out). `committed` is the clean text from complete
+   *  messages only: the source of truth for the final render. */
+  'turn:text': [accumulated: string, committed: string];
   /** Fired for each parsed UI bridge action (request-permission excluded). */
   'turn:action': [action: BojuBotAction];
   /** Fired when Claude initiates a tool call. */
@@ -403,6 +409,7 @@ export class SessionCoordinator {
         permissionMode: this.getEffectivePermissionMode(),
         model: this._sessionModel || this.host.getModel() || undefined,
         effort: this.getEffectiveEffort(),
+        includePartialMessages: this.host.isStreamingEnabled?.() ?? false,
         capabilities: this.capabilities,
       });
       this._activeProc = proc;
@@ -430,13 +437,19 @@ export class SessionCoordinator {
 
     parseStreamOutput(proc, {
       onText: (delta) => {
+        // The complete block replaces its live preview.
         accumulated += delta;
         if (this.host.isUiBridgeEnabled()) {
           const { clean, actions } = extractActions(accumulated);
           accumulated = clean;
           for (const a of actions) handleAction(a);
         }
-        this.emit('turn:text', accumulated);
+        this.emit('turn:text', accumulated, accumulated);
+      },
+      onTextPreview: (blockText) => {
+        // Display only — never parsed for actions or queries. @@BOJU lines (and
+        // partial lines that could become one) are filtered out of what's shown.
+        this.emit('turn:text', composeStreamingText(accumulated, blockText), accumulated);
       },
       onAction: (line) => {
         if (!this.host.isUiBridgeEnabled()) return;

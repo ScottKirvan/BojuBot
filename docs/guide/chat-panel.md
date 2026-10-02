@@ -4,6 +4,8 @@ The chat panel opens as a sidebar. Type your message and press **Enter** to send
 
 If you would prefer to exclusively use the **Up Arrow** icon to send messages rather than the **Enter** key, the "Send on Enter" behavior can be toggled in **Settings → BojuBot → Send On Enter**.
 
+Replies stream in word by word as Claude writes them, then switch to fully formatted markdown when each reply is complete. To get a whole block at a time instead, turn off **Settings → BojuBot → Stream replies as they're written**. Live streaming needs a Claude Code version that supports it; on older versions replies arrive a block at a time either way.
+
 In **Standard** permissions mode, Claude has access to your full vault — it can read, write, create, move, and organize notes. The vault root is Claude's working directory.  You can confirm this by typing, "What is your current working directory?"
 
 ---

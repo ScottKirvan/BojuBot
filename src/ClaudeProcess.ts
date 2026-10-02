@@ -158,13 +158,15 @@ export interface SpawnOptions {
   model?: string;
   /** `--effort` level. Dropped unless the CLI listed it in `capabilities`. */
   effort?: string;
+  /** Request token-by-token stream events. Dropped unless the CLI lists the flag. */
+  includePartialMessages?: boolean;
   /** What the installed CLI supports. Omitted → unknown → the long-standing default args. */
   capabilities?: CliCapabilities;
 }
 
 /** CLI args for a chat turn. Pure — exported for tests. Never includes the prompt. */
 export function buildSpawnArgs(
-  opts: Pick<SpawnOptions, 'resumeSessionId' | 'permissionMode' | 'model' | 'effort' | 'capabilities'>,
+  opts: Pick<SpawnOptions, 'resumeSessionId' | 'permissionMode' | 'model' | 'effort' | 'includePartialMessages' | 'capabilities'>,
 ): string[] {
   const caps = opts.capabilities ?? UNKNOWN_CAPABILITIES;
   const args = [
@@ -173,6 +175,10 @@ export function buildSpawnArgs(
     '--print',
     ...permissionArgs(opts.permissionMode ?? 'standard', caps),
   ];
+
+  if (opts.includePartialMessages && has(caps, '--include-partial-messages')) {
+    args.push('--include-partial-messages');
+  }
 
   if (opts.model) {
     args.push('--model', opts.model);
@@ -356,6 +362,11 @@ export interface TokenUsage {
 
 export interface StreamCallbacks {
   onText: (delta: string) => void;
+  /** Live preview of the text block being generated (needs --include-partial-messages).
+   *  Receives the block's full text so far, raw — it may contain partial or complete
+   *  @@BOJU lines. Display only: onText with the complete message always follows and
+   *  is the source of truth. Optional — existing callers unaffected. */
+  onTextPreview?: (blockText: string) => void;
   onAction: (line: string) => void;
   /** Called for each @@BOJU_QUERY line. Optional — existing callers unaffected. */
   onQuery?: (line: string) => void;
@@ -374,6 +385,7 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
   let buffer = '';
   let sessionId: string | undefined;
   let gotResult = false;
+  const preview: PreviewState = { blockText: '' };
 
   proc.stdout?.on('data', (chunk: Buffer) => {
     const raw = chunk.toString();
@@ -387,7 +399,7 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
       try {
         const msg = JSON.parse(line) as Record<string, unknown>;
         LOGV('  parsed msg type:', msg.type);
-        handleMessage(msg, cb, (id) => { sessionId = id; }, (clean) => { gotResult = clean; });
+        handleMessage(msg, cb, (id) => { sessionId = id; }, (clean) => { gotResult = clean; }, preview);
       } catch {
         LOGV('  non-JSON line:', line.substring(0, 100));
       }
@@ -406,18 +418,57 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
   });
 }
 
+/** Text of the main-thread content block currently being streamed (partial messages only). */
+interface PreviewState {
+  blockText: string;
+}
+
+/**
+ * --include-partial-messages events. Only text deltas are used, and only to
+ * build a display preview; everything else (tool input, thinking, usage) still
+ * comes from the complete messages. Subagent events (parent_tool_use_id set)
+ * are ignored so they can't interleave with the main reply.
+ */
+function handleStreamEvent(msg: Record<string, unknown>, cb: StreamCallbacks, preview: PreviewState): void {
+  if (!cb.onTextPreview || msg.parent_tool_use_id) return;
+  const event = msg.event as Record<string, unknown> | undefined;
+  switch (event?.type) {
+    case 'content_block_start':
+      preview.blockText = '';
+      break;
+    case 'content_block_delta': {
+      const delta = event.delta as Record<string, unknown> | undefined;
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text) {
+        preview.blockText += delta.text;
+        cb.onTextPreview(preview.blockText);
+      }
+      break;
+    }
+  }
+}
+
 function handleMessage(
   msg: Record<string, unknown>,
   cb: StreamCallbacks,
   setSessionId: (id: string) => void,
   setGotResult: (clean: boolean) => void,
+  preview: PreviewState = { blockText: '' },
 ): void {
   switch (msg.type) {
     case 'system':
       if (msg.session_id) setSessionId(msg.session_id as string);
       break;
+    case 'stream_event':
+      handleStreamEvent(msg, cb, preview);
+      break;
     case 'assistant': {
       // Full message format: {type:'assistant', message:{content:[{type:'text',text:'...'}], usage:{...}}}
+      // The complete block supersedes its streamed preview. Tell the caller even
+      // when the block yields no onText (e.g. it held only @@BOJU lines).
+      if (!msg.parent_tool_use_id && preview.blockText) {
+        preview.blockText = '';
+        cb.onTextPreview?.('');
+      }
       const message = msg.message as Record<string, unknown> | undefined;
       const rawUsage = message?.usage as Record<string, number> | undefined;
       if (rawUsage) {
