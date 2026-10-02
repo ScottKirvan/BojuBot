@@ -10,7 +10,8 @@ BojuBot is not limited to features that involve Claude Code directly. Obsidian-n
 - `proc.stdin.end()` closes stdin so claude doesn't hang waiting for more input
 - Flags: `--output-format stream-json --verbose --print` + permission-mode args (see below)
 - Permission modes map to CLI args via `permissionArgs()` in `ClaudeProcess.ts`:
-  - **Standard** (default): `--permission-mode acceptEdits` (Bash denial is emergent from acceptEdits' own behavior in `--print` mode, not independently enforced — see #291)
+  - **All modes**: `--permission-prompts none` appended when the CLI lists `--permission-prompts` — anything that would prompt is denied explicitly and lands in `permission_denials` (drives the denial card). Harmless under bypassPermissions.
+  - **Standard** (default): `--permission-mode acceptEdits`. Bash denial is explicit via `--permission-prompts none` (#291) on CLIs that support it, emergent from `--print` mode on older ones. The CLI auto-approves read-only Bash commands it classifies as safe (`echo`, `ls`) in acceptEdits; anything else (e.g. `curl -o`) is denied. Do NOT use `--disallowedTools Bash` — it removes Bash entirely, so nothing is denied and the denial card never appears.
   - **Read-only**: `--permission-mode manual --allowedTools Read,Glob,Grep,WebFetch,WebSearch` (`default` instead of `manual` when the CLI doesn't list `manual` — #352)
   - **Full**: `--permission-mode bypassPermissions`
   - **Restricted** (planned #154): `--permission-mode manual|default --allowedTools Write,WebFetch,WebSearch` + vault tree injection suppressed
