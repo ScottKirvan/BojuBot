@@ -17,6 +17,10 @@ The same picker is available from the Command Palette: **BojuBot: Change permiss
 
 The default for new sessions is set in **Settings → BojuBot → Permission mode**.
 
+::: info Claude Code version detection
+When the plugin loads, BojuBot runs `claude --version` and `claude --help` in the background to see which options your Claude Code CLI supports, and builds its arguments to match. For example, newer CLIs (2.1.286 and later) name the "ask before acting" permission mode `manual` instead of `default`, so Read only and Chat only use `manual` when it's available. If the check fails or hasn't finished yet, BojuBot uses the same arguments it always has. The detected version is shown in the About dialog and under **Claude binary path** in settings.
+:::
+
 ### Chat only
 
 Chat only is designed for conversations where you want Claude to reason and suggest, but not touch your vault. Claude can see any context you explicitly hand it — @-mentioned notes, file attachments, clipboard pastes — and can fetch web URLs and search the web. It cannot browse, read, or modify vault files on its own.

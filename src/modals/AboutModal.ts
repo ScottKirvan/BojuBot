@@ -2,6 +2,7 @@ import { App, Modal, Plugin, sanitizeHTMLToDom, setIcon } from 'obsidian';
 import logoDataUrl from '../../assets/media/logo.png';
 import { activeBrand, isWhiteLabeled, DEFAULT_BRAND, ResolvedBrand } from '../brand';
 import { KOFI_URL } from '../constants';
+import { CliCapabilities, formatCliVersion } from '../utils/cliCapabilities';
 
 // Inline SVG — no file import, no runtime string replacement, attributes set directly.
 // stroke-width="4" matches Lucide's visual weight at this viewBox size (48×48 vs Lucide's 24×24).
@@ -84,10 +85,13 @@ function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
   return items;
 }
 
-export class AboutModal extends Modal {
-  private plugin: Plugin;
+/** Plugin plus the probed CLI capabilities (absent before the first probe). */
+type AboutPlugin = Plugin & { cliCapabilities?: CliCapabilities };
 
-  constructor(app: App, plugin: Plugin) {
+export class AboutModal extends Modal {
+  private plugin: AboutPlugin;
+
+  constructor(app: App, plugin: AboutPlugin) {
     super(app);
     this.plugin = plugin;
   }
@@ -110,6 +114,11 @@ export class AboutModal extends Modal {
     header.createDiv({ text: brand.name, cls: 'bojubot-about-name' });
     header.createDiv({
       text: `Version ${this.plugin.manifest.version}`,
+      cls: 'bojubot-about-version',
+    });
+    const caps = this.plugin.cliCapabilities;
+    header.createDiv({
+      text: caps?.version ? formatCliVersion(caps) : 'Claude Code: unknown',
       cls: 'bojubot-about-version',
     });
 

@@ -5,6 +5,7 @@ export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
 import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
+import { formatCliVersion } from './utils/cliCapabilities';
 
 export interface ClaudeModel {
   id: string;
@@ -149,7 +150,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Claude binary path')
-      .setDesc('Path to the Claude CLI binary. Leave blank to auto-detect.')
+      .setDesc(`Path to the Claude CLI binary. Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.cliCapabilities)}.`)
       .addText((text) =>
         text
           .setPlaceholder('(Auto-detect)')

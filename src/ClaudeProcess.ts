@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import { spawn, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from './utils/logger';
 import { parseApiError, ApiError } from './utils/apiError';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities } from './utils/cliCapabilities';
 export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';
 
 export interface PermissionDenial {
@@ -13,17 +14,24 @@ export interface PermissionDenial {
   input: unknown;
 }
 
-/** Maps BojuBot permissionMode to Claude CLI args. */
-export function permissionArgs(mode: PermissionMode): string[] {
+/**
+ * Maps BojuBot permissionMode to Claude CLI args. `caps` is what the installed
+ * CLI reported in `--help`; with unknown capabilities (probe not finished or
+ * failed) the args are exactly what BojuBot has always sent.
+ */
+export function permissionArgs(mode: PermissionMode, caps: CliCapabilities = UNKNOWN_CAPABILITIES): string[] {
+  // 2.1.286 dropped `default` from the listed choices in favour of `manual` (#352).
+  // `default` is still accepted for now, but use the listed name when it's there.
+  const askMode = caps.permissionModes.includes('manual') ? 'manual' : 'default';
   switch (mode) {
     case 'restricted':
       return [
-        '--permission-mode', 'default',
+        '--permission-mode', askMode,
         '--allowedTools', 'WebFetch,WebSearch',
       ];
     case 'readonly':
       return [
-        '--permission-mode', 'default',
+        '--permission-mode', askMode,
         '--allowedTools', 'Read,Glob,Grep,WebFetch,WebSearch',
       ];
     case 'full':
@@ -138,6 +146,8 @@ export interface SpawnOptions {
   resumeSessionId?: string;
   permissionMode?: PermissionMode;
   model?: string;
+  /** What the installed CLI supports. Omitted → unknown → the long-standing default args. */
+  capabilities?: CliCapabilities;
 }
 
 export function spawnClaude(opts: SpawnOptions): ChildProcess {
@@ -145,7 +155,7 @@ export function spawnClaude(opts: SpawnOptions): ChildProcess {
     '--output-format', 'stream-json',
     '--verbose',
     '--print',
-    ...permissionArgs(opts.permissionMode ?? 'standard'),
+    ...permissionArgs(opts.permissionMode ?? 'standard', opts.capabilities),
   ];
 
   if (opts.model) {
@@ -157,38 +167,8 @@ export function spawnClaude(opts: SpawnOptions): ChildProcess {
   }
   // Prompt is written to stdin after spawn — avoids all shell/arg quoting issues.
 
-  // Strip CLAUDECODE so claude doesn't refuse to launch inside another session.
-  const env = { ...opts.env };
-  delete env['CLAUDECODE'];
-
   LOG('spawnClaude cwd:', opts.vaultRoot, 'session:', opts.resumeSessionId ?? 'new');
-
-  let proc: ChildProcess;
-
-  if (process.platform === 'win32') {
-    // On Windows, Electron's child_process piping doesn't work correctly with
-    // cmd.exe (shell:true) or direct spawn (shell:false) — stdout is swallowed.
-    // Spawning via powershell.exe -NonInteractive works reliably.
-    // Single-quote flags only (no user content in args now — prompt goes via stdin).
-    const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
-    const psCmd = `& ${ps(opts.binaryPath)} ${args.map(ps).join(' ')}`;
-    LOG('  powershell spawn');
-    proc = spawn('powershell.exe', ['-NonInteractive', '-Command', psCmd], {
-      cwd: opts.vaultRoot,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-    });
-  } else {
-    proc = spawn(opts.binaryPath, args, {
-      cwd: opts.vaultRoot,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-    });
-  }
-
-  LOG('  pid:', proc.pid);
+  const proc = launchClaude(opts.binaryPath, args, opts.vaultRoot, opts.env);
 
   // Write prompt via stdin — bypasses all shell/arg quoting issues.
   // claude --print reads from stdin when no positional prompt arg is given.
@@ -201,6 +181,122 @@ export function spawnClaude(opts: SpawnOptions): ChildProcess {
   proc.stdin.end();
 
   return proc;
+}
+
+/**
+ * Start the claude binary with `args`. Every invocation goes through here so the
+ * Windows/Electron workaround and the env cleanup apply everywhere.
+ * Never put user content in `args` — write it to stdin instead.
+ */
+function launchClaude(binaryPath: string, args: string[], cwd: string, baseEnv: Record<string, string>): ChildProcess {
+  // Strip CLAUDECODE so claude doesn't refuse to launch inside another session.
+  const env = { ...baseEnv };
+  delete env['CLAUDECODE'];
+
+  let proc: ChildProcess;
+
+  if (process.platform === 'win32') {
+    // On Windows, Electron's child_process piping doesn't work correctly with
+    // cmd.exe (shell:true) or direct spawn (shell:false) — stdout is swallowed.
+    // Spawning via powershell.exe -NonInteractive works reliably.
+    // Single-quote flags only (no user content in args now — prompt goes via stdin).
+    const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
+    const psCmd = `& ${ps(binaryPath)} ${args.map(ps).join(' ')}`;
+    LOG('  powershell spawn');
+    proc = spawn('powershell.exe', ['-NonInteractive', '-Command', psCmd], {
+      cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false,
+    });
+  } else {
+    proc = spawn(binaryPath, args, {
+      cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false,
+    });
+  }
+
+  LOG('  pid:', proc.pid);
+  return proc;
+}
+
+/**
+ * Run claude to completion and resolve with its stdout. `stdin` (if given) is
+ * written, and stdin is always closed so claude never waits for more input.
+ * Rejects on spawn error, non-zero exit, or timeout (the process tree is killed).
+ */
+export function runClaude(
+  binaryPath: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  timeoutMs: number,
+  stdin = '',
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let proc: ChildProcess;
+    try {
+      proc = launchClaude(binaryPath, args, cwd, env);
+    } catch (e) {
+      reject(e instanceof Error ? e : new Error(String(e)));
+      return;
+    }
+    let out = '';
+    let errText = '';
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      killProcess(proc);
+      reject(new Error(`timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      fn();
+    };
+
+    proc.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+    proc.stderr?.on('data', (chunk: Buffer) => { errText += chunk.toString(); });
+    proc.on('error', (e) => settle(() => reject(e)));
+    proc.on('close', (code) => settle(() => {
+      if (code === 0) resolve(out);
+      else reject(new Error(`exit code ${code}${errText.trim() ? `: ${errText.trim().substring(0, 200)}` : ''}`));
+    }));
+
+    if (stdin) proc.stdin?.write(stdin, 'utf8');
+    proc.stdin?.end();
+  });
+}
+
+const PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * Ask the installed CLI what it supports (`--version`, then `--help`). Never
+ * rejects: any failure logs a line and yields UNKNOWN_CAPABILITIES, which keeps
+ * spawn args at their long-standing defaults.
+ */
+export async function probeCliCapabilities(
+  binaryPath: string,
+  env: Record<string, string>,
+  cwd: string,
+): Promise<CliCapabilities> {
+  try {
+    const versionText = await runClaude(binaryPath, ['--version'], cwd, env, PROBE_TIMEOUT_MS);
+    const helpText = await runClaude(binaryPath, ['--help'], cwd, env, PROBE_TIMEOUT_MS);
+    const caps = parseCliCapabilities(helpText, versionText);
+    LOG('CLI capabilities — version:', caps.version ?? 'unknown',
+      '— permission modes:', caps.permissionModes.join(',') || '(unknown)',
+      '— effort levels:', caps.effortLevels.join(',') || '(unsupported)',
+      '— flags:', [...caps.flags].sort().join(' ') || '(none)');
+    return caps;
+  } catch (e) {
+    WARN('CLI capability probe failed — using defaults:', e instanceof Error ? e.message : String(e));
+    return UNKNOWN_CAPABILITIES;
+  }
 }
 
 /**

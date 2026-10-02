@@ -273,6 +273,7 @@ export class ContextGenerationModal extends Modal {
       vaultRoot: this.vaultRoot,
       env: this.env,
       permissionMode: 'standard',
+      capabilities: this.plugin.cliCapabilities,
     });
 
     let cancelled = false;

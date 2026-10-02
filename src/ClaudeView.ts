@@ -25,6 +25,7 @@ import { CLAUDE_MODELS, ClaudeModel, DEFAULT_MODEL_ID } from './settings';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError } from './utils/apiError';
+import { formatCliVersion } from './utils/cliCapabilities';
 import {
   StoredSession,
   InjectedContext,
@@ -167,6 +168,7 @@ export class ClaudeView extends ItemView {
         await this.plugin.saveSettings();
       },
       isUiBridgeEnabled: () => this.plugin.settings.uiBridgeEnabled,
+      getCliCapabilities: () => this.plugin.cliCapabilities,
     });
     this._setupCoordinatorEvents();
     this.tokenGauge = new TokenGauge({
@@ -644,6 +646,11 @@ export class ClaudeView extends ItemView {
 
   getEffectivePermissionMode(): PermissionMode {
     return this.coordinator.getEffectivePermissionMode();
+  }
+
+  /** Called by the plugin when the CLI capability probe finishes. */
+  onCliCapabilitiesChanged(): void {
+    log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.cliCapabilities));
   }
 
   onSettingsChanged(): void {
@@ -1453,6 +1460,7 @@ export class ClaudeView extends ItemView {
     checkBtn.addEventListener('click', () => {
       this.plugin.claudeBinaryPath = findClaudeBinary(this.plugin.settings.binaryPath);
       if (this.plugin.claudeBinaryPath) {
+        void this.plugin.refreshCliCapabilities();
         void this.onOpen();
       } else {
         const err = card.createEl('p', {
