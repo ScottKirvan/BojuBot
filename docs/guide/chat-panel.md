@@ -17,7 +17,7 @@ Starting a new session (or opening the panel with no active conversation) shows 
 
 ## About Dialog
 
-Open the **About DIalog** by clicking the **About BojuBot** icon in the toolbar, or by using the the **BojuBot: About** command. 
+Open the **About DIalog** by clicking the **About BojuBot** icon in the toolbar, or by using the the **BojuBot: About** command. The dialog shows the BojuBot version and the installed Claude Code CLI version ("Claude Code: unknown" if the CLI couldn't be checked).
  
  ![](images/about_dialog.png)
 

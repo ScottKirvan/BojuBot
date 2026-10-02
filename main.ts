@@ -4,7 +4,8 @@ import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
-import { findClaudeBinary, PermissionMode } from './src/ClaudeProcess';
+import { findClaudeBinary, probeCliCapabilities, PermissionMode } from './src/ClaudeProcess';
+import { CliCapabilities, UNKNOWN_CAPABILITIES } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
@@ -20,6 +21,9 @@ export default class BojuBotPlugin extends Plugin {
   brand: ResolvedBrand = resolveBrand(undefined);
   shellEnv: Record<string, string> = {};
   claudeBinaryPath: string | null = null;
+  /** What the installed CLI supports. Unknown until the async probe finishes (or if it fails). */
+  cliCapabilities: CliCapabilities = UNKNOWN_CAPABILITIES;
+  private cliProbeSeq = 0;
   private skillCommandIds = new Set<string>();
 
   /** Recompute the resolved brand and mirror it to the module-level accessor. */
@@ -61,8 +65,12 @@ export default class BojuBotPlugin extends Plugin {
       })
     );
 
-    void resolveShellEnv().then(env => { this.shellEnv = env; });
     this.claudeBinaryPath = findClaudeBinary(this.settings.binaryPath);
+    // Probe after the shell env resolves — on Mac/Linux claude may need its PATH.
+    void resolveShellEnv().then(env => {
+      this.shellEnv = env;
+      void this.refreshCliCapabilities();
+    });
 
     if (!this.claudeBinaryPath) {
       new Notice(`${this.brand.name}: Claude binary not found. Check plugin settings.`);
@@ -425,6 +433,24 @@ export default class BojuBotPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     this.refreshBrand();
+  }
+
+  /**
+   * Re-probe the CLI at claudeBinaryPath. Call after (re-)detecting the binary.
+   * Capabilities reset to unknown immediately, so turns started while the probe
+   * runs use the default args; a stale probe (binary changed again) is discarded.
+   */
+  async refreshCliCapabilities(): Promise<void> {
+    const seq = ++this.cliProbeSeq;
+    this.cliCapabilities = UNKNOWN_CAPABILITIES;
+    const binary = this.claudeBinaryPath;
+    if (!binary) return;
+    const env = Object.keys(this.shellEnv).length ? this.shellEnv : { ...process.env } as Record<string, string>;
+    const caps = await probeCliCapabilities(binary, env, this.getVaultRoot());
+    if (seq !== this.cliProbeSeq) return;
+    this.cliCapabilities = caps;
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (leaves.length) (leaves[0].view as ClaudeView).onCliCapabilitiesChanged();
   }
 
   notifyPermissionChanged(): void {

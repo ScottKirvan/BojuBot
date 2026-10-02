@@ -23,6 +23,7 @@ import {
 } from './utils/sessionStorage';
 import { log } from './utils/logger';
 import type { ApiError } from './utils/apiError';
+import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -36,6 +37,9 @@ export interface SessionCoordinatorHost {
   getSessionsDir(): string;
   saveLastActiveSessionId(id: string): Promise<void>;
   isUiBridgeEnabled(): boolean;
+  /** What the installed CLI supports. Optional — omitted (or before the probe
+   *  finishes) means unknown, which keeps spawn args at their defaults. */
+  getCliCapabilities?(): CliCapabilities;
 }
 
 // ── Event payload types ──────────────────────────────────────────────────────
@@ -149,6 +153,11 @@ export class SessionCoordinator {
   get suppressVaultContext(): boolean { return this._suppressVaultContext; }
   get sessionModel(): string | undefined { return this._sessionModel; }
   get rawSession(): boolean { return this._rawSession; }
+
+  /** Read fresh on every spawn so a probe that finishes mid-session applies from the next turn. */
+  get capabilities(): CliCapabilities {
+    return this.host.getCliCapabilities?.() ?? UNKNOWN_CAPABILITIES;
+  }
 
   /** Session-level overrides (Custom Session) win over the global default, but a
    *  runtime denial-card upgrade (setPermissionOverride) always wins over both —
@@ -321,6 +330,7 @@ export class SessionCoordinator {
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
         model: this._sessionModel || this.host.getModel() || undefined,
+        capabilities: this.capabilities,
       });
     } catch (e) {
       onError(`Failed to start claude: ${e}`);
@@ -365,6 +375,7 @@ export class SessionCoordinator {
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
         model: this._sessionModel || this.host.getModel() || undefined,
+        capabilities: this.capabilities,
       });
       this._activeProc = proc;
     } catch (e) {

@@ -22,6 +22,7 @@ import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
+import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
@@ -308,6 +309,205 @@ describe('permissionArgs', () => {
     for (const mode of ['standard', 'readonly', 'full', 'restricted'] as const) {
       assert.ok(!permissionArgs(mode).some(a => a.includes('dangerously')));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI capability detection — fixtures are trimmed real `claude --help` output
+// ---------------------------------------------------------------------------
+
+const HELP_2_1_286 = [
+  'Usage: claude [options] [command] [prompt]',
+  '',
+  'Claude Code - starts an interactive session by default, use -p/--print for',
+  'non-interactive output',
+  '',
+  'Arguments:',
+  '  prompt                                Your prompt',
+  '',
+  'Options:',
+  '  --add-dir <directories...>            Additional directories to allow tool',
+  '                                        access to',
+  '  --allowedTools, --allowed-tools <tools...>',
+  '      Comma or space-separated list of tool names to allow (e.g. "Bash(git *)',
+  '      Edit")',
+  '  -c, --continue                        Continue the most recent conversation in',
+  '                                        the current directory',
+  '  --effort <level>                      Effort level for the current session',
+  '                                        (low, medium, high, xhigh, max)',
+  '  --include-partial-messages            Include partial message chunks as they',
+  '                                        arrive (only works with --print and',
+  '                                        --output-format=stream-json)',
+  '  --model <model>                       Model for the current session. Provide',
+  '                                        an alias for the latest model (e.g.',
+  "                                        'fable', 'opus', or 'sonnet') or a",
+  "                                        model's full name.",
+  '  --no-session-persistence              Disable session persistence - sessions',
+  '                                        will not be saved to disk and cannot be',
+  '                                        resumed (only works with --print)',
+  '  --output-format <format>              Output format (only works with --print):',
+  '                                        "text" (default), "json" (single',
+  '                                        result), or "stream-json" (realtime',
+  '                                        streaming) (choices: "text", "json",',
+  '                                        "stream-json")',
+  '  --permission-mode <mode>              Permission mode to use for the session',
+  '                                        (choices: "acceptEdits", "auto",',
+  '                                        "bypassPermissions", "manual",',
+  '                                        "dontAsk", "plan")',
+  '  --permission-prompts <target>         Who answers permission prompts with',
+  '                                        --print: "host" (the SDK host or',
+  '                                        --permission-prompt-tool) or "none"',
+  '                                        (nobody: anything that would prompt is',
+  '                                        denied automatically; the permission',
+  '                                        mode still decides everything else)',
+  '                                        (choices: "host", "none", default:',
+  '                                        "host")',
+  '  -p, --print                           Print response and exit (useful for',
+  '                                        pipes).',
+  '  -r, --resume [value]                  Resume a conversation by session ID, or',
+  '                                        open interactive picker with optional',
+  '                                        search term',
+  '  --verbose                             Override verbose mode setting from',
+  '                                        config',
+  '  -v, --version                         Output the version number',
+  '',
+  'Commands:',
+  '  agents [options]                      Manage background agents',
+  '  attach <id>                           Open a background session in this',
+  '                                        terminal. <id> is the short id that',
+  '                                        `claude --bg` prints and `claude agents`',
+  '                                        lists',
+].join('\n');
+
+// Older CLI: no effort / partial messages / permission-prompts, `default` mode listed.
+const HELP_OLD = [
+  'Usage: claude [options] [command] [prompt]',
+  '',
+  'Options:',
+  '  --allowedTools, --allowed-tools <tools...>  Comma or space-separated list of tool names to allow (e.g. "Bash(git:*) Edit")',
+  '  --model <model>                             Model for the current session.',
+  '  --output-format <format>                    Output format (only works with --print): "text" (default), "json" (single result), or "stream-json" (realtime streaming) (choices: "text", "json", "stream-json")',
+  '  --permission-mode <mode>                    Permission mode to use for the session (choices: "acceptEdits", "bypassPermissions", "default", "plan")',
+  '  -p, --print                                 Print response and exit (useful for pipes).',
+  '  -r, --resume [sessionId]                    Resume a conversation - provide a session ID or interactively select a conversation to resume',
+  '  --verbose                                   Override verbose mode setting from config',
+].join('\n');
+
+const CAPS_2_1_286 = parseCliCapabilities(HELP_2_1_286, '2.1.286 (Claude Code)\n');
+const CAPS_OLD = parseCliCapabilities(HELP_OLD, '2.1.70 (Claude Code)');
+
+describe('parseCliCapabilities', () => {
+  test('reads the version from --version output', () => {
+    assert.equal(CAPS_2_1_286.version, '2.1.286');
+    assert.equal(CAPS_OLD.version, '2.1.70');
+  });
+
+  test('collects every long flag, including aliases on the same option line', () => {
+    for (const flag of [
+      '--effort', '--include-partial-messages', '--permission-mode', '--permission-prompts',
+      '--no-session-persistence', '--model', '--resume', '--allowedTools', '--allowed-tools',
+      '--continue', '--print', '--verbose', '--version', '--add-dir',
+    ]) {
+      assert.ok(has(CAPS_2_1_286, flag), `missing ${flag}`);
+    }
+  });
+
+  test('ignores flags mentioned inside descriptions and in the Commands section', () => {
+    assert.ok(!has(CAPS_2_1_286, '--output-format=stream-json'));
+    assert.ok(!has(CAPS_2_1_286, '--permission-prompt-tool'));
+    assert.ok(!has(CAPS_2_1_286, '--bg'));
+  });
+
+  test('parses permission-mode choices that wrap across lines', () => {
+    assert.deepEqual([...CAPS_2_1_286.permissionModes], ['acceptEdits', 'auto', 'bypassPermissions', 'manual', 'dontAsk', 'plan']);
+  });
+
+  test('parses effort levels from the bare parenthesised list', () => {
+    assert.deepEqual([...CAPS_2_1_286.effortLevels], ['low', 'medium', 'high', 'xhigh', 'max']);
+  });
+
+  test('older CLI: no new flags, default mode listed, no effort levels', () => {
+    assert.ok(has(CAPS_OLD, '--permission-mode'));
+    assert.ok(has(CAPS_OLD, '--allowed-tools'));
+    assert.ok(!has(CAPS_OLD, '--effort'));
+    assert.ok(!has(CAPS_OLD, '--include-partial-messages'));
+    assert.ok(!has(CAPS_OLD, '--permission-prompts'));
+    assert.ok(!has(CAPS_OLD, '--no-session-persistence'));
+    assert.deepEqual([...CAPS_OLD.permissionModes], ['acceptEdits', 'bypassPermissions', 'default', 'plan']);
+    assert.deepEqual([...CAPS_OLD.effortLevels], []);
+  });
+
+  test('handles CRLF line endings', () => {
+    const caps = parseCliCapabilities(HELP_2_1_286.replace(/\n/g, '\r\n'), '2.1.286 (Claude Code)\r\n');
+    assert.deepEqual([...caps.permissionModes], [...CAPS_2_1_286.permissionModes]);
+    assert.ok(has(caps, '--effort'));
+  });
+
+  test('effort levels in commander choices form are read too', () => {
+    const caps = parseCliCapabilities('Options:\n  --effort <level>   Effort (choices: "low", "high")\n', '');
+    assert.deepEqual([...caps.effortLevels], ['low', 'high']);
+    assert.equal(caps.version, null);
+  });
+
+  test('garbage or empty input yields unknown capabilities', () => {
+    for (const [help, version] of [['', ''], ['command not found', 'claude: error'], ['{"type":"result"}', 'v?']]) {
+      const caps = parseCliCapabilities(help, version);
+      assert.equal(caps, UNKNOWN_CAPABILITIES);
+      assert.equal(caps.version, null);
+      assert.equal(caps.flags.size, 0);
+      assert.deepEqual([...caps.permissionModes], []);
+      assert.deepEqual([...caps.effortLevels], []);
+    }
+  });
+
+  test('version alone (help failed) is still reported', () => {
+    const caps = parseCliCapabilities('', '2.1.286 (Claude Code)');
+    assert.equal(caps.version, '2.1.286');
+    assert.equal(caps.flags.size, 0);
+  });
+});
+
+describe('formatCliVersion', () => {
+  test('names the version when known', () => {
+    assert.equal(formatCliVersion(CAPS_2_1_286), 'Claude Code 2.1.286');
+  });
+
+  test('says unknown otherwise', () => {
+    assert.equal(formatCliVersion(UNKNOWN_CAPABILITIES), 'unknown');
+  });
+});
+
+describe('permissionArgs with CLI capabilities', () => {
+  const ALL = ['standard', 'readonly', 'full', 'restricted'] as const;
+
+  test('unknown capabilities produce exactly the long-standing args', () => {
+    assert.deepEqual(permissionArgs('standard', UNKNOWN_CAPABILITIES), ['--permission-mode', 'acceptEdits']);
+    assert.deepEqual(permissionArgs('readonly', UNKNOWN_CAPABILITIES), ['--permission-mode', 'default', '--allowedTools', 'Read,Glob,Grep,WebFetch,WebSearch']);
+    assert.deepEqual(permissionArgs('restricted', UNKNOWN_CAPABILITIES), ['--permission-mode', 'default', '--allowedTools', 'WebFetch,WebSearch']);
+    assert.deepEqual(permissionArgs('full', UNKNOWN_CAPABILITIES), ['--permission-mode', 'bypassPermissions']);
+  });
+
+  test('omitting capabilities is the same as unknown', () => {
+    for (const mode of ALL) assert.deepEqual(permissionArgs(mode), permissionArgs(mode, UNKNOWN_CAPABILITIES));
+  });
+
+  test('readonly and restricted use manual when the CLI lists it', () => {
+    assert.deepEqual(permissionArgs('readonly', CAPS_2_1_286).slice(0, 4), ['--permission-mode', 'manual', '--allowedTools', 'Read,Glob,Grep,WebFetch,WebSearch']);
+    assert.deepEqual(permissionArgs('restricted', CAPS_2_1_286).slice(0, 4), ['--permission-mode', 'manual', '--allowedTools', 'WebFetch,WebSearch']);
+  });
+
+  test('standard and full keep their modes on a new CLI', () => {
+    assert.deepEqual(permissionArgs('standard', CAPS_2_1_286).slice(0, 2), ['--permission-mode', 'acceptEdits']);
+    assert.deepEqual(permissionArgs('full', CAPS_2_1_286).slice(0, 2), ['--permission-mode', 'bypassPermissions']);
+  });
+
+  test('older CLI listing only default keeps default', () => {
+    assert.deepEqual(permissionArgs('readonly', CAPS_OLD), permissionArgs('readonly'));
+    assert.deepEqual(permissionArgs('restricted', CAPS_OLD), permissionArgs('restricted'));
+  });
+
+  test('default is never sent once manual is available', () => {
+    for (const mode of ALL) assert.ok(!permissionArgs(mode, CAPS_2_1_286).includes('default'), mode);
   });
 });
 
