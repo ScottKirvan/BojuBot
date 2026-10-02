@@ -22,6 +22,7 @@ import {
   titleFromPrompt,
 } from './utils/sessionStorage';
 import { log } from './utils/logger';
+import type { ApiError } from './utils/apiError';
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -76,6 +77,8 @@ export interface SessionCoordinatorEvents {
   'turn:query': [query: VaultQuery];
   /** Fired when token-usage data arrives. */
   'turn:usage': [usage: TokenUsage];
+  /** Fired when the CLI reports an API error for this turn (turn:done still follows). */
+  'turn:api-error': [err: ApiError];
   /** Fired for stderr output (non-fatal; process continues). */
   'turn:stderr': [err: string];
   /** Fired when the process exits abnormally (fatal; no turn:done follows). */
@@ -414,6 +417,9 @@ export class SessionCoordinator {
       },
       onUsage: (usage) => {
         this.emit('turn:usage', usage);
+      },
+      onApiError: (err) => {
+        this.emit('turn:api-error', err);
       },
       onError: (err) => {
         this.emit('turn:stderr', err);

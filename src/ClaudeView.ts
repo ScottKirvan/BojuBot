@@ -24,6 +24,7 @@ import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { CLAUDE_MODELS, ClaudeModel, DEFAULT_MODEL_ID } from './settings';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
+import { formatApiError, ApiError } from './utils/apiError';
 import {
   StoredSession,
   InjectedContext,
@@ -113,6 +114,7 @@ interface ActiveTurnElements {
   turnInputTokens: number;
   turnCacheTokens: number;
   turnOutputTokens: number;
+  apiError: ApiError | null;
   unlock: () => void;
   isInjectTurn: boolean;
 }
@@ -281,6 +283,13 @@ export class ClaudeView extends ItemView {
       tokenStatsEl.show();
     });
 
+    this.coordinator.on('turn:api-error', (err) => {
+      if (!this._activeTurnEls) return;
+      this._activeTurnEls.apiError = err;
+      // The rejected request reports zero usage — "0 out · 0 in" is just noise
+      this._activeTurnEls.tokenStatsEl.hide();
+    });
+
     this.coordinator.on('turn:stderr', (err) => {
       if (this._activeTurnEls) this._activeTurnEls.statusEl.remove();
       this.appendMessage('system', `stderr: ${err.trim()}`);
@@ -304,12 +313,13 @@ export class ClaudeView extends ItemView {
       if (!this._activeTurnEls) return;
       const {
         assistantEl, statusEl, toolEventsEl, responseGroupEl,
-        toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn,
+        toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError,
       } = this._activeTurnEls;
       this._activeTurnEls = null;
 
       statusEl.remove();
-      if (!result.clean) this.appendMessage('system', 'Interrupted.');
+      // An API error already explains why the turn failed
+      if (!result.clean && !apiError) this.appendMessage('system', 'Interrupted.');
 
       // Collapse tool calls into a toggle
       if (toolCallCount > 0) {
@@ -330,7 +340,9 @@ export class ClaudeView extends ItemView {
       }
 
       // Render assistant response
-      if (!accumulated && uiBridgeActionCount) {
+      if (apiError && !accumulated) {
+        this.renderApiError(assistantEl, apiError);
+      } else if (!accumulated && uiBridgeActionCount) {
         assistantEl.remove();
       } else if (!accumulated) {
         assistantEl.setText('(No response)');
@@ -1246,7 +1258,7 @@ export class ClaudeView extends ItemView {
     this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
       toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '',
-      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0,
+      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null,
       unlock, isInjectTurn: false,
     };
     this.coordinator.send(finalPrompt, prompt);
@@ -1452,6 +1464,13 @@ export class ClaudeView extends ItemView {
         window.setTimeout(() => err.remove(), 6000);
       }
     });
+  }
+
+  private renderApiError(el: HTMLElement, err: ApiError) {
+    const { title, details } = formatApiError(err, process.platform);
+    el.empty();
+    el.createEl('p', { text: title, cls: 'bojubot-setup-step-title' });
+    for (const line of details) el.createEl('p', { text: line, cls: 'bojubot-setup-note' });
   }
 
   private isAuthError(text: string): boolean {
@@ -1675,7 +1694,7 @@ export class ClaudeView extends ItemView {
     this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
       toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '',
-      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0,
+      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null,
       unlock, isInjectTurn: true,
     };
     this.coordinator.send(injectPrompt);
