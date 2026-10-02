@@ -19,6 +19,8 @@ export interface StoredSession {
   permissionMode?: PermissionMode;
   /** Per-session model override, set via Custom Session. Undefined = use the global default. */
   model?: string;
+  /** Per-session `--effort` level, set via Custom Session. Undefined = use the global default. */
+  effort?: string;
   /** Skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge)
    *  for a bare Claude Code experience — the per-session equivalent of global Minimal mode. */
   rawSession?: boolean;

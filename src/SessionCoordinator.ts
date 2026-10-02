@@ -24,6 +24,7 @@ import {
 import { log } from './utils/logger';
 import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
+import { resolveEffort } from './utils/effort';
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ export interface SessionCoordinatorHost {
   getEnv(): Record<string, string>;
   getPermissionMode(): PermissionMode;
   getModel(): string;
+  /** Global default effort level; '' = Default (flag left off). Optional — omitted means ''. */
+  getEffort?(): string;
   getSessionsDir(): string;
   saveLastActiveSessionId(id: string): Promise<void>;
   isUiBridgeEnabled(): boolean;
@@ -109,6 +112,7 @@ export class SessionCoordinator {
   private _suppressVaultContext = false;
   private _sessionPermissionMode: PermissionMode | undefined;
   private _sessionModel: string | undefined;
+  private _sessionEffort: string | undefined;
   private _rawSession = false;
   private _hasCustomTitle = false;
   private _placeholderSessionId: string | undefined;
@@ -152,7 +156,14 @@ export class SessionCoordinator {
   get sessionCwd(): string | undefined { return this._sessionCwd; }
   get suppressVaultContext(): boolean { return this._suppressVaultContext; }
   get sessionModel(): string | undefined { return this._sessionModel; }
+  get sessionEffort(): string | undefined { return this._sessionEffort; }
   get rawSession(): boolean { return this._rawSession; }
+
+  /** The `--effort` level for the next turn (session pin, then global default),
+   *  or undefined when it's Default or the installed CLI doesn't list it. */
+  getEffectiveEffort(): string | undefined {
+    return resolveEffort(this._sessionEffort, this.host.getEffort?.() ?? '', this.capabilities.effortLevels);
+  }
 
   /** Read fresh on every spawn so a probe that finishes mid-session applies from the next turn. */
   get capabilities(): CliCapabilities {
@@ -190,6 +201,8 @@ export class SessionCoordinator {
     suppressVaultContext?: boolean;
     permissionMode?: PermissionMode;
     model?: string;
+    /** '' or omitted = no pin (follows the global default). */
+    effort?: string;
     rawSession?: boolean;
   }): void {
     this._permissionOverride = null;
@@ -201,6 +214,7 @@ export class SessionCoordinator {
     const suppressVaultContext = custom?.suppressVaultContext ?? false;
     const permissionMode = custom?.permissionMode;
     const model = custom?.model?.trim() || undefined;
+    const effort = custom?.effort?.trim() || undefined;
     const rawSession = custom?.rawSession ?? false;
 
     const session: StoredSession = {
@@ -213,6 +227,7 @@ export class SessionCoordinator {
       ...(suppressVaultContext && { suppressVaultContext }),
       ...(permissionMode && { permissionMode }),
       ...(model && { model }),
+      ...(effort && { effort }),
       ...(rawSession && { rawSession }),
     };
 
@@ -226,6 +241,7 @@ export class SessionCoordinator {
     this._suppressVaultContext = suppressVaultContext;
     this._sessionPermissionMode = permissionMode;
     this._sessionModel = model;
+    this._sessionEffort = effort;
     this._rawSession = rawSession;
     this._hasCustomTitle = !!custom?.name?.trim();
     void this.host.saveLastActiveSessionId(sessionId);
@@ -256,6 +272,15 @@ export class SessionCoordinator {
     if (this._sessionModel) this._sessionModel = modelId;
   }
 
+  /**
+   * Mid-session effort switch — same rule as switchSessionModel: only a pinned
+   * session needs updating. Switching a pinned session to Default ('') drops the
+   * pin, so the session follows the (now Default) global setting.
+   */
+  switchSessionEffort(level: string): void {
+    if (this._sessionEffort) this._sessionEffort = level || undefined;
+  }
+
   async loadSession(session: StoredSession): Promise<void> {
     this._placeholderSessionId = undefined;
     this._sessionId = session.claudeSessionId || undefined;
@@ -266,6 +291,7 @@ export class SessionCoordinator {
     this._suppressVaultContext = session.suppressVaultContext ?? false;
     this._sessionPermissionMode = session.permissionMode;
     this._sessionModel = session.model;
+    this._sessionEffort = session.effort || undefined;
     this._rawSession = session.rawSession ?? false;
     this._hasCustomTitle = false;
 
@@ -330,6 +356,7 @@ export class SessionCoordinator {
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
         model: this._sessionModel || this.host.getModel() || undefined,
+        effort: this.getEffectiveEffort(),
         capabilities: this.capabilities,
       });
     } catch (e) {
@@ -375,6 +402,7 @@ export class SessionCoordinator {
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
         model: this._sessionModel || this.host.getModel() || undefined,
+        effort: this.getEffectiveEffort(),
         capabilities: this.capabilities,
       });
       this._activeProc = proc;
@@ -479,6 +507,7 @@ export class SessionCoordinator {
         ...(this._suppressVaultContext && { suppressVaultContext: true }),
         ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
         ...(this._sessionModel && { model: this._sessionModel }),
+        ...(this._sessionEffort && { effort: this._sessionEffort }),
         ...(this._rawSession && { rawSession: true }),
       }, sessionsDir);
       const placeholderId = this._placeholderSessionId;
@@ -504,6 +533,7 @@ export class SessionCoordinator {
         ...(this._suppressVaultContext && { suppressVaultContext: true }),
         ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
         ...(this._sessionModel && { model: this._sessionModel }),
+        ...(this._sessionEffort && { effort: this._sessionEffort }),
         ...(this._rawSession && { rawSession: true }),
       }, sessionsDir);
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
@@ -522,6 +552,7 @@ export class SessionCoordinator {
         ...(this._suppressVaultContext && { suppressVaultContext: true }),
         ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
         ...(this._sessionModel && { model: this._sessionModel }),
+        ...(this._sessionEffort && { effort: this._sessionEffort }),
         ...(this._rawSession && { rawSession: true }),
       }, sessionsDir);
     }

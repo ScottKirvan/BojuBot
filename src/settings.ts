@@ -90,6 +90,8 @@ export interface BojuBotSettings {
   userLabel: string;
   /** Claude model ID passed via --model at spawn time. Empty = Claude default (Sonnet). */
   defaultModel: string;
+  /** `--effort` level for new turns. '' = Default (flag left off, the CLI decides). Only sent if the CLI lists it. */
+  defaultEffort: string;
   /** Count of new-session creations (not sessions saved). Drives the periodic sponsorship welcome variant. */
   sessionCreationCount: number;
   /** User opt-out of the periodic sponsorship welcome variant. Always hidden/off on white-labeled installs regardless of this value. */
@@ -132,6 +134,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   minimalMode: false,
   userLabel: '',
   defaultModel: DEFAULT_MODEL_ID,
+  defaultEffort: '',
   sessionCreationCount: 0,
   hideSponsorshipMessages: false,
 };

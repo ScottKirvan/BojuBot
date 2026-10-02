@@ -22,6 +22,7 @@ Obsidian namespaces every plugin command as `<plugin-id>:<command-id>`. BojuBot'
 | **BojuBot: New session**            | `new-session`             | Start a fresh conversation. The current session is saved automatically.                 |
 | **BojuBot: Clear current session**  | `clear-session`           | Clear all messages from the current session. Context is re-injected on the next message. |
 | **BojuBot: Switch model**           | `switch-model`            | Open the model picker. The current session continues with the new model — see [Model Indicator](./chat-panel#model-indicator). |
+| **BojuBot: Switch effort**          | `switch-effort`           | Open the effort picker (Default / low / medium / high / …). Takes effect on the next message — see [Effort](./chat-panel#effort). Only listed when your Claude Code CLI supports effort levels. |
 | **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to switch the active permission mode (Chat only / Read only / Standard / Full access). Takes effect on the next message. |
 
 ## Context & Memory

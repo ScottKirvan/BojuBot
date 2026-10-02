@@ -5,7 +5,7 @@ import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { findClaudeBinary, probeCliCapabilities, PermissionMode } from './src/ClaudeProcess';
-import { CliCapabilities, UNKNOWN_CAPABILITIES } from './src/utils/cliCapabilities';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
@@ -257,6 +257,27 @@ export default class BojuBotPlugin extends Plugin {
             if (leaves.length) (leaves[0].view as ClaudeView).openModelPicker();
           });
         }
+      },
+    });
+
+    this.addCommand({
+      id: 'switch-effort',
+      name: 'Switch effort',
+      // Hidden from the palette when the installed CLI doesn't support --effort.
+      checkCallback: (checking) => {
+        const caps = this.cliCapabilities;
+        if (!has(caps, '--effort') || caps.effortLevels.length === 0) return false;
+        if (checking) return true;
+        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+        if (existing.length) {
+          (existing[0].view as ClaudeView).openEffortPicker();
+        } else {
+          void this.activateView().then(() => {
+            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+            if (leaves.length) (leaves[0].view as ClaudeView).openEffortPicker();
+          });
+        }
+        return true;
       },
     });
 

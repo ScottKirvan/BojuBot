@@ -156,25 +156,41 @@ export interface SpawnOptions {
   resumeSessionId?: string;
   permissionMode?: PermissionMode;
   model?: string;
+  /** `--effort` level. Dropped unless the CLI listed it in `capabilities`. */
+  effort?: string;
   /** What the installed CLI supports. Omitted → unknown → the long-standing default args. */
   capabilities?: CliCapabilities;
 }
 
-export function spawnClaude(opts: SpawnOptions): ChildProcess {
+/** CLI args for a chat turn. Pure — exported for tests. Never includes the prompt. */
+export function buildSpawnArgs(
+  opts: Pick<SpawnOptions, 'resumeSessionId' | 'permissionMode' | 'model' | 'effort' | 'capabilities'>,
+): string[] {
+  const caps = opts.capabilities ?? UNKNOWN_CAPABILITIES;
   const args = [
     '--output-format', 'stream-json',
     '--verbose',
     '--print',
-    ...permissionArgs(opts.permissionMode ?? 'standard', opts.capabilities),
+    ...permissionArgs(opts.permissionMode ?? 'standard', caps),
   ];
 
   if (opts.model) {
     args.push('--model', opts.model);
   }
 
+  // Only ever a level the installed CLI listed in --help.
+  if (opts.effort && has(caps, '--effort') && caps.effortLevels.includes(opts.effort)) {
+    args.push('--effort', opts.effort);
+  }
+
   if (opts.resumeSessionId) {
     args.push('--resume', opts.resumeSessionId);
   }
+  return args;
+}
+
+export function spawnClaude(opts: SpawnOptions): ChildProcess {
+  const args = buildSpawnArgs(opts);
   // Prompt is written to stdin after spawn — avoids all shell/arg quoting issues.
 
   LOG('spawnClaude cwd:', opts.vaultRoot, 'session:', opts.resumeSessionId ?? 'new');

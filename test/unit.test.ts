@@ -19,7 +19,8 @@ import { EventEmitter } from 'node:events';
 
 import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, ChatMessage } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
-import { parseStreamOutput, permissionArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
+import { parseStreamOutput, permissionArgs, buildSpawnArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
+import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
@@ -527,6 +528,32 @@ describe('permissionArgs with CLI capabilities', () => {
   test('repeated calls do not accumulate flags', () => {
     permissionArgs('standard', CAPS_2_1_286);
     assert.equal(permissionArgs('standard', CAPS_2_1_286).filter(a => a === '--permission-prompts').length, 1);
+  });
+});
+
+describe('buildSpawnArgs', () => {
+  test('unknown capabilities produce the long-standing args byte-for-byte', () => {
+    assert.deepEqual(
+      buildSpawnArgs({ permissionMode: 'standard', model: 'claude-sonnet-5-5', resumeSessionId: 'abc', effort: 'high' }),
+      ['--output-format', 'stream-json', '--verbose', '--print', '--permission-mode', 'acceptEdits', '--model', 'claude-sonnet-5-5', '--resume', 'abc'],
+    );
+  });
+
+  test('effort goes after --model and before --resume when the CLI lists it', () => {
+    assert.deepEqual(
+      buildSpawnArgs({ permissionMode: 'full', model: 'claude-haiku-4-5', resumeSessionId: 'abc', effort: 'high', capabilities: CAPS_2_1_286 }),
+      ['--output-format', 'stream-json', '--verbose', '--print', '--permission-mode', 'bypassPermissions', '--permission-prompts', 'none',
+        '--model', 'claude-haiku-4-5', '--effort', 'high', '--resume', 'abc'],
+    );
+  });
+
+  test('an unlisted effort level is never sent', () => {
+    assert.ok(!buildSpawnArgs({ effort: 'ultra', capabilities: CAPS_2_1_286 }).includes('--effort'));
+    assert.ok(!buildSpawnArgs({ effort: 'high', capabilities: CAPS_OLD }).includes('--effort'));
+  });
+
+  test('no effort, no flag', () => {
+    assert.ok(!buildSpawnArgs({ capabilities: CAPS_2_1_286 }).includes('--effort'));
   });
 });
 
@@ -1434,7 +1461,7 @@ describe('resolveShellEnv', () => {
 // _activeProc truthy — there's no way to inject a fake spawnClaude today.
 // ---------------------------------------------------------------------------
 
-function makeTestHost(sessionsDir: string): SessionCoordinatorHost {
+function makeTestHost(sessionsDir: string, overrides: Partial<SessionCoordinatorHost> = {}): SessionCoordinatorHost {
   return {
     getBinaryPath: () => process.execPath,
     getVaultRoot: () => sessionsDir,
@@ -1445,6 +1472,7 @@ function makeTestHost(sessionsDir: string): SessionCoordinatorHost {
     getSessionsDir: () => sessionsDir,
     saveLastActiveSessionId: async () => { /* no-op */ },
     isUiBridgeEnabled: () => false,
+    ...overrides,
   };
 }
 
@@ -1613,6 +1641,151 @@ describe('SessionCoordinator session-level overrides (Custom Session)', () => {
     } finally {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
+  });
+});
+
+describe('resolveEffort', () => {
+  const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+  test('session pin wins over the global default', () => {
+    assert.equal(resolveEffort('low', 'high', LEVELS), 'low');
+  });
+
+  test('falls back to the global default with no pin', () => {
+    assert.equal(resolveEffort(undefined, 'high', LEVELS), 'high');
+    assert.equal(resolveEffort('', 'high', LEVELS), 'high');
+  });
+
+  test('Default everywhere means no flag', () => {
+    assert.equal(resolveEffort(undefined, '', LEVELS), undefined);
+  });
+
+  test('a level the CLI did not list is dropped, never sent', () => {
+    assert.equal(resolveEffort('ultra', '', LEVELS), undefined);
+    assert.equal(resolveEffort(undefined, 'ultra', LEVELS), undefined);
+  });
+
+  test('an unsupported pin does not fall through to the global default', () => {
+    assert.equal(resolveEffort('ultra', 'high', LEVELS), undefined);
+  });
+
+  test('nothing is sent when the CLI lists no levels', () => {
+    assert.equal(resolveEffort('high', 'high', []), undefined);
+  });
+});
+
+describe('modelIndicatorText', () => {
+  test('appends the level when one applies', () => {
+    assert.equal(modelIndicatorText('Claude Sonnet 5.5', 'high'), 'Claude Sonnet 5.5 · high');
+  });
+
+  test('shows just the model at Default', () => {
+    assert.equal(modelIndicatorText('Claude Sonnet 5.5', undefined), 'Claude Sonnet 5.5');
+    assert.equal(modelIndicatorText('Claude Sonnet 5.5', ''), 'Claude Sonnet 5.5');
+  });
+});
+
+describe('SessionCoordinator effort (session pin + global default)', () => {
+  const withCoordinator = async (
+    overrides: Partial<SessionCoordinatorHost>,
+    fn: (c: SessionCoordinator, dir: string) => void | Promise<void>,
+  ) => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      await fn(new SessionCoordinator(makeTestHost(sessionsDir, { getCliCapabilities: () => CAPS_2_1_286, ...overrides })), sessionsDir);
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  };
+
+  test('custom session effort pins the session and wins over the global default', async () => {
+    await withCoordinator({ getEffort: () => 'high' }, (c) => {
+      c.startNewSession({ effort: 'low' });
+      assert.equal(c.sessionEffort, 'low');
+      assert.equal(c.getEffectiveEffort(), 'low');
+    });
+  });
+
+  test('no pin follows the global default', async () => {
+    await withCoordinator({ getEffort: () => 'high' }, (c) => {
+      c.startNewSession();
+      assert.equal(c.sessionEffort, undefined);
+      assert.equal(c.getEffectiveEffort(), 'high');
+    });
+  });
+
+  test('custom session left at Default creates no pin', async () => {
+    await withCoordinator({ getEffort: () => 'medium' }, (c) => {
+      c.startNewSession({ effort: '' });
+      assert.equal(c.sessionEffort, undefined);
+      assert.equal(c.getEffectiveEffort(), 'medium');
+    });
+  });
+
+  test('host without getEffort means Default', async () => {
+    await withCoordinator({}, (c) => {
+      c.startNewSession();
+      assert.equal(c.getEffectiveEffort(), undefined);
+    });
+  });
+
+  test('unknown capabilities never yield an effort, even when pinned', async () => {
+    await withCoordinator({ getCliCapabilities: () => UNKNOWN_CAPABILITIES, getEffort: () => 'high' }, (c) => {
+      c.startNewSession({ effort: 'low' });
+      assert.equal(c.getEffectiveEffort(), undefined);
+    });
+  });
+
+  test('switchSessionEffort updates a pinned session', async () => {
+    await withCoordinator({}, (c) => {
+      c.startNewSession({ effort: 'low' });
+      c.switchSessionEffort('max');
+      assert.equal(c.sessionEffort, 'max');
+      assert.equal(c.getEffectiveEffort(), 'max');
+    });
+  });
+
+  test('switchSessionEffort to Default drops the pin', async () => {
+    let global = 'low';
+    await withCoordinator({ getEffort: () => global }, (c) => {
+      c.startNewSession({ effort: 'low' });
+      global = '';
+      c.switchSessionEffort('');
+      assert.equal(c.sessionEffort, undefined);
+      assert.equal(c.getEffectiveEffort(), undefined);
+    });
+  });
+
+  test('switchSessionEffort leaves an unpinned session following the global default', async () => {
+    await withCoordinator({ getEffort: () => 'xhigh' }, (c) => {
+      c.startNewSession();
+      c.switchSessionEffort('xhigh');
+      assert.equal(c.sessionEffort, undefined, 'no pin created');
+      assert.equal(c.getEffectiveEffort(), 'xhigh');
+    });
+  });
+
+  test('the pin is persisted in the session file and restored by loadSession', async () => {
+    await withCoordinator({}, async (c, dir) => {
+      c.startNewSession({ effort: 'high' });
+      const stored = loadAllSessions(dir, dir, '.obsidian').find(s => s.id === c.sessionFileId);
+      assert.ok(stored);
+      assert.equal(stored.effort, 'high');
+
+      const fresh = new SessionCoordinator(makeTestHost(dir, { getCliCapabilities: () => CAPS_2_1_286 }));
+      await fresh.loadSession(stored);
+      assert.equal(fresh.sessionEffort, 'high');
+      assert.equal(fresh.getEffectiveEffort(), 'high');
+    });
+  });
+
+  test('an unpinned session stores no effort field', async () => {
+    await withCoordinator({ getEffort: () => 'high' }, (c, dir) => {
+      c.startNewSession();
+      const stored = loadAllSessions(dir, dir, '.obsidian').find(s => s.id === c.sessionFileId);
+      assert.ok(stored);
+      assert.equal('effort' in stored, false);
+    });
   });
 });
 
