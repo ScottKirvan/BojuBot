@@ -5,6 +5,7 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import { spawn, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from './utils/logger';
+import { parseApiError, ApiError } from './utils/apiError';
 export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';
 
 export interface PermissionDenial {
@@ -238,6 +239,9 @@ export interface StreamCallbacks {
   onQuery?: (line: string) => void;
   onToolCall: (tool: string, input: unknown, toolUseId: string) => void;
   onToolResult?: (toolUseId: string, content: string) => void;
+  /** Called when the CLI reports an API error (synthetic `API Error: ...` message).
+   *  Optional — without it the error text is passed to onText as before. */
+  onApiError?: (err: ApiError) => void;
   onPermissionDenied: (denials: PermissionDenial[]) => void;
   onUsage: (usage: TokenUsage) => void;
   onDone: (sessionId?: string, clean?: boolean) => void;
@@ -306,6 +310,13 @@ function handleMessage(
         for (const block of content) {
           if (block.type === 'text') {
             const raw = (block.text as string) ?? '';
+            // API failures arrive as a synthetic assistant message, not as model output
+            const apiError = message?.model === '<synthetic>' && cb.onApiError ? parseApiError(raw) : null;
+            if (apiError) {
+              WARN('API error:', apiError.raw);
+              cb.onApiError?.(apiError);
+              continue;
+            }
             // Route @@BOJU lines; dispatch on JSON key ("action" vs "query")
             const textLines: string[] = [];
             for (const line of raw.split('\n')) {

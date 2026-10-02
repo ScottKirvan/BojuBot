@@ -21,6 +21,7 @@ import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, delete
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { extractToolDetail } from '../src/utils/toolFormatting';
+import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
@@ -666,6 +667,140 @@ describe('parseStreamOutput', () => {
       'tool:Read',
       'text: Done.',
     ], 'callbacks must fire in stream order: text → tool → text');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseApiError / formatApiError — CLI "API Error: ..." messages
+// ---------------------------------------------------------------------------
+
+// Verbatim text emitted by Claude Code 2.1.70 when a 5.5 model is selected
+const VERSION_TOO_OLD_TEXT = 'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Claude Code 2.1.70 does not support this model; version 2.1.280 or newer is required. Run \'claude update\', or update the Claude desktop app, then try again.","details":{"error_code":"claude_code_version_too_old"}},"request_id":"req_011CfddzTQXYUSS82oneg9Wk"}';
+
+describe('parseApiError', () => {
+  test('parses status, message, and error_code from the CLI payload', () => {
+    const err = parseApiError(VERSION_TOO_OLD_TEXT);
+    assert.ok(err);
+    assert.equal(err.status, 400);
+    assert.equal(err.errorCode, 'claude_code_version_too_old');
+    assert.equal(err.message, "Claude Code 2.1.70 does not support this model; version 2.1.280 or newer is required. Run 'claude update', or update the Claude desktop app, then try again.");
+    assert.equal(err.raw, VERSION_TOO_OLD_TEXT);
+  });
+
+  test('error without details has null errorCode', () => {
+    const err = parseApiError('API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}');
+    assert.ok(err);
+    assert.equal(err.status, 529);
+    assert.equal(err.message, 'Overloaded');
+    assert.equal(err.errorCode, null);
+  });
+
+  test('malformed JSON falls back to the raw remainder', () => {
+    const err = parseApiError('API Error: 500 upstream connect error');
+    assert.ok(err);
+    assert.equal(err.status, 500);
+    assert.equal(err.message, 'upstream connect error');
+    assert.equal(err.errorCode, null);
+  });
+
+  test('missing status code yields null status', () => {
+    const err = parseApiError('API Error: Connection error.');
+    assert.ok(err);
+    assert.equal(err.status, null);
+    assert.equal(err.message, 'Connection error.');
+  });
+
+  test('bare prefix falls back to the full text as message', () => {
+    const err = parseApiError('API Error:');
+    assert.ok(err);
+    assert.equal(err.message, 'API Error:');
+  });
+
+  test('returns null for non-error text', () => {
+    assert.equal(parseApiError('Hello world'), null);
+    assert.equal(parseApiError('The API Error: field is documented here'), null);
+    assert.equal(parseApiError(''), null);
+  });
+});
+
+describe('formatApiError', () => {
+  const tooOld = parseApiError(VERSION_TOO_OLD_TEXT) as ApiError;
+
+  test('version-too-old names both versions and the update command', () => {
+    const d = formatApiError(tooOld, 'darwin');
+    assert.equal(d.title, 'Claude Code needs an update');
+    assert.equal(d.details[0], "Your Claude Code CLI (2.1.70) doesn't support this model. Version 2.1.280 or newer is required.");
+    assert.equal(d.details[1], 'Update it by running "claude update" in a terminal, then send your message again.');
+    assert.equal(d.details[2], 'To keep working in the meantime, switch to an older model.');
+  });
+
+  test('version-too-old mentions winget on Windows only', () => {
+    assert.ok(formatApiError(tooOld, 'win32').details[1].includes('winget upgrade Anthropic.ClaudeCode'));
+    assert.ok(!formatApiError(tooOld, 'linux').details[1].includes('winget'));
+  });
+
+  test('version-too-old with unexpected message wording still gives guidance', () => {
+    const d = formatApiError({ status: 400, message: 'Please upgrade.', errorCode: 'claude_code_version_too_old', raw: '' }, 'linux');
+    assert.equal(d.title, 'Claude Code needs an update');
+    assert.equal(d.details[0], "Your Claude Code CLI doesn't support this model. A newer version is required.");
+  });
+
+  test('generic error shows status and message, no JSON', () => {
+    const d = formatApiError({ status: 529, message: 'Overloaded', errorCode: null, raw: '' }, 'win32');
+    assert.deepEqual(d, { title: 'API error (529)', details: ['Overloaded'] });
+  });
+
+  test('generic error without status omits the code', () => {
+    const d = formatApiError({ status: null, message: 'Connection error.', errorCode: null, raw: '' }, 'win32');
+    assert.deepEqual(d, { title: 'API error', details: ['Connection error.'] });
+  });
+});
+
+describe('parseStreamOutput API errors', () => {
+  function run(lines: object[], withApiErrorCb = true): Promise<{ texts: string[], apiErrors: ApiError[] }> {
+    return new Promise((resolve) => {
+      const proc = mockProc();
+      const texts: string[] = [];
+      const apiErrors: ApiError[] = [];
+      parseStreamOutput(proc, {
+        onText: (t) => texts.push(t),
+        onAction: () => { /* unused */ },
+        onToolCall: () => { /* unused */ },
+        onPermissionDenied: () => { /* unused */ },
+        onUsage: () => { /* unused */ },
+        onDone: () => resolve({ texts, apiErrors }),
+        onError: () => { /* unused */ },
+        ...(withApiErrorCb ? { onApiError: (e: ApiError) => apiErrors.push(e) } : {}),
+      });
+      for (const l of lines) proc.stdout.emit('data', Buffer.from(JSON.stringify(l) + '\n'));
+      proc.emit('close', 1);
+    });
+  }
+
+  const syntheticError = {
+    type: 'assistant',
+    message: { model: '<synthetic>', content: [{ type: 'text', text: VERSION_TOO_OLD_TEXT }] },
+  };
+
+  test('synthetic API error goes to onApiError, not onText', async () => {
+    const r = await run([syntheticError, { type: 'result', is_error: true, result: VERSION_TOO_OLD_TEXT }]);
+    assert.deepEqual(r.texts, []);
+    assert.equal(r.apiErrors.length, 1);
+    assert.equal(r.apiErrors[0].errorCode, 'claude_code_version_too_old');
+  });
+
+  test('without onApiError the error text still reaches onText', async () => {
+    const r = await run([syntheticError], false);
+    assert.deepEqual(r.texts, [VERSION_TOO_OLD_TEXT]);
+  });
+
+  test('real model output starting with "API Error:" is treated as text', async () => {
+    const r = await run([{
+      type: 'assistant',
+      message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: 'API Error: 400 means a bad request.' }] },
+    }]);
+    assert.deepEqual(r.texts, ['API Error: 400 means a bad request.']);
+    assert.deepEqual(r.apiErrors, []);
   });
 });
 
