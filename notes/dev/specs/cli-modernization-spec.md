@@ -1,6 +1,6 @@
 # Claude Code CLI Modernization — Feature Design Spec
 
-**Status: Phase 1 IN PROGRESS** (branch `feat/cli-capabilities`) · **Phase 2 PROPOSED** (future sprint)
+**Status: Phase 1 IMPLEMENTED** (branch `feat/cli-capabilities`) · **Phase 2 PROPOSED** (future sprint)
 
 Written 2026-10-02 against Claude Code CLI **2.1.286**. Every "verified" statement below was tested on that version; everything else is design intent and should be re-checked against the CLI current at implementation time.
 
@@ -12,12 +12,12 @@ Two recent bugs show the cost of not knowing what the installed CLI supports: Cl
 
 | Phase | Scope | When |
 | --- | --- | --- |
-| 1 | Capability detection, `--permission-prompts none`, effort selector, token streaming, `/usage` command | In progress |
+| 1 | Capability detection, `--permission-prompts none`, effort selector, token streaming, `/usage` command | Implemented |
 | 2 | Usage meter UI, native slash-command set (incl. remote control), session forking, and the remaining flag adoptions below | Future sprint |
 
 ---
 
-## Phase 1 — In progress
+## Phase 1 — Implemented
 
 Summarized here so this spec stands alone; implementation details live in the `feat/cli-capabilities` commits.
 
