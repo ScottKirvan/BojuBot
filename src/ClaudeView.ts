@@ -2009,13 +2009,17 @@ export class ClaudeView extends ItemView {
     );
     const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
 
-    new ModelPickerModal(this.app, this.plugin.settings.defaultModel || DEFAULT_MODEL_ID, allModels, (model) => {
+    const currentModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel || DEFAULT_MODEL_ID;
+    new ModelPickerModal(this.app, currentModel, allModels, (model) => {
       const previous = this.plugin.settings.defaultModel;
       this.plugin.settings.defaultModel = model.id;
       void this.plugin.saveSettings().then(() => {
+        // The session continues — every turn passes --model alongside --resume
+        this.coordinator.switchSessionModel(model.id);
         this.updateModelIndicator();
-        this.appendMessage('system', `Switching to ${model.displayName} — starting new session.`);
-        this.startNewSession();
+        if (this.coordinator.sessionId) {
+          this.appendMessage('system', `Switched to ${model.displayName} — takes effect on your next message.`);
+        }
       }).catch((err: unknown) => {
         this.plugin.settings.defaultModel = previous;
         log('error', 'Failed to save model setting', err);

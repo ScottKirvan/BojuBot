@@ -29,6 +29,8 @@ The working directory you set is saved in the session JSON and used on every tur
 
 ::: info Permission mode, model, and raw-session persist too
 Like the working directory, these three overrides are saved in the session JSON and re-applied every time the session is resumed — they aren't a one-time setup step.
+
+A pinned model isn't locked in: switching models from the [model picker](./chat-panel.md#model-indicator) mid-session updates the pin, and the session continues with the new model.
 :::
 
 ---

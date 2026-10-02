@@ -78,7 +78,13 @@ The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects th
 | Claude Opus   | Complex reasoning and long tasks |
 | Claude Fable  | Long-running agents              |
 
-Switching models starts a **new session** — the current conversation cannot continue with a different model. The selected model persists across restarts.
+You can switch models **mid-conversation** — the session continues with its full history, and the new model takes over from your next message. This is handy for getting a second opinion: work through a problem with one model, then switch to another to review the result without re-explaining everything.
+
+The selected model also becomes the default for new sessions and persists across restarts. If the session was started as a [Custom session](./sessions.md#starting-a-new-session) with its own pinned model, switching updates that session's model too.
+
+::: tip
+The first message after a switch costs more than usual: prompt caching is per model, so the new model reads the conversation history uncached once. Later messages are cached again.
+:::
 
 You can also switch via `/model` in the slash menu or **BojuBot: Switch model** in the Command Palette.
 
