@@ -24,8 +24,8 @@ export interface CliCapabilities {
 export const UNKNOWN_CAPABILITIES: CliCapabilities = Object.freeze({
   version: null,
   flags: new Set<string>(),
-  permissionModes: Object.freeze([]) as readonly string[],
-  effortLevels: Object.freeze([]) as readonly string[],
+  permissionModes: Object.freeze([]),
+  effortLevels: Object.freeze([]),
 });
 
 /** True when the CLI's help listed `flag` (e.g. "--effort"). */
