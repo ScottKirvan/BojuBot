@@ -90,6 +90,25 @@ You can also switch via `/model` in the slash menu or **BojuBot: Switch model** 
 
 To add models not in the built-in list, see [Custom models](./settings.md#custom-models) in Settings.
 
+### Effort
+
+Effort controls how much thinking Claude does on each turn — lower is faster and lighter on your plan, higher reasons more deeply on hard problems. Click the **gauge icon** next to the model name to pick a level. When a level other than **Default** is active, the model indicator shows it, e.g. *Claude Sonnet 5.5 · high*.
+
+| Level       | What it means                                     |
+| ----------- | ------------------------------------------------- |
+| **Default** | Let Claude Code choose (no level is sent)         |
+| low         | Fastest replies, least thinking                   |
+| medium      | Balanced speed and depth                          |
+| high        | Deeper reasoning for harder tasks                 |
+| xhigh       | Extra thinking — slower, uses more of your plan   |
+| max         | Most thinking — slowest, uses the most of your plan |
+
+The list comes from your installed Claude Code CLI, so it may differ on other versions. If your CLI doesn't support effort levels, the gauge icon and the effort commands are hidden.
+
+Like a model switch, an effort change applies from your **next message** and the session continues. The chosen level also becomes the default for new sessions. A [Custom session](./sessions.md#starting-a-new-session) can pin its own level; switching mid-session updates that pin too.
+
+You can also switch via `/effort` in the slash menu or **BojuBot: Switch effort** in the Command Palette.
+
 ---
 
 ## Context Gauge

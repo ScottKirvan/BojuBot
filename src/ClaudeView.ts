@@ -25,7 +25,8 @@ import { CLAUDE_MODELS, ClaudeModel, DEFAULT_MODEL_ID } from './settings';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError } from './utils/apiError';
-import { formatCliVersion } from './utils/cliCapabilities';
+import { formatCliVersion, has } from './utils/cliCapabilities';
+import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
 import {
   StoredSession,
   InjectedContext,
@@ -143,6 +144,7 @@ export class ClaudeView extends ItemView {
   private attachPopoverEl: HTMLElement;
   private permissionIconEl!: HTMLButtonElement;
   private modelIndicatorEl!: HTMLElement;
+  private effortBtnEl!: HTMLButtonElement;
   private currentUserLabel = 'User';
   private currentAssistantLabel = 'BojuBot';
 
@@ -162,6 +164,7 @@ export class ClaudeView extends ItemView {
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
       getModel: () => this.plugin.settings.defaultModel || DEFAULT_MODEL_ID,
+      getEffort: () => this.plugin.settings.defaultEffort ?? '',
       getSessionsDir: () => this.getSessionsDir(),
       saveLastActiveSessionId: async (id) => {
         this.plugin.settings.lastActiveSessionId = id;
@@ -416,6 +419,8 @@ export class ClaudeView extends ItemView {
           allModels,
           this.plugin.settings.permissionMode,
           this.plugin.settings.defaultModel || DEFAULT_MODEL_ID,
+          this.supportedEffortLevels(),
+          this.plugin.settings.defaultEffort ?? '',
           (opts) => this.startNewSession(opts),
         ).open();
       } else {
@@ -502,6 +507,11 @@ export class ClaudeView extends ItemView {
     this.modelIndicatorEl = inputToolbar.createSpan({ cls: 'bojubot-model-indicator' });
     this.modelIndicatorEl.title = 'Switch model';
     this.modelIndicatorEl.addEventListener('click', () => this.openModelPicker());
+
+    // Hidden until the CLI probe reports --effort support (updateModelIndicator).
+    this.effortBtnEl = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-input-toolbar-btn bojubot-effort-btn' });
+    setIcon(this.effortBtnEl, 'gauge');
+    this.effortBtnEl.addEventListener('click', () => this.openEffortPicker());
     this.updateModelIndicator();
 
     inputToolbar.createDiv({ cls: 'bojubot-input-toolbar-spacer' });
@@ -651,6 +661,13 @@ export class ClaudeView extends ItemView {
   /** Called by the plugin when the CLI capability probe finishes. */
   onCliCapabilitiesChanged(): void {
     log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.cliCapabilities));
+    this.updateModelIndicator();
+  }
+
+  /** Effort levels the installed CLI lists, or [] when it doesn't support --effort (hides all effort UI). */
+  private supportedEffortLevels(): readonly string[] {
+    const caps = this.plugin.cliCapabilities;
+    return has(caps, '--effort') ? caps.effortLevels : [];
   }
 
   onSettingsChanged(): void {
@@ -722,6 +739,7 @@ export class ClaudeView extends ItemView {
       suppressVaultContext: custom.suppressVaultContext,
       permissionMode: custom.permissionMode,
       model: custom.model,
+      effort: custom.effort,
       rawSession: custom.rawSession,
     } : undefined);
     // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
@@ -2006,7 +2024,41 @@ export class ClaudeView extends ItemView {
     if (!this.modelIndicatorEl) return;
     const effectiveModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel || DEFAULT_MODEL_ID;
     const active = CLAUDE_MODELS.find(m => m.id === effectiveModel);
-    this.modelIndicatorEl.setText(active?.displayName ?? 'Claude Sonnet');
+    const effort = this.coordinator.getEffectiveEffort();
+    this.modelIndicatorEl.setText(modelIndicatorText(active?.displayName ?? 'Claude Sonnet', effort));
+
+    if (!this.effortBtnEl) return;
+    if (this.supportedEffortLevels().length === 0) {
+      this.effortBtnEl.hide();
+    } else {
+      this.effortBtnEl.show();
+      this.effortBtnEl.title = `Effort: ${effort ?? 'default'} — click to change`;
+    }
+  }
+
+  openEffortPicker() {
+    const levels = this.supportedEffortLevels();
+    if (levels.length === 0) {
+      new Notice(`${this.plugin.brand.name}: your Claude Code version doesn't support effort levels.`);
+      return;
+    }
+    const current = this.coordinator.getEffectiveEffort() ?? '';
+    new EffortPickerModal(this.app, current, levels, (level) => {
+      const previous = this.plugin.settings.defaultEffort;
+      this.plugin.settings.defaultEffort = level;
+      void this.plugin.saveSettings().then(() => {
+        // Same as a model switch: every turn passes --effort alongside --resume
+        this.coordinator.switchSessionEffort(level);
+        this.updateModelIndicator();
+        if (this.coordinator.sessionId) {
+          this.appendMessage('system', `Effort set to ${level || 'default'} — takes effect on your next message.`);
+        }
+      }).catch((err: unknown) => {
+        this.plugin.settings.defaultEffort = previous;
+        log('error', 'Failed to save effort setting', err);
+        new Notice('Failed to save effort setting. Please try again.');
+      });
+    }).open();
   }
 
   openModelPicker() {
@@ -2044,6 +2096,12 @@ export class ClaudeView extends ItemView {
         description: 'Choose which Claude model to use',
         action: () => this.openModelPicker(),
       },
+      ...(this.supportedEffortLevels().length > 0 ? [{
+        category: 'Session',
+        name: 'Switch effort',
+        description: 'Choose how much thinking Claude does per turn',
+        action: () => this.openEffortPicker(),
+      }] : []),
       {
         category: 'Session',
         name: 'New session',
@@ -2162,6 +2220,46 @@ class ModelPickerModal extends Modal {
 
       row.addEventListener('click', () => {
         this.onSelect(model);
+        this.close();
+      });
+    }
+  }
+
+  onClose() { this.contentEl.empty(); }
+}
+
+class EffortPickerModal extends Modal {
+  constructor(
+    app: App,
+    private currentLevel: string,
+    private levels: readonly string[],
+    private onSelect: (level: string) => void,
+  ) {
+    super(app);
+  }
+
+  onOpen() {
+    this.titleEl.setText('Switch effort');
+    this.contentEl.addClass('bojubot-model-picker');
+
+    // '' = Default: the --effort flag is left off and Claude Code decides.
+    for (const level of ['', ...this.levels]) {
+      const row = this.contentEl.createDiv({ cls: 'bojubot-model-row' });
+      if (level === this.currentLevel) row.addClass('is-active');
+
+      const text = row.createDiv({ cls: 'bojubot-model-text' });
+      text.createDiv({ cls: 'bojubot-model-name', text: level || 'Default' });
+      text.createDiv({
+        cls: 'bojubot-model-desc',
+        text: level ? (EFFORT_DESCRIPTIONS[level] ?? '') : 'Let Claude Code choose',
+      });
+
+      if (level === this.currentLevel) {
+        row.createDiv({ cls: 'bojubot-model-check', text: '✓' });
+      }
+
+      row.addEventListener('click', () => {
+        this.onSelect(level);
         this.close();
       });
     }

@@ -18,6 +18,9 @@ export interface CustomSessionOptions {
   permissionMode: PermissionMode;
   /** Always set — pre-filled from the global default, editable before submit. */
   model: string;
+  /** `--effort` level pinned for this session. '' = Default (no pin — follows the
+   *  global setting). Always '' when the CLI doesn't support effort. */
+  effort: string;
   /** Bare Claude Code experience — no BojuBot context injection at all (the
    *  per-session equivalent of global Minimal mode). */
   rawSession: boolean;
@@ -42,6 +45,7 @@ export class CustomSessionModal extends Modal {
   private attachListEl: HTMLElement | null = null;
   private permissionMode: PermissionMode;
   private model: string;
+  private effort: string;
   private rawSession = false;
   private readonly vaultRoot: string;
   private readonly configDir: string;
@@ -53,6 +57,9 @@ export class CustomSessionModal extends Modal {
     private readonly allModels: ClaudeModel[],
     defaultPermissionMode: PermissionMode,
     defaultModel: string,
+    /** Levels the installed CLI lists for --effort. Empty → the field is hidden. */
+    private readonly effortLevels: readonly string[],
+    defaultEffort: string,
     private readonly onSubmit: (opts: CustomSessionOptions) => void,
   ) {
     super(app);
@@ -60,6 +67,7 @@ export class CustomSessionModal extends Modal {
     this.configDir = configDir;
     this.permissionMode = defaultPermissionMode;
     this.model = defaultModel;
+    this.effort = effortLevels.includes(defaultEffort) ? defaultEffort : '';
   }
 
   onOpen() {
@@ -152,6 +160,19 @@ export class CustomSessionModal extends Modal {
       select.addEventListener('change', () => { this.model = select.value; });
     }
 
+    // ── Effort (only when the CLI supports --effort) ─────────────────────────
+    if (this.effortLevels.length > 0) {
+      const field = form.createDiv({ cls: 'bojubot-param-field' });
+      field.createEl('label', { text: 'Effort', cls: 'bojubot-param-label' });
+      field.createDiv({ text: 'How much thinking Claude does per turn. Pre-filled from your global default. Default lets Claude Code decide and follows the global setting.', cls: 'bojubot-param-desc' });
+      const select = field.createEl('select', { cls: 'bojubot-param-input' });
+      for (const level of ['', ...this.effortLevels]) {
+        const opt = select.createEl('option', { text: level || 'Default', value: level });
+        if (level === this.effort) opt.selected = true;
+      }
+      select.addEventListener('change', () => { this.effort = select.value; });
+    }
+
     // ── Raw session ────────────────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
@@ -222,6 +243,7 @@ export class CustomSessionModal extends Modal {
         customAttachments: this.attachments,
         permissionMode: this.permissionMode,
         model: this.model,
+        effort: this.effort,
         rawSession: this.rawSession,
       });
     });
