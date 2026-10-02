@@ -92,6 +92,8 @@ export interface BojuBotSettings {
   defaultModel: string;
   /** `--effort` level for new turns. '' = Default (flag left off, the CLI decides). Only sent if the CLI lists it. */
   defaultEffort: string;
+  /** Show reply text as it's generated (--include-partial-messages, when the CLI supports it). */
+  streamPartialMessages: boolean;
   /** Count of new-session creations (not sessions saved). Drives the periodic sponsorship welcome variant. */
   sessionCreationCount: number;
   /** User opt-out of the periodic sponsorship welcome variant. Always hidden/off on white-labeled installs regardless of this value. */
@@ -135,6 +137,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   userLabel: '',
   defaultModel: DEFAULT_MODEL_ID,
   defaultEffort: '',
+  streamPartialMessages: true,
   sessionCreationCount: 0,
   hideSponsorshipMessages: false,
 };
@@ -184,6 +187,18 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.resumeLastSession)
           .onChange(async (value) => {
             this.plugin.settings.resumeLastSession = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Stream replies as they're written")
+      .setDesc('Show reply text word by word as Claude writes it, instead of a block at a time. Needs a Claude Code version that supports streaming; takes effect on the next message.')
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.streamPartialMessages)
+          .onChange(async (value) => {
+            this.plugin.settings.streamPartialMessages = value;
             await this.plugin.saveSettings();
           })
       );

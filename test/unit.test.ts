@@ -21,6 +21,7 @@ import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, delete
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
+import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractToolDetail } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
@@ -999,6 +1000,171 @@ describe('formatApiError', () => {
   test('generic error without status omits the code', () => {
     const d = formatApiError({ status: null, message: 'Connection error.', errorCode: null, raw: '' }, 'win32');
     assert.deepEqual(d, { title: 'API error', details: ['Connection error.'] });
+  });
+});
+
+describe('parseStreamOutput partial messages (live preview)', () => {
+  type Ev = { kind: 'preview' | 'text' | 'action' | 'tool', value: string };
+
+  function run(chunks: string[], withPreviewCb = true): Promise<Ev[]> {
+    return new Promise((resolve) => {
+      const proc = mockProc();
+      const events: Ev[] = [];
+      parseStreamOutput(proc, {
+        onText: (t) => events.push({ kind: 'text', value: t }),
+        onAction: (l) => events.push({ kind: 'action', value: l }),
+        onToolCall: (name) => events.push({ kind: 'tool', value: name }),
+        onPermissionDenied: () => { /* unused */ },
+        onUsage: () => { /* unused */ },
+        onDone: () => resolve(events),
+        onError: () => { /* unused */ },
+        ...(withPreviewCb ? { onTextPreview: (t: string) => events.push({ kind: 'preview', value: t }) } : {}),
+      });
+      for (const c of chunks) proc.stdout.emit('data', Buffer.from(c));
+      proc.emit('close', 0);
+    });
+  }
+
+  const line = (o: object) => JSON.stringify(o) + '\n';
+  const se = (event: object, parent: string | null = null) => line({ type: 'stream_event', event, parent_tool_use_id: parent, session_id: 's' });
+  const blockStart = (type: string, parent: string | null = null) => se({ type: 'content_block_start', index: 0, content_block: { type } }, parent);
+  const textDelta = (text: string, parent: string | null = null) => se({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }, parent);
+  const assistantText = (text: string) => line({ type: 'assistant', message: { content: [{ type: 'text', text }] }, parent_tool_use_id: null });
+
+  test('text deltas build up the preview of the current block', async () => {
+    const ev = await run([blockStart('text'), textDelta('Hel'), textDelta('lo'), textDelta(' there')]);
+    assert.deepEqual(ev, [
+      { kind: 'preview', value: 'Hel' },
+      { kind: 'preview', value: 'Hello' },
+      { kind: 'preview', value: 'Hello there' },
+    ]);
+  });
+
+  test('the complete message clears the preview, then delivers the text', async () => {
+    const ev = await run([blockStart('text'), textDelta('Hi'), assistantText('Hi'), blockStart('text'), textDelta('Next')]);
+    assert.deepEqual(ev, [
+      { kind: 'preview', value: 'Hi' },
+      { kind: 'preview', value: '' },
+      { kind: 'text', value: 'Hi' },
+      { kind: 'preview', value: 'Next' },
+    ]);
+  });
+
+  test('actions and queries still come only from the complete message', async () => {
+    const actionLine = `${BOJU_PREFIX}{"action":"show-notice","message":"hi"}`;
+    const ev = await run([blockStart('text'), textDelta(`Done\n${actionLine}`), assistantText(`Done\n${actionLine}`)]);
+    assert.deepEqual(ev.filter(e => e.kind === 'action'), [{ kind: 'action', value: actionLine }]);
+    assert.deepEqual(ev.filter(e => e.kind === 'text'), [{ kind: 'text', value: 'Done' }]);
+  });
+
+  test('subagent stream events are ignored', async () => {
+    const ev = await run([blockStart('text', 'toolu_1'), textDelta('sub', 'toolu_1'), blockStart('text'), textDelta('main')]);
+    assert.deepEqual(ev, [{ kind: 'preview', value: 'main' }]);
+  });
+
+  test('a subagent block start does not reset the main preview', async () => {
+    const ev = await run([blockStart('text'), textDelta('ab'), blockStart('text', 'toolu_1'), textDelta('c')]);
+    assert.deepEqual(ev.map(e => e.value), ['ab', 'abc']);
+  });
+
+  test('non-text deltas (thinking, tool input) are not previewed', async () => {
+    const ev = await run([
+      blockStart('thinking'),
+      se({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } }),
+      blockStart('tool_use'),
+      se({ type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"a"' } }),
+    ]);
+    assert.deepEqual(ev, []);
+  });
+
+  test('a stream_event line split across two stdout chunks still parses', async () => {
+    const delta = textDelta('split ok');
+    const half = Math.floor(delta.length / 2);
+    const ev = await run([blockStart('text'), delta.slice(0, half), delta.slice(half)]);
+    assert.deepEqual(ev, [{ kind: 'preview', value: 'split ok' }]);
+  });
+
+  test('without onTextPreview, stream events are ignored and text still arrives', async () => {
+    const ev = await run([blockStart('text'), textDelta('Hi'), assistantText('Hi')], false);
+    assert.deepEqual(ev, [{ kind: 'text', value: 'Hi' }]);
+  });
+
+  test('system thinking_tokens and rate_limit_event lines are ignored', async () => {
+    const ev = await run([
+      line({ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 133 }),
+      line({ type: 'rate_limit_event', rate_limit_info: {} }),
+    ]);
+    assert.deepEqual(ev, []);
+  });
+});
+
+describe('previewForDisplay', () => {
+  test('normal text passes through unchanged', () => {
+    assert.equal(previewForDisplay('Hello world'), 'Hello world');
+    assert.equal(previewForDisplay('one\ntwo\n'), 'one\ntwo\n');
+  });
+
+  test('empty input yields empty output', () => {
+    assert.equal(previewForDisplay(''), '');
+  });
+
+  test('complete @@BOJU lines are dropped', () => {
+    assert.equal(previewForDisplay(`Opening it.\n${BOJU_PREFIX}{"action":"open-file","path":"a.md"}\nDone`), 'Opening it.\nDone');
+    assert.equal(previewForDisplay(`${BOJU_PREFIX}{"query":"tags"}\n`), '');
+  });
+
+  test('a trailing line that is a prefix of @@BOJU is held back', () => {
+    assert.equal(previewForDisplay('Sure.\n@'), 'Sure.\n');
+    assert.equal(previewForDisplay('Sure.\n@@BO'), 'Sure.\n');
+    assert.equal(previewForDisplay('@@BOJU'), '');
+  });
+
+  test('a trailing partial @@BOJU line is held back', () => {
+    assert.equal(previewForDisplay(`Sure.\n${BOJU_PREFIX}{"action":"open-fi`), 'Sure.\n');
+  });
+
+  test('@@ in the middle of a line is ordinary text', () => {
+    assert.equal(previewForDisplay('email me @@BO'), 'email me @@BO');
+    assert.equal(previewForDisplay('a @@BOJU b\nc'), 'a @@BOJU b\nc');
+  });
+
+  test('a trailing line that diverges from the prefix is shown', () => {
+    assert.equal(previewForDisplay('x\n@@BX'), 'x\n@@BX');
+    assert.equal(previewForDisplay('x\n@home'), 'x\n@home');
+  });
+
+  test('matches how the complete message is cleaned once the block is done', () => {
+    const block = `Intro\n${BOJU_PREFIX}{"action":"show-notice","message":"x"}\nOutro`;
+    assert.equal(previewForDisplay(block), extractActions(block).clean);
+  });
+});
+
+describe('composeStreamingText', () => {
+  test('appends the filtered preview to the committed text', () => {
+    assert.equal(composeStreamingText('First block. ', 'Second bl'), 'First block. Second bl');
+  });
+
+  test('no preview → exactly the committed text', () => {
+    assert.equal(composeStreamingText('All done.', ''), 'All done.');
+  });
+
+  test('protocol lines in the preview never reach the display', () => {
+    assert.equal(composeStreamingText('Done. ', `Opening\n${BOJU_PREFIX}{"act`), 'Done. Opening\n');
+  });
+});
+
+describe('buildSpawnArgs partial messages', () => {
+  test('--include-partial-messages is added when requested and supported', () => {
+    assert.ok(buildSpawnArgs({ includePartialMessages: true, capabilities: CAPS_2_1_286 }).includes('--include-partial-messages'));
+  });
+
+  test('not added when the setting is off', () => {
+    assert.ok(!buildSpawnArgs({ includePartialMessages: false, capabilities: CAPS_2_1_286 }).includes('--include-partial-messages'));
+  });
+
+  test('not added when the CLI does not list it, or capabilities are unknown', () => {
+    assert.ok(!buildSpawnArgs({ includePartialMessages: true, capabilities: CAPS_OLD }).includes('--include-partial-messages'));
+    assert.ok(!buildSpawnArgs({ includePartialMessages: true }).includes('--include-partial-messages'));
   });
 });
 
