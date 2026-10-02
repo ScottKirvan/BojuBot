@@ -238,6 +238,15 @@ export class SessionCoordinator {
     this.emit('session:updated', { title: newTitle, sessionId: this._sessionId });
   }
 
+  /**
+   * Mid-session model switch. Unpinned sessions already follow the host default, so
+   * only a session with its own pinned model (Custom Session) needs updating — otherwise
+   * the pin would silently override the switch. Persisted with the next turn's save.
+   */
+  switchSessionModel(modelId: string): void {
+    if (this._sessionModel) this._sessionModel = modelId;
+  }
+
   async loadSession(session: StoredSession): Promise<void> {
     this._placeholderSessionId = undefined;
     this._sessionId = session.claudeSessionId || undefined;

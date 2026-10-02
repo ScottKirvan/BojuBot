@@ -1371,6 +1371,30 @@ describe('SessionCoordinator session-level overrides (Custom Session)', () => {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
   });
+
+  test('switchSessionModel updates a pinned session model', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession({ model: 'claude-haiku-4-5' });
+      coordinator.switchSessionModel('claude-opus-5-5');
+      assert.equal(coordinator.sessionModel, 'claude-opus-5-5');
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
+
+  test('switchSessionModel leaves an unpinned session following the host default', () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
+      coordinator.startNewSession();
+      coordinator.switchSessionModel('claude-opus-5-5');
+      assert.equal(coordinator.sessionModel, undefined, 'no pin created — host default applies');
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
