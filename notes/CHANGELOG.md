@@ -7,6 +7,33 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.7.0](https://github.com/ScottKirvan/BojuBot/compare/3.6.0...3.7.0) (2026-10-03)
+
+
+### Features
+
+* add /usage command to show plan usage ([9744348](https://github.com/ScottKirvan/BojuBot/commit/974434820361c1e3e767bfcd94aa773e565034e0))
+* add effort level selector with per-session override ([2872e04](https://github.com/ScottKirvan/BojuBot/commit/2872e041da1d781b73386b1d55e3dd0cfdf638ba))
+* add pre-release staging workflow, update release pipeline ([350c61a](https://github.com/ScottKirvan/BojuBot/commit/350c61a756f768f15ba278041817366ea7862788))
+* stream reply text as it is generated ([718471c](https://github.com/ScottKirvan/BojuBot/commit/718471c5e16a9ef6f1f6e5a5ff3eac946d37c419))
+* switch models mid-session without starting a new conversation ([04f21b8](https://github.com/ScottKirvan/BojuBot/commit/04f21b80aa7e59a02a5cafce7444a008ad9dc26c)), closes [#322](https://github.com/ScottKirvan/BojuBot/issues/322)
+
+
+### Bug Fixes
+
+* add actionlint job to CI ([0992f0a](https://github.com/ScottKirvan/BojuBot/commit/0992f0a31f0a9aa10a2512d7b0a8e02c2a4d8725))
+* add changelog link to release and staging footers ([da1c64c](https://github.com/ScottKirvan/BojuBot/commit/da1c64c6a791c86f58c20cb29ed78a7613a36ffe))
+* deny permission prompts explicitly via --permission-prompts none ([8674234](https://github.com/ScottKirvan/BojuBot/commit/8674234bb60da9e5691158fa530fff3d5cf4f050)), closes [#291](https://github.com/ScottKirvan/BojuBot/issues/291)
+* describe Standard mode's read-only shell access accurately ([8f134e7](https://github.com/ScottKirvan/BojuBot/commit/8f134e7db48e4a8091e3883e76e9efca1ccb7fba))
+* detect Claude Code CLI capabilities and use manual permission mode when supported ([c7d7f49](https://github.com/ScottKirvan/BojuBot/commit/c7d7f49f110f0443f86ee8b246c5b2a2643f4370)), closes [#352](https://github.com/ScottKirvan/BojuBot/issues/352)
+* force Vite to bundle bojuvue for SSR instead of externalizing it ([bb8a614](https://github.com/ScottKirvan/BojuBot/commit/bb8a6143cc8d3476f42e70b00b23dad9ea5f987f))
+* import BojuVue components from the base entry, not /vitepress ([7e6818d](https://github.com/ScottKirvan/BojuBot/commit/7e6818d16508e3b4df46d0281ffaef30d30aca14))
+* migrate starline badge to self-hosted GitHub Action ([3c009b6](https://github.com/ScottKirvan/BojuBot/commit/3c009b6a70d2f5b21d6b4c44e30e9b64e02e092b))
+* remove extra space below versions in About dialog ([d75218d](https://github.com/ScottKirvan/BojuBot/commit/d75218d48c0accb5cb8859eec1b0d69b5292d3c6))
+* remove unnecessary type assertion on DEFAULT_GREETINGS ([de3367d](https://github.com/ScottKirvan/BojuBot/commit/de3367d1d16d021b0f9fe4197120658a7cc36f82))
+* show readable message for CLI API errors instead of raw JSON ([385e9bc](https://github.com/ScottKirvan/BojuBot/commit/385e9bc161d57b2d6b7db2e9d401f64fafbde90d)), closes [#350](https://github.com/ScottKirvan/BojuBot/issues/350)
+* update supported model list to current Claude 5.5 generation ([3d4a818](https://github.com/ScottKirvan/BojuBot/commit/3d4a8189a5e8648fc813f598b9c147918196e2da))
+
 ## [3.6.0](https://github.com/ScottKirvan/BojuBot/compare/3.5.0...3.6.0) (2026-07-27)
 
 
