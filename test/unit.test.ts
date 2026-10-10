@@ -31,6 +31,7 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
+import { shouldShowSponsorMessage, SponsorGateInput, SPONSOR_COOLDOWN_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2159,5 +2160,71 @@ describe('neutralizeTriggers', () => {
   test('is idempotent — neutralizing already-neutralized text is a no-op', () => {
     const once = neutralizeTriggers(`${BOJU_PREFIX}test`);
     assert.equal(neutralizeTriggers(once), once);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldShowSponsorMessage — welcome-screen sponsorship gate
+// ---------------------------------------------------------------------------
+
+describe('shouldShowSponsorMessage', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = Date.parse('2026-10-10T12:00:00Z');
+  // A qualifying input: 10th session, three other sessions this week, never shown.
+  const base = (over: Partial<SponsorGateInput> = {}): SponsorGateInput => ({
+    whiteLabeled: false,
+    optedOut: false,
+    sessionCreationCount: 10,
+    otherSessionUpdatedAt: [NOW - 1 * DAY, NOW - 2 * DAY, NOW - 3 * DAY],
+    lastShownAt: 0,
+    now: NOW,
+    ...over,
+  });
+
+  test('shows when every condition holds', () => {
+    assert.equal(shouldShowSponsorMessage(base()), true);
+  });
+
+  test('never shows on a white-labeled build', () => {
+    assert.equal(shouldShowSponsorMessage(base({ whiteLabeled: true })), false);
+  });
+
+  test('never shows once the user has opted out', () => {
+    assert.equal(shouldShowSponsorMessage(base({ optedOut: true })), false);
+  });
+
+  test('only on multiples of the interval, never at count 0', () => {
+    assert.equal(shouldShowSponsorMessage(base({ sessionCreationCount: 0 })), false);
+    assert.equal(shouldShowSponsorMessage(base({ sessionCreationCount: 9 })), false);
+    assert.equal(shouldShowSponsorMessage(base({ sessionCreationCount: 11 })), false);
+    assert.equal(shouldShowSponsorMessage(base({ sessionCreationCount: 20 })), true);
+  });
+
+  test('needs at least three other sessions active within the window', () => {
+    assert.equal(shouldShowSponsorMessage(base({ otherSessionUpdatedAt: [] })), false);
+    assert.equal(shouldShowSponsorMessage(base({ otherSessionUpdatedAt: [NOW - DAY, NOW - 2 * DAY] })), false);
+  });
+
+  test('returning user: one fresh session after a long absence does not qualify', () => {
+    const longAgo = NOW - 90 * DAY;
+    const input = base({ otherSessionUpdatedAt: [NOW - 60_000, longAgo, longAgo - DAY, longAgo - 2 * DAY] });
+    assert.equal(shouldShowSponsorMessage(input), false);
+  });
+
+  test('a session exactly at the window edge still counts; one just past it does not', () => {
+    const edge = NOW - SPONSOR_ACTIVITY_WINDOW_MS;
+    assert.equal(shouldShowSponsorMessage(base({ otherSessionUpdatedAt: [NOW - DAY, NOW - 2 * DAY, edge] })), true);
+    assert.equal(shouldShowSponsorMessage(base({ otherSessionUpdatedAt: [NOW - DAY, NOW - 2 * DAY, edge - 1] })), false);
+  });
+
+  test('cooldown: not again within 30 days of the last showing', () => {
+    assert.equal(shouldShowSponsorMessage(base({ lastShownAt: NOW - DAY })), false);
+    assert.equal(shouldShowSponsorMessage(base({ lastShownAt: NOW - SPONSOR_COOLDOWN_MS + 1 })), false);
+    assert.equal(shouldShowSponsorMessage(base({ lastShownAt: NOW - SPONSOR_COOLDOWN_MS })), true);
+  });
+
+  test('unparseable session dates are ignored rather than counted', () => {
+    const input = base({ otherSessionUpdatedAt: [NaN, NaN, NaN, NOW - DAY] });
+    assert.equal(shouldShowSponsorMessage(input), false);
   });
 });

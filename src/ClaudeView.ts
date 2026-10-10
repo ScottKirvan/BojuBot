@@ -27,6 +27,7 @@ import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError } from './utils/apiError';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
+import { shouldShowSponsorMessage } from './utils/sponsorGate';
 import {
   StoredSession,
   InjectedContext,
@@ -79,11 +80,6 @@ const TOOL_ICONS: Record<string, string> = {
   todoread: 'check-square',
 };
 
-// Show the sponsorship welcome variant every Nth new-session creation.
-const SPONSOR_MESSAGE_INTERVAL = 10;
-// Only show it if there's been session activity within this window — otherwise a
-// single new session after a long absence could still land on a matching modulo.
-const SPONSOR_RECENCY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const SPONSOR_MESSAGE = `**Thank you for using BojuBot!**
 
 My name is Scott, and I'm BojuBot's author. It looks like you use the plugin regularly! I hope it's making your life easier and saving you some time.
@@ -1360,20 +1356,25 @@ export class ClaudeView extends ItemView {
     }
 
     // Recent sessions — loaded here (not just at the footer below) because the
-    // sponsor-variant recency check needs it too.
+    // sponsor-variant activity check needs it too.
     const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
       .filter(s => s.id !== this.coordinator.sessionFileId);
 
     // Centered body: sprite + greeting + tip, or (periodically) a sponsorship message
     const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
-    const hasRecentActivity = sessions.some(s => Date.now() - new Date(s.updatedAt).getTime() <= SPONSOR_RECENCY_WINDOW_MS);
-    const showSponsorMessage = !isWhiteLabeled(this.plugin.brand)
-      && !this.plugin.settings.hideSponsorshipMessages
-      && this.plugin.settings.sessionCreationCount > 0
-      && this.plugin.settings.sessionCreationCount % SPONSOR_MESSAGE_INTERVAL === 0
-      && hasRecentActivity;
+    const now = Date.now();
+    const showSponsorMessage = shouldShowSponsorMessage({
+      whiteLabeled: isWhiteLabeled(this.plugin.brand),
+      optedOut: this.plugin.settings.hideSponsorshipMessages,
+      sessionCreationCount: this.plugin.settings.sessionCreationCount,
+      otherSessionUpdatedAt: sessions.map(s => new Date(s.updatedAt).getTime()),
+      lastShownAt: this.plugin.settings.lastSponsorShownAt,
+      now,
+    });
 
     if (showSponsorMessage) {
+      this.plugin.settings.lastSponsorShownAt = now;
+      void this.plugin.saveSettings();
       body.addClass('bojubot-welcome-sponsor');
       const sponsorImg = body.createEl('img', { cls: 'bojubot-welcome-sponsor-image', attr: { alt: brandName, src: sponsorImageUrl } });
       sponsorImg.draggable = false;
