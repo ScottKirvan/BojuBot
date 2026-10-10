@@ -53,7 +53,7 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 | **Enable debug log**    | **Off**                                        | Write a debug log file. See [Troubleshooting](./troubleshooting#logging).                                          |
 | **Log file path**       | `.obsidian/plugins/bojubot/bojubot-debug.log` | Vault-relative path for the log file. Defaults to the plugin folder so it stays out of your vault and git history. |
 | **Log verbosity**       | Normal                                         | **Normal** logs session events and errors. **Verbose** adds raw stream data and token breakdowns.                  |
-| **Hide sponsorship messages** | Off                                      | Suppress the [periodic welcome-screen message](./chat-panel#welcome-screen) about supporting the project. Not shown on white-labeled installs regardless of this setting.  |
+| **Hide sponsorship messages** | Off                                      | Suppress the [occasional welcome-screen message](./chat-panel#welcome-screen) about supporting the project (at most once every 30 days). Not shown on white-labeled installs regardless of this setting.  |
 
 Branding (name, icon, logo, mascot, links) has its own dedicated [Branding](#branding) section below.
 

@@ -98,6 +98,8 @@ export interface BojuBotSettings {
   sessionCreationCount: number;
   /** User opt-out of the periodic sponsorship welcome variant. Always hidden/off on white-labeled installs regardless of this value. */
   hideSponsorshipMessages: boolean;
+  /** When the sponsorship welcome variant was last shown (ms since epoch), 0 if never. Drives its cooldown. */
+  lastSponsorShownAt: number;
   /**
    * Optional white-label branding (display name, icon, art, greetings, links).
    * Absent → the stock BojuBot identity, byte-for-byte. Always read through
@@ -140,6 +142,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   streamPartialMessages: true,
   sessionCreationCount: 0,
   hideSponsorshipMessages: false,
+  lastSponsorShownAt: 0,
 };
 
 export class BojuBotSettingsTab extends PluginSettingTab {
