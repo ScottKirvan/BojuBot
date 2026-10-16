@@ -239,7 +239,8 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 - Scott tests from `dev`: the test vaults' plugin junction points at the repo root, so checking out `dev` and building is enough.
 - Keep `dev` current by merging `main` into it whenever `main` moves (e.g. after #356 merges), so the final merge back is small.
 - release-please only runs on `main`, so nothing on `dev` is released or added to the changelog until `dev` merges.
-- **The final `dev` → `main` merge should be a merge commit, not a squash.** release-please builds the changelog from the commit subjects that land on `main`, so a squash would collapse the whole effort into one entry.
+- **Feature PRs into `dev` are squash-merged with clean conventional subjects** (`feat:`, `fix:`, `refactor:`). Each one becomes a changelog line when `dev` reaches `main`, so the subject is the changelog entry.
+- **The final `dev` → `main` merge is a merge commit (decided).** release-please builds the changelog from every commit subject that lands on `main`; a squash would collapse the whole effort into one entry. A rebase merge would also keep the entries, but it replays commits one by one: the merges from `main` that `dev` accumulates often can't be rebased cleanly, and the rewritten commit IDs would leave `dev` diverged from `main` afterward.
 
 ## Testing
 
@@ -254,7 +255,6 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 3. **Default backend:** global setting only, or per vault? Should first run detect which CLIs are installed and ask?
 4. **Transcript store:** use it for Claude too (one history source, simpler exports), or keep it Antigravity-only for the MVP?
 5. **Context cost:** Antigravity adds ~11.8k tokens of its own system prompt per call with no cache reads reported, on top of BojuBot's orientation. Worth trimming BojuBot's first-turn context for Antigravity?
-6. **`dev` → `main` merge style:** confirm a merge commit for the release.
 
 ## Sources
 
