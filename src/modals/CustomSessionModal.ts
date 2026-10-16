@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile, setIcon } from 'obsidian';
 import type { PendingContext } from '../AttachmentHandler';
-import type { PermissionMode } from '../ClaudeProcess';
+import type { PermissionMode } from '../backends/types';
 import type { ClaudeModel } from '../settings';
 import { PERMISSION_MODES, openModePickerPopover } from './PermissionPickerModal';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';

@@ -4,38 +4,18 @@ import { buildVaultTree } from './utils/fileTree';
 import { log, estimateTokens } from './utils/logger';
 import { neutralizeTriggers } from './constants';
 import { scanPinnedFiles, scanFileInstructions } from './FrontmatterGuard';
-import type { PermissionMode } from './ClaudeProcess';
+import type { BackendOrientation, PermissionMode } from './backends/types';
 import orientationTemplate from './orientation.md';
+import { renderOrientation } from './utils/orientation';
 import { activeBrand, resolveIdentityName, DEFAULT_BRAND } from './brand';
-
-export const PERMISSION_DESCRIPTIONS: Record<PermissionMode, { summary: string; can: string; cannot: string }> = {
-  restricted: {
-    summary: 'Chat only',
-    can: 'respond to messages, fetch web URLs (WebFetch), search the web (WebSearch), and work with any context the user explicitly attaches',
-    cannot: 'read, write, or modify vault files. If asked to make file changes, describe exactly what you would change and ask the user to switch to Standard mode or apply the change themselves',
-  },
-  readonly: {
-    summary: 'Read-only',
-    can: 'read vault files (Read, Glob, Grep), fetch web URLs, and search the web',
-    cannot: 'write or modify any files. If asked to make changes, show the user a diff or the exact content to paste',
-  },
-  standard: {
-    summary: 'Standard',
-    can: 'read and write vault files, fetch the web, and run read-only shell commands (Bash) such as ls, echo, or git status',
-    cannot: 'run shell commands that change anything (write files, install, delete, download) — those are denied. Request permission if a task genuinely requires one',
-  },
-  full: {
-    summary: 'Full access',
-    can: 'use all tools including Bash shell commands',
-    cannot: 'nothing — all tools are available',
-  },
-};
 
 export class ContextManager {
   needsCompaction = false;
 
   constructor(
     private app: App,
+    /** Wording for the CLI this session runs on — the session's backend, never a default. */
+    private orientation: BackendOrientation,
     private contextFilePath: string,
     private autonomousMemory: boolean = true,
     private vaultTreeDepth: number = 0,
@@ -55,7 +35,6 @@ export class ContextManager {
     const layerBreakdown: Record<string, { text: string; chars: number; tokens: number }> = {};
 
     // Layer 0: System orientation (always injected)
-    const perm = PERMISSION_DESCRIPTIONS[this.permissionMode];
     // Assistant identity: only rebranded when the user opts in — otherwise the
     // orientation stays byte-for-byte the stock BojuBot identity even if a
     // display name is set elsewhere. Support line falls back to the bundled URLs.
@@ -78,21 +57,15 @@ export class ContextManager {
       // cwd is outside the vault entirely — absolute path is fine, no vault info leaked
       cwdDisplay = this.cwd;
     }
-    const ADDITIONAL_DIRS_BOUNDARY = `Your environment may list "Additional working directories" beyond your CWD — these come from Claude Code CLI's own global config and are not something ${identityName} set up; they are frequently leftover from unrelated projects. Ignore them: do not read, write, or explore any additional working directory unless the user explicitly directs you there.`;
-    const CWD_BOUNDARY = 'Treat your CWD as your working root. Never autonomously infer or declare a vault root, project root, or repository root from directory structure or config folder markers. If the user explicitly asks you to look at a parent directory, you may do so.';
-    const cwdInstruction = [
-      ADDITIONAL_DIRS_BOUNDARY,
-      (this.cwd && this.cwd !== this.vaultRoot) ? CWD_BOUNDARY : '',
-    ].filter(Boolean).join(' ');
 
-    let orientation = orientationTemplate
-      .split('{{BRAND}}').join(identityName)
-      .replace('{{SUPPORT_LINE}}', supportLine)
-      .replace('{{CWD}}', cwdDisplay)
-      .replace('{{CWD_INSTRUCTION}}', cwdInstruction)
-      .replace('{{PERMISSION_SUMMARY}}', perm.summary)
-      .replace('{{PERMISSION_CAN}}', perm.can)
-      .replace('{{PERMISSION_CANNOT}}', perm.cannot);
+    let orientation = renderOrientation(orientationTemplate, {
+      identityName,
+      supportLine,
+      cwdDisplay,
+      customCwd: !!this.cwd && this.cwd !== this.vaultRoot,
+      permissionMode: this.permissionMode,
+      backend: this.orientation,
+    });
 
     if (this.commandAllowlist.length > 0) {
       const rows = this.commandAllowlist
@@ -169,7 +142,7 @@ export class ContextManager {
           `It is injected at the start of every session.\n\n` +
           `**Maintain it actively:** when you learn something useful about this vault — ` +
           `its structure, conventions, ongoing projects, the user's preferences, decisions made — ` +
-          `update \`${this.contextFilePath}\` using the Write or Edit tool. ` +
+          `update \`${this.contextFilePath}\` using ${this.orientation.editToolHint}. ` +
           `Keep it concise and high-signal. Do not ask permission; just do it.`;
         parts.push(memInstruction);
         layerBreakdown['memory-instruction'] = {

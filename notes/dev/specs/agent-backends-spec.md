@@ -1,6 +1,6 @@
 # Agent Backends (Antigravity CLI first) — Feature Design Spec
 
-**Status: PROPOSED** · development on the `dev` branch
+**Status: Phase 1 IMPLEMENTED** (seam, on `dev`) · **Phases 2–3 PROPOSED** · development on the `dev` branch
 
 Written 2026-10-16. Verified against **Antigravity CLI 1.4.0** (`agy`, run on Windows 11 with a personal Google account) and **Gemini CLI 0.64.0** (read from its published npm package). "Verified" means tested or read in code on those versions; everything else is design intent to re-check at implementation time.
 
@@ -168,7 +168,7 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 
 | Area | Change |
 | --- | --- |
-| `src/ClaudeProcess.ts` | Split into `src/backends/` (`types.ts`, `launch.ts`, `claudeCode.ts`, `antigravity.ts`, `index.ts` registry); stream parsing pure and unit-tested |
+| `src/ClaudeProcess.ts` | Split into `src/backends/` (`types.ts`, `process.ts` for launch/run/kill, `modes.ts`, `claudeCode.ts`, `antigravity.ts`, `index.ts` registry); stream parsing pure and unit-tested |
 | `main.ts` | Probe the selected backend(s) at startup; per-backend capabilities in memory; "binary not found" notices name the backend |
 | `src/SessionCoordinator.ts` | `host.getBackend(session)`; resume, compact and plan usage go through backend features; stores `backend` |
 | `src/ContextManager.ts`, `src/orientation.md` | "Claude Code subprocess" becomes `{{AGENT}}`; `PERMISSION_DESCRIPTIONS` (which name `Read`, `Bash`, `WebFetch`…) come from `backend.orientation`; the memory instruction stops naming "Write or Edit tool" |
@@ -199,6 +199,8 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 - Route `SessionCoordinator`, `ContextGenerationModal`, plan usage and probing through the registry (one backend for now).
 - `ContextManager` and the orientation take their agent label and permission text from the backend; Claude's output must stay byte-for-byte identical.
 - **Done when:** all existing tests pass unchanged, new tests pin Claude spawn args and orientation output, and a manual session in the test vault behaves exactly as before. This phase is low-risk and could merge to `main` early if useful.
+
+**As built:** `src/backends/` holds `types.ts` (the interface and shared stream types), `process.ts` (`launchCli`, `runCli`, `killProcess`), `modes.ts` (`canWrite`, `resolveSpawnCwd`), `claudeCode.ts` (the former `ClaudeProcess.ts`, moved with history) and `index.ts` (registry). `splitBojuLines()` lives in `src/utils/bojuLines.ts` and `renderOrientation()` in `src/utils/orientation.ts`. `ContextManager` takes the backend's orientation as a required second argument, so no call site can silently fall back to Claude's wording. The interface has only the members Phase 1 routes through: `findBinary`, `probe`, `spawnTurn`, `parseStream`, `fetchPlanUsage`, `compactPrompt`, `orientation`. `listModels`, `permissionSupport`, `features()` and a structured `PlanUsage` arrive with Phase 2, which is their first user. The plugin's `claudeBinaryPath` and `cliCapabilities` fields also stay single-backend until then. Verified: all 16 orientation variants (4 modes × custom cwd × rebranded name) are byte-identical to the previous code. The only user-visible changes are two error messages, which now use the backend's name: "Claude binary not found" became "Claude Code binary not found", and "Failed to start claude" became "Failed to start Claude Code".
 
 ### Phase 2: Antigravity MVP
 

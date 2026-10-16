@@ -1,14 +1,8 @@
 import { EventEmitter } from 'events';
 import type { ChildProcess } from 'child_process';
-import {
-  spawnClaude,
-  parseStreamOutput,
-  killProcess,
-  resolveSpawnCwd,
-  PermissionMode,
-  PermissionDenial,
-  TokenUsage,
-} from './ClaudeProcess';
+import type { AgentBackend, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
+import { killProcess } from './backends/process';
+import { resolveSpawnCwd } from './backends/modes';
 import { VaultQuery } from './QueryHandler';
 import { BOJU_PREFIX } from './constants';
 import { extractActions, BojuBotAction } from './utils/actionParser';
@@ -30,6 +24,8 @@ import { composeStreamingText } from './utils/streamPreview';
 // ── Host interface ───────────────────────────────────────────────────────────
 
 export interface SessionCoordinatorHost {
+  /** The CLI backend this session runs on. */
+  getBackend(): AgentBackend;
   getBinaryPath(): string | null;
   getVaultRoot(): string;
   getConfigDir(): string;
@@ -331,7 +327,7 @@ export class SessionCoordinator {
   }
 
   /**
-   * Trigger Claude Code's native /compact slash command via a --resume turn.
+   * Trigger the backend's native compact command (Claude Code's /compact) via a resumed turn.
    * Shares the busy guard and _activeProc tracking with send() — previously this
    * spawned its own untracked process directly from TokenGauge, so compacting
    * while a turn was streaming raced a second process against the same
@@ -346,18 +342,23 @@ export class SessionCoordinator {
       onError('No active session to compact.');
       return;
     }
+    const backend = this.host.getBackend();
+    if (!backend.compactPrompt) {
+      onError(`${backend.displayName} doesn't support compacting a session.`);
+      return;
+    }
     const binary = this.host.getBinaryPath();
     if (!binary) {
-      onError('Claude binary not found.');
+      onError(`${backend.displayName} binary not found.`);
       return;
     }
 
     let proc: ChildProcess;
     try {
-      proc = spawnClaude({
+      proc = backend.spawnTurn({
         binaryPath: binary,
-        prompt: '/compact',
-        vaultRoot: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
+        prompt: backend.compactPrompt,
+        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
@@ -366,7 +367,7 @@ export class SessionCoordinator {
         capabilities: this.capabilities,
       });
     } catch (e) {
-      onError(`Failed to start claude: ${e}`);
+      onError(`Failed to start ${backend.displayName}: ${e}`);
       return;
     }
 
@@ -392,18 +393,19 @@ export class SessionCoordinator {
       return;
     }
 
+    const backend = this.host.getBackend();
     const binary = this.host.getBinaryPath();
     if (!binary) {
-      this.emit('turn:error', 'Claude binary not found.');
+      this.emit('turn:error', `${backend.displayName} binary not found.`);
       return;
     }
 
     let proc: ChildProcess;
     try {
-      proc = spawnClaude({
+      proc = backend.spawnTurn({
         binaryPath: binary,
         prompt,
-        vaultRoot: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
+        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
@@ -414,7 +416,7 @@ export class SessionCoordinator {
       });
       this._activeProc = proc;
     } catch (e) {
-      this.emit('turn:error', `Failed to start claude: ${e}`);
+      this.emit('turn:error', `Failed to start ${backend.displayName}: ${e}`);
       return;
     }
 
@@ -435,7 +437,7 @@ export class SessionCoordinator {
       }
     };
 
-    parseStreamOutput(proc, {
+    backend.parseStream(proc, {
       onText: (delta) => {
         // The complete block replaces its live preview.
         accumulated += delta;

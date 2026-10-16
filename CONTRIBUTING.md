@@ -92,7 +92,7 @@ BojuBot/
       logo.png                 ← About modal / plugin browser logo (embedded at build time)
   src/
     ClaudeView.ts              ← chat panel UI, session state, setup/auth error panels
-    ClaudeProcess.ts           ← binary detection, spawn (PowerShell on Win), stream-json parsing
+    backends/                  ← CLI backends behind the AgentBackend seam: claudeCode.ts (binary detection, spawn args, stream-json parsing), process.ts (PowerShell spawn on Win), types.ts
     ContextManager.ts          ← vault tree + context file + memory instruction assembly
     ContextGenerationModal.ts  ← first-run modal for context file setup
     UIBridge.ts                ← @@BOJU_ACTION protocol: parse + execute Obsidian UI actions

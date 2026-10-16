@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal, setIcon } from 'obsidian';
 import type BojuBotPlugin from '../../main';
-import type { PermissionMode } from '../ClaudeProcess';
+import type { PermissionMode } from '../backends/types';
 
 export interface ModeOption {
   mode: PermissionMode;

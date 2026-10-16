@@ -118,7 +118,7 @@ Always call `off` in your plugin's `onunload()` to avoid memory leaks.
 ```typescript
 import { Plugin } from 'obsidian';
 import { VIEW_TYPE_CLAUDE, ClaudeView } from 'bojubot/src/ClaudeView';
-import type { TokenUsage } from 'bojubot/src/ClaudeProcess';
+import type { TokenUsage } from 'bojubot/src/backends/types';
 
 export default class TokenLoggerPlugin extends Plugin {
   private _usageHandler = (usage: TokenUsage) => {

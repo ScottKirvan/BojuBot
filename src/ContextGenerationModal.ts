@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile } from 'obsidian';
 import type BojuBotPlugin from '../main';
-import { spawnClaude, parseStreamOutput, killProcess } from './ClaudeProcess';
+import { killProcess } from './backends/process';
 import { ContextManager } from './ContextManager';
 import { VIEW_TYPE_CLAUDE } from './ClaudeView';
 import { log } from './utils/logger';
@@ -213,8 +213,10 @@ export class ContextGenerationModal extends Modal {
     // memory, command allowlist) rather than re-deciding them here.
     // Permission mode is forced to 'standard' regardless of the user's configured
     // default — generation always needs write access to create the file.
+    const backend = this.plugin.getBackend();
     const ctx = new ContextManager(
       this.app,
+      backend.orientation,
       this.contextFilePath,
       this.plugin.settings.autonomousMemory,
       this.vaultTreeDepth,
@@ -267,10 +269,10 @@ export class ContextGenerationModal extends Modal {
 
     const prompt = sessionContext ? `${sessionContext}\n\n${instructions}` : instructions;
 
-    const proc = spawnClaude({
+    const proc = backend.spawnTurn({
       binaryPath: this.binaryPath,
       prompt,
-      vaultRoot: this.vaultRoot,
+      cwd: this.vaultRoot,
       env: this.env,
       permissionMode: 'standard',
       capabilities: this.plugin.cliCapabilities,
@@ -288,7 +290,7 @@ export class ContextGenerationModal extends Modal {
     });
     progressModal.open();
 
-    parseStreamOutput(proc, {
+    backend.parseStream(proc, {
       onText: () => { /* background — discard streaming text */ },
       onAction: () => { /* background — discard UI actions */ },
       onToolCall: (tool) => {

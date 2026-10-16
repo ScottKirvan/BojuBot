@@ -12,14 +12,18 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
 import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, ChatMessage } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
-import { parseStreamOutput, permissionArgs, buildSpawnArgs, canWrite, resolveSpawnCwd } from '../src/ClaudeProcess';
+import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
+import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
+import { splitBojuLines } from '../src/utils/bojuLines';
+import { renderOrientation } from '../src/utils/orientation';
+import { getBackend, DEFAULT_BACKEND_ID } from '../src/backends';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
@@ -1671,6 +1675,7 @@ describe('resolveShellEnv', () => {
 
 function makeTestHost(sessionsDir: string, overrides: Partial<SessionCoordinatorHost> = {}): SessionCoordinatorHost {
   return {
+    getBackend: () => claudeCodeBackend,
     getBinaryPath: () => process.execPath,
     getVaultRoot: () => sessionsDir,
     getConfigDir: () => '.obsidian',
@@ -2159,5 +2164,124 @@ describe('neutralizeTriggers', () => {
   test('is idempotent — neutralizing already-neutralized text is a no-op', () => {
     const once = neutralizeTriggers(`${BOJU_PREFIX}test`);
     assert.equal(neutralizeTriggers(once), once);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agent backends — shared protocol parsing, orientation, registry
+// ---------------------------------------------------------------------------
+
+describe('splitBojuLines', () => {
+  test('text with no protocol lines passes through unchanged', () => {
+    assert.deepEqual(splitBojuLines('Hello\nworld'), { clean: 'Hello\nworld', lines: [] });
+  });
+
+  test('action and query lines are pulled out in order, the rest stays as text', () => {
+    const raw = [
+      'Opening it now.',
+      `${BOJU_PREFIX}{"query":"backlinks","path":"A.md"}`,
+      `${BOJU_PREFIX}{"action":"open-file","path":"A.md"}`,
+      'Done.',
+    ].join('\n');
+    assert.deepEqual(splitBojuLines(raw), {
+      clean: 'Opening it now.\nDone.',
+      lines: [
+        { kind: 'query', line: `${BOJU_PREFIX}{"query":"backlinks","path":"A.md"}` },
+        { kind: 'action', line: `${BOJU_PREFIX}{"action":"open-file","path":"A.md"}` },
+      ],
+    });
+  });
+
+  test('a prefixed line with valid JSON but no action or query key is dropped', () => {
+    assert.deepEqual(splitBojuLines(`keep\n${BOJU_PREFIX}{"other":1}`), { clean: 'keep', lines: [] });
+  });
+
+  test('a prefixed line that is not a JSON object stays as text', () => {
+    for (const line of [`${BOJU_PREFIX}{not json`, `${BOJU_PREFIX}null`, `${BOJU_PREFIX}42`]) {
+      assert.deepEqual(splitBojuLines(line), { clean: line, lines: [] }, line);
+    }
+  });
+
+  test('a block holding only protocol lines leaves no text', () => {
+    assert.deepEqual(splitBojuLines(`${BOJU_PREFIX}{"action":"show-notice","message":"hi"}`).clean, '');
+  });
+});
+
+describe('renderOrientation', () => {
+  const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
+  const vars = {
+    identityName: 'BojuBot',
+    supportLine: 'https://example.com',
+    cwdDisplay: 'vault root',
+    customCwd: false,
+    permissionMode: 'standard' as const,
+    backend: CLAUDE_CODE_ORIENTATION,
+  };
+
+  test('fills every placeholder in the real template', () => {
+    assert.ok(!renderOrientation(template, vars).includes('{{'));
+  });
+
+  test('names the backend as the subprocess', () => {
+    const line = renderOrientation(template, vars).split('\n')[1];
+    assert.equal(line, 'Obsidian AI assistant. Claude Code subprocess. cwd=vault root. Help user manage/write/organize/think with notes.');
+  });
+
+  test("includes the backend's environment note with the assistant name filled in", () => {
+    const out = renderOrientation(template, { ...vars, identityName: 'AXI25' });
+    assert.ok(out.includes('are not something AXI25 set up'));
+  });
+
+  test('a backend with no environment note adds no extra sentence', () => {
+    const out = renderOrientation('[{{CWD_INSTRUCTION}}]', { ...vars, backend: { ...CLAUDE_CODE_ORIENTATION, environmentNote: null } });
+    assert.equal(out, '[]');
+  });
+
+  test('a custom cwd adds the working-root boundary', () => {
+    const out = renderOrientation('{{CWD_INSTRUCTION}}', { ...vars, customCwd: true, backend: { ...CLAUDE_CODE_ORIENTATION, environmentNote: null } });
+    assert.ok(out.startsWith('Treat your CWD as your working root.'));
+  });
+
+  test("uses the backend's wording for the session's permission mode", () => {
+    const out = renderOrientation(template, { ...vars, permissionMode: 'readonly' });
+    assert.ok(out.includes('## Permission: Read-only'));
+    assert.ok(out.includes(`Can: ${CLAUDE_CODE_ORIENTATION.permissions.readonly.can}.`));
+  });
+});
+
+describe('backend registry', () => {
+  test('the default backend is Claude Code', () => {
+    assert.equal(DEFAULT_BACKEND_ID, 'claude-code');
+    assert.equal(getBackend(), claudeCodeBackend);
+  });
+
+  test('Claude Code compacts with its native /compact command', () => {
+    assert.equal(claudeCodeBackend.compactPrompt, '/compact');
+  });
+});
+
+describe('SessionCoordinator compact on a backend without compaction', () => {
+  test('reports unsupported instead of spawning anything', async () => {
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
+    try {
+      let spawned = false;
+      const backend = {
+        ...claudeCodeBackend,
+        displayName: 'Test CLI',
+        compactPrompt: null,
+        spawnTurn: () => { spawned = true; throw new Error('should not spawn'); },
+      };
+      const coordinator = new SessionCoordinator(makeTestHost(sessionsDir, { getBackend: () => backend }));
+      await coordinator.loadSession({
+        id: 's1', title: 'S', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        claudeSessionId: 'conv-1',
+      });
+      const errors: string[] = [];
+      coordinator.compact(() => assert.fail('onDone should not run'), (m) => errors.push(m));
+      assert.deepEqual(errors, ["Test CLI doesn't support compacting a session."]);
+      assert.equal(spawned, false);
+    } finally {
+      try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
   });
 });
