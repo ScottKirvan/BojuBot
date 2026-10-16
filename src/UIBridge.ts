@@ -1,7 +1,8 @@
 import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { brandName } from './brand';
-import { canWrite, PermissionMode } from './ClaudeProcess';
+import { canWrite } from './backends/modes';
+import type { PermissionMode } from './backends/types';
 export { BOJU_PREFIX } from './constants';
 export { BojuBotAction, extractActions } from './utils/actionParser';
 import type { BojuBotAction } from './utils/actionParser';

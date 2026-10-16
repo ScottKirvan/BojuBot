@@ -1,5 +1,5 @@
 ## {{BRAND}}
-Obsidian AI assistant. Claude Code subprocess. cwd={{CWD}}. Help user manage/write/organize/think with notes.
+Obsidian AI assistant. {{AGENT}} subprocess. cwd={{CWD}}. Help user manage/write/organize/think with notes.
 {{CWD_INSTRUCTION}}
 Support: {{SUPPORT_LINE}}
 

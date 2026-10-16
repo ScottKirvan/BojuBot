@@ -4,7 +4,8 @@ import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
-import { findClaudeBinary, probeCliCapabilities, PermissionMode } from './src/ClaudeProcess';
+import { getBackend } from './src/backends';
+import type { AgentBackend, PermissionMode } from './src/backends/types';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
@@ -65,7 +66,7 @@ export default class BojuBotPlugin extends Plugin {
       })
     );
 
-    this.claudeBinaryPath = findClaudeBinary(this.settings.binaryPath);
+    this.claudeBinaryPath = this.getBackend().findBinary(this.settings.binaryPath);
     // Probe after the shell env resolves — on Mac/Linux claude may need its PATH.
     void resolveShellEnv().then(env => {
       this.shellEnv = env;
@@ -473,6 +474,11 @@ export default class BojuBotPlugin extends Plugin {
     this.refreshBrand();
   }
 
+  /** The CLI backend BojuBot drives. Only Claude Code so far (agent-backends spec, Phase 1). */
+  getBackend(): AgentBackend {
+    return getBackend();
+  }
+
   /**
    * Re-probe the CLI at claudeBinaryPath. Call after (re-)detecting the binary.
    * Capabilities reset to unknown immediately, so turns started while the probe
@@ -484,7 +490,7 @@ export default class BojuBotPlugin extends Plugin {
     const binary = this.claudeBinaryPath;
     if (!binary) return;
     const env = Object.keys(this.shellEnv).length ? this.shellEnv : { ...process.env } as Record<string, string>;
-    const caps = await probeCliCapabilities(binary, env, this.getVaultRoot());
+    const caps = await this.getBackend().probe(binary, env, this.getVaultRoot());
     if (seq !== this.cliProbeSeq) return;
     this.cliCapabilities = caps;
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);

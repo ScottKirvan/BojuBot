@@ -14,12 +14,12 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type BojuBotPlugin from '../main';
-import { findClaudeBinary, fetchPlanUsage, PermissionDenial, PermissionMode } from './ClaudeProcess';
+import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL } from './constants';
-import { ContextManager, PERMISSION_DESCRIPTIONS } from './ContextManager';
+import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { CLAUDE_MODELS, ClaudeModel, DEFAULT_MODEL_ID } from './settings';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
@@ -163,6 +163,7 @@ export class ClaudeView extends ItemView {
     this.plugin = plugin;
     this.currentAssistantLabel = plugin.brand.name;
     this.coordinator = new SessionCoordinator({
+      getBackend: () => this.plugin.getBackend(),
       getBinaryPath: () => this.plugin.claudeBinaryPath,
       getVaultRoot: () => this.plugin.getVaultRoot(),
       getConfigDir: () => this.app.vault.configDir,
@@ -700,7 +701,7 @@ export class ClaudeView extends ItemView {
     this.coordinator.setPermissionOverride(null);
     this.updatePermissionIcon();
     if (this.coordinator.sessionId) {
-      const perm = PERMISSION_DESCRIPTIONS[this.plugin.settings.permissionMode];
+      const perm = this.plugin.getBackend().orientation.permissions[this.plugin.settings.permissionMode];
       this.coordinator.setPendingSystemMessage(
         `[System: Permission mode changed to ${perm.summary}. ` +
         `You can now: ${perm.can}. ` +
@@ -811,6 +812,7 @@ export class ClaudeView extends ItemView {
       const effectiveMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
         this.app,
+        this.plugin.getBackend().orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
@@ -1055,6 +1057,7 @@ export class ClaudeView extends ItemView {
     const effectiveMode = this.coordinator.getEffectivePermissionMode();
     const ctx = new ContextManager(
       this.app,
+      this.plugin.getBackend().orientation,
       this.plugin.settings.contextFilePath,
       this.plugin.settings.autonomousMemory,
       this.plugin.settings.vaultTreeDepth,
@@ -1270,6 +1273,7 @@ export class ClaudeView extends ItemView {
       const effectiveCwd = this.coordinator.sessionCwd ?? vaultRoot;
       const ctx = new ContextManager(
         this.app,
+        this.plugin.getBackend().orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
@@ -1502,7 +1506,7 @@ export class ClaudeView extends ItemView {
 
     const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
     checkBtn.addEventListener('click', () => {
-      this.plugin.claudeBinaryPath = findClaudeBinary(this.plugin.settings.binaryPath);
+      this.plugin.claudeBinaryPath = this.plugin.getBackend().findBinary(this.plugin.settings.binaryPath);
       if (this.plugin.claudeBinaryPath) {
         void this.plugin.refreshCliCapabilities();
         void this.onOpen();
@@ -2075,7 +2079,7 @@ export class ClaudeView extends ItemView {
     }
     this.messagesEl.querySelector('.bojubot-welcome')?.remove();
     const card = this.appendMessage('system', 'Checking plan usage…');
-    fetchPlanUsage(binary, this.plugin.shellEnv, this.plugin.getVaultRoot(), this.plugin.cliCapabilities)
+    this.plugin.getBackend().fetchPlanUsage(binary, this.plugin.shellEnv, this.plugin.getVaultRoot(), this.plugin.cliCapabilities)
       .then((text) => {
         card.addClass('bojubot-usage-card');
         card.setText(text);

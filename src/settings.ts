@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type BojuBotPlugin from '../main';
-import type { PermissionMode } from './ClaudeProcess';
+import type { PermissionMode } from './backends/types';
 export type { PermissionMode };
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';

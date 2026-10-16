@@ -46,7 +46,7 @@ BojuBot/
 ├── tsconfig.json
 ├── esbuild.config.mjs           # Build configuration
 ├── src/                         # TypeScript source
-│   ├── ClaudeProcess.ts         # Claude Code CLI subprocess lifecycle
+│   ├── backends/                # CLI backends behind the AgentBackend seam (claudeCode.ts, process.ts, types.ts)
 │   ├── ClaudeSession.ts         # Session state and serialization
 │   ├── ClaudeView.ts            # Main chat panel (Obsidian ItemView)
 │   ├── ContextGenerationModal.ts

@@ -21,7 +21,7 @@ Windows 11. Use PowerShell for all shell commands. `npm` and `git` are available
 - Key files:
   - `main.ts` — plugin entry, 16 commands
   - `src/ClaudeView.ts` — chat UI and session state
-  - `src/ClaudeProcess.ts` — spawn logic
+  - `src/backends/claudeCode.ts` — Claude Code spawn and stream parsing (behind the `AgentBackend` seam in `src/backends/types.ts`)
   - `src/modals/CustomSessionModal.ts` — custom session config modal (Shift+click +)
   - `src/UIBridge.ts` — @@BOJU protocol
   - `src/utils/sessionStorage.ts` — session CRUD

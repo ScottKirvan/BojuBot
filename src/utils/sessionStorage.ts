@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlink
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { estimateTokens } from './logger';
-import type { PermissionMode } from '../ClaudeProcess';
+import type { PermissionMode } from '../backends/types';
 
 export interface StoredSession {
   id: string;
