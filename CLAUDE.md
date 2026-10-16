@@ -9,7 +9,7 @@ BojuBot is not limited to features that involve Claude Code directly. Obsidian-n
 - **Prompt is written to `proc.stdin`, NOT passed as a CLI arg.** `proc.stdin.write(prompt)` then `proc.stdin.end()`. This avoids all Windows shell-quoting issues (smart quotes, double quotes, special chars).
 - `proc.stdin.end()` closes stdin so claude doesn't hang waiting for more input
 - Flags: `--output-format stream-json --verbose --print` + permission-mode args (see below)
-- Permission modes map to CLI args via `permissionArgs()` in `ClaudeProcess.ts`:
+- Permission modes map to CLI args via `permissionArgs()` in `src/backends/claudeCode.ts`:
   - **All modes**: `--permission-prompts none` appended when the CLI lists `--permission-prompts` — anything that would prompt is denied explicitly and lands in `permission_denials` (drives the denial card). Harmless under bypassPermissions.
   - **Standard** (default): `--permission-mode acceptEdits`. Bash denial is explicit via `--permission-prompts none` (#291) on CLIs that support it, emergent from `--print` mode on older ones. The CLI auto-approves read-only Bash commands it classifies as safe (`echo`, `ls`) in acceptEdits; anything else (e.g. `curl -o`) is denied. Do NOT use `--disallowedTools Bash` — it removes Bash entirely, so nothing is denied and the denial card never appears.
   - **Read-only**: `--permission-mode manual --allowedTools Read,Glob,Grep,WebFetch,WebSearch` (`default` instead of `manual` when the CLI doesn't list `manual` — #352)
@@ -44,7 +44,9 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` �
 | ------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `main.ts`                       | Plugin entry, 20 commands, activateView, notifyAllowlistChanged, generateCommandsFile          |
 | `src/ClaudeView.ts`             | Chat UI, session state, context injection, history modal, bridgeOptions, refreshSessionContext |
-| `src/ClaudeProcess.ts`          | Binary detect, spawn (PowerShell on Win), stream-json parse                                    |
+| `src/backends/types.ts`         | `AgentBackend` seam: the interface every CLI backend implements, plus shared stream types      |
+| `src/backends/claudeCode.ts`    | Claude Code backend: binary detect, spawn args, capability probe, stream-json parse            |
+| `src/backends/process.ts`       | Shared CLI launch (PowerShell on Win), run-to-completion, process-tree kill                    |
 | `src/ContextManager.ts`         | Vault tree + context file + allowlist assembly; all session-start context layers               |
 | `src/UIBridge.ts`               | @@BOJU action parsing + execution; ConfirmCommandModal; allowlist/denylist enforcement         |
 | `src/QueryHandler.ts`           | @@BOJU query resolution; resolveQuery(), queryLabel(), buildInjectMessage()                    |

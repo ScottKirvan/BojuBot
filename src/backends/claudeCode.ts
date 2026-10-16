@@ -1,19 +1,21 @@
 import { existsSync } from 'fs';
-import { BOJU_PREFIX } from './constants';
 import { join } from 'path';
 import * as os from 'os';
-import { execSync } from 'child_process';
-import { spawn, ChildProcess } from 'child_process';
-import { log as LOG, warn as WARN, logv as LOGV } from './utils/logger';
-import { parseApiError, ApiError } from './utils/apiError';
-import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from './utils/cliCapabilities';
-import { extractResultText } from './utils/planUsage';
-export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';
-
-export interface PermissionDenial {
-  tool: string;
-  input: unknown;
-}
+import { execSync, ChildProcess } from 'child_process';
+import { log as LOG, warn as WARN, logv as LOGV } from '../utils/logger';
+import { parseApiError } from '../utils/apiError';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from '../utils/cliCapabilities';
+import { extractResultText } from '../utils/planUsage';
+import { splitBojuLines } from '../utils/bojuLines';
+import { launchCli, runCli } from './process';
+import type {
+  AgentBackend,
+  BackendOrientation,
+  PermissionDenial,
+  PermissionMode,
+  StreamCallbacks,
+  TurnOptions,
+} from './types';
 
 /**
  * Maps BojuBot permissionMode to Claude CLI args. `caps` is what the installed
@@ -70,31 +72,6 @@ function modeArgs(mode: PermissionMode, caps: CliCapabilities): string[] {
   }
 }
 
-/**
- * Chat only (restricted) mode has no file-system tools at all, but Claude Code
- * still spawns with — and is aware of — its OS working directory regardless of
- * tool access. Spawning it there instead of the vault root keeps the vault's
- * file-system path from leaking through that awareness (e.g. via error text or
- * the model's own environment context, independent of anything BojuBot injects).
- * Called fresh on every spawn (never cached) so a mid-session permission
- * upgrade takes effect on the very next turn without needing a re-spawn.
- */
-export function resolveSpawnCwd(mode: PermissionMode, sessionCwd: string | undefined, vaultRoot: string): string {
-  if (mode === 'restricted') return os.tmpdir();
-  return sessionCwd ?? vaultRoot;
-}
-
-/**
- * True when the effective permission mode allows vault writes (Standard or Full).
- * Used to gate UI Bridge file-mutating actions (rename-file, move-file,
- * delete-file), which run through that side-channel rather than Claude Code's
- * own tool permissions and so aren't otherwise subject to Read only / Chat
- * only's "no writes" guarantee.
- */
-export function canWrite(permissionMode?: PermissionMode): boolean {
-  return permissionMode === 'standard' || permissionMode === 'full';
-}
-
 // ---------------------------------------------------------------------------
 // Binary detection
 // ---------------------------------------------------------------------------
@@ -149,25 +126,9 @@ export function findClaudeBinary(settingsOverride?: string): string | null {
 // Spawn
 // ---------------------------------------------------------------------------
 
-export interface SpawnOptions {
-  binaryPath: string;
-  prompt: string;
-  vaultRoot: string;
-  env: Record<string, string>;
-  resumeSessionId?: string;
-  permissionMode?: PermissionMode;
-  model?: string;
-  /** `--effort` level. Dropped unless the CLI listed it in `capabilities`. */
-  effort?: string;
-  /** Request token-by-token stream events. Dropped unless the CLI lists the flag. */
-  includePartialMessages?: boolean;
-  /** What the installed CLI supports. Omitted → unknown → the long-standing default args. */
-  capabilities?: CliCapabilities;
-}
-
 /** CLI args for a chat turn. Pure — exported for tests. Never includes the prompt. */
 export function buildSpawnArgs(
-  opts: Pick<SpawnOptions, 'resumeSessionId' | 'permissionMode' | 'model' | 'effort' | 'includePartialMessages' | 'capabilities'>,
+  opts: Pick<TurnOptions, 'resumeSessionId' | 'permissionMode' | 'model' | 'effort' | 'includePartialMessages' | 'capabilities'>,
 ): string[] {
   const caps = opts.capabilities ?? UNKNOWN_CAPABILITIES;
   const args = [
@@ -196,12 +157,12 @@ export function buildSpawnArgs(
   return args;
 }
 
-export function spawnClaude(opts: SpawnOptions): ChildProcess {
+export function spawnClaude(opts: TurnOptions): ChildProcess {
   const args = buildSpawnArgs(opts);
   // Prompt is written to stdin after spawn — avoids all shell/arg quoting issues.
 
-  LOG('spawnClaude cwd:', opts.vaultRoot, 'session:', opts.resumeSessionId ?? 'new');
-  const proc = launchClaude(opts.binaryPath, args, opts.vaultRoot, opts.env);
+  LOG('spawnClaude cwd:', opts.cwd, 'session:', opts.resumeSessionId ?? 'new');
+  const proc = launchCli(opts.binaryPath, args, opts.cwd, opts.env);
 
   // Write prompt via stdin — bypasses all shell/arg quoting issues.
   // claude --print reads from stdin when no positional prompt arg is given.
@@ -214,95 +175,6 @@ export function spawnClaude(opts: SpawnOptions): ChildProcess {
   proc.stdin.end();
 
   return proc;
-}
-
-/**
- * Start the claude binary with `args`. Every invocation goes through here so the
- * Windows/Electron workaround and the env cleanup apply everywhere.
- * Never put user content in `args` — write it to stdin instead.
- */
-function launchClaude(binaryPath: string, args: string[], cwd: string, baseEnv: Record<string, string>): ChildProcess {
-  // Strip CLAUDECODE so claude doesn't refuse to launch inside another session.
-  const env = { ...baseEnv };
-  delete env['CLAUDECODE'];
-
-  let proc: ChildProcess;
-
-  if (process.platform === 'win32') {
-    // On Windows, Electron's child_process piping doesn't work correctly with
-    // cmd.exe (shell:true) or direct spawn (shell:false) — stdout is swallowed.
-    // Spawning via powershell.exe -NonInteractive works reliably.
-    // Single-quote flags only (no user content in args now — prompt goes via stdin).
-    const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
-    const psCmd = `& ${ps(binaryPath)} ${args.map(ps).join(' ')}`;
-    LOG('  powershell spawn');
-    proc = spawn('powershell.exe', ['-NonInteractive', '-Command', psCmd], {
-      cwd,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-    });
-  } else {
-    proc = spawn(binaryPath, args, {
-      cwd,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-    });
-  }
-
-  LOG('  pid:', proc.pid);
-  return proc;
-}
-
-/**
- * Run claude to completion and resolve with its stdout. `stdin` (if given) is
- * written, and stdin is always closed so claude never waits for more input.
- * Rejects on spawn error, non-zero exit, or timeout (the process tree is killed).
- */
-export function runClaude(
-  binaryPath: string,
-  args: string[],
-  cwd: string,
-  env: Record<string, string>,
-  timeoutMs: number,
-  stdin = '',
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let proc: ChildProcess;
-    try {
-      proc = launchClaude(binaryPath, args, cwd, env);
-    } catch (e) {
-      reject(e instanceof Error ? e : new Error(String(e)));
-      return;
-    }
-    let out = '';
-    let errText = '';
-    let settled = false;
-    const timer = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      killProcess(proc);
-      reject(new Error(`timed out after ${timeoutMs} ms`));
-    }, timeoutMs);
-    const settle = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      fn();
-    };
-
-    proc.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString(); });
-    proc.stderr?.on('data', (chunk: Buffer) => { errText += chunk.toString(); });
-    proc.on('error', (e) => settle(() => reject(e)));
-    proc.on('close', (code) => settle(() => {
-      if (code === 0) resolve(out);
-      else reject(new Error(`exit code ${code}${errText.trim() ? `: ${errText.trim().substring(0, 200)}` : ''}`));
-    }));
-
-    if (stdin) proc.stdin?.write(stdin, 'utf8');
-    proc.stdin?.end();
-  });
 }
 
 const USAGE_TIMEOUT_MS = 30_000;
@@ -320,7 +192,7 @@ export async function fetchPlanUsage(
 ): Promise<string> {
   const args = ['--output-format', 'stream-json', '--verbose', '--print'];
   if (has(caps, '--no-session-persistence')) args.push('--no-session-persistence');
-  const out = await runClaude(binaryPath, args, cwd, env, USAGE_TIMEOUT_MS, '/usage');
+  const out = await runCli(binaryPath, args, cwd, env, USAGE_TIMEOUT_MS, '/usage');
   const result = extractResultText(out);
   const text = result?.text.trim() ?? '';
   if (!result || !text) throw new Error('Claude Code returned no usage information.');
@@ -341,8 +213,8 @@ export async function probeCliCapabilities(
   cwd: string,
 ): Promise<CliCapabilities> {
   try {
-    const versionText = await runClaude(binaryPath, ['--version'], cwd, env, PROBE_TIMEOUT_MS);
-    const helpText = await runClaude(binaryPath, ['--help'], cwd, env, PROBE_TIMEOUT_MS);
+    const versionText = await runCli(binaryPath, ['--version'], cwd, env, PROBE_TIMEOUT_MS);
+    const helpText = await runCli(binaryPath, ['--help'], cwd, env, PROBE_TIMEOUT_MS);
     const caps = parseCliCapabilities(helpText, versionText);
     LOG('CLI capabilities — version:', caps.version ?? 'unknown',
       '— permission modes:', caps.permissionModes.join(',') || '(unknown)',
@@ -355,55 +227,9 @@ export async function probeCliCapabilities(
   }
 }
 
-/**
- * Kill a spawned claude process and its entire process tree.
- * On Windows, proc.kill() only kills the PowerShell wrapper — claude.exe keeps running.
- * taskkill /F /T kills the full tree.
- */
-export function killProcess(proc: ChildProcess): void {
-  if (!proc.pid) return;
-  LOG('killProcess — pid:', proc.pid);
-  if (process.platform === 'win32') {
-    try {
-      execSync(`taskkill /F /T /PID ${proc.pid}`, { stdio: 'ignore' });
-    } catch {
-      // Process may have already exited — ignore
-    }
-  } else {
-    proc.kill('SIGTERM');
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Stream-JSON parsing
 // ---------------------------------------------------------------------------
-
-export interface TokenUsage {
-  inputTokens: number;
-  cacheReadTokens: number;
-  outputTokens: number;
-}
-
-export interface StreamCallbacks {
-  onText: (delta: string) => void;
-  /** Live preview of the text block being generated (needs --include-partial-messages).
-   *  Receives the block's full text so far, raw — it may contain partial or complete
-   *  @@BOJU lines. Display only: onText with the complete message always follows and
-   *  is the source of truth. Optional — existing callers unaffected. */
-  onTextPreview?: (blockText: string) => void;
-  onAction: (line: string) => void;
-  /** Called for each @@BOJU_QUERY line. Optional — existing callers unaffected. */
-  onQuery?: (line: string) => void;
-  onToolCall: (tool: string, input: unknown, toolUseId: string) => void;
-  onToolResult?: (toolUseId: string, content: string) => void;
-  /** Called when the CLI reports an API error (synthetic `API Error: ...` message).
-   *  Optional — without it the error text is passed to onText as before. */
-  onApiError?: (err: ApiError) => void;
-  onPermissionDenied: (denials: PermissionDenial[]) => void;
-  onUsage: (usage: TokenUsage) => void;
-  onDone: (sessionId?: string, clean?: boolean) => void;
-  onError: (err: string) => void;
-}
 
 export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void {
   let buffer = '';
@@ -514,23 +340,11 @@ function handleMessage(
               cb.onApiError?.(apiError);
               continue;
             }
-            // Route @@BOJU lines; dispatch on JSON key ("action" vs "query")
-            const textLines: string[] = [];
-            for (const line of raw.split('\n')) {
-              if (line.startsWith(BOJU_PREFIX)) {
-                try {
-                  const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
-                  if ('action' in parsed) {
-                    cb.onAction(line);
-                  } else if ('query' in parsed) {
-                    cb.onQuery?.(line);
-                  }
-                } catch { /* malformed — treat as text */ textLines.push(line); }
-              } else {
-                textLines.push(line);
-              }
+            const { clean, lines } = splitBojuLines(raw);
+            for (const l of lines) {
+              if (l.kind === 'action') cb.onAction(l.line);
+              else cb.onQuery?.(l.line);
             }
-            const clean = textLines.join('\n');
             if (clean) cb.onText(clean);
           } else if (block.type === 'tool_use') {
             cb.onToolCall(block.name as string, block.input, block.id as string);
@@ -578,3 +392,48 @@ function handleMessage(
       break;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Backend
+// ---------------------------------------------------------------------------
+
+/** Orientation wording for Claude Code. Tool names match Claude Code's built-in tools. */
+export const CLAUDE_CODE_ORIENTATION: BackendOrientation = {
+  agentLabel: 'Claude Code',
+  environmentNote: `Your environment may list "Additional working directories" beyond your CWD — these come from Claude Code CLI's own global config and are not something {{BRAND}} set up; they are frequently leftover from unrelated projects. Ignore them: do not read, write, or explore any additional working directory unless the user explicitly directs you there.`,
+  editToolHint: 'the Write or Edit tool',
+  permissions: {
+    restricted: {
+      summary: 'Chat only',
+      can: 'respond to messages, fetch web URLs (WebFetch), search the web (WebSearch), and work with any context the user explicitly attaches',
+      cannot: 'read, write, or modify vault files. If asked to make file changes, describe exactly what you would change and ask the user to switch to Standard mode or apply the change themselves',
+    },
+    readonly: {
+      summary: 'Read-only',
+      can: 'read vault files (Read, Glob, Grep), fetch web URLs, and search the web',
+      cannot: 'write or modify any files. If asked to make changes, show the user a diff or the exact content to paste',
+    },
+    standard: {
+      summary: 'Standard',
+      can: 'read and write vault files, fetch the web, and run read-only shell commands (Bash) such as ls, echo, or git status',
+      cannot: 'run shell commands that change anything (write files, install, delete, download) — those are denied. Request permission if a task genuinely requires one',
+    },
+    full: {
+      summary: 'Full access',
+      can: 'use all tools including Bash shell commands',
+      cannot: 'nothing — all tools are available',
+    },
+  },
+};
+
+export const claudeCodeBackend: AgentBackend = {
+  id: 'claude-code',
+  displayName: 'Claude Code',
+  findBinary: findClaudeBinary,
+  probe: probeCliCapabilities,
+  spawnTurn: spawnClaude,
+  parseStream: parseStreamOutput,
+  fetchPlanUsage,
+  compactPrompt: '/compact',
+  orientation: CLAUDE_CODE_ORIENTATION,
+};
