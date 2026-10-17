@@ -26,11 +26,11 @@ import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
-import { extractToolDetail } from '../src/utils/toolFormatting';
+import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
@@ -2961,5 +2961,75 @@ describe('loadCustomModels', () => {
 describe('formatCliVersion product name', () => {
   test('names the given product', () => {
     assert.equal(formatCliVersion(AGY_CAPS, 'Antigravity'), 'Antigravity 1.4.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Antigravity polish (step 4)
+// ---------------------------------------------------------------------------
+
+const AGY_DENIAL_NOTICE = 'jetski: no output produced — a tool required the "command" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n';
+
+describe('isAgyDenialNotice', () => {
+  test('matches agy headless auto-denial notices for any permission', () => {
+    assert.equal(isAgyDenialNotice(AGY_DENIAL_NOTICE), true);
+    assert.equal(isAgyDenialNotice(AGY_DENIAL_NOTICE.replace('"command"', '"write_file"')), true);
+  });
+  test('other stderr is not a denial notice', () => {
+    for (const t of ['boom', 'Error: not signed in', 'permission denied: EACCES']) assert.equal(isAgyDenialNotice(t), false, t);
+  });
+});
+
+describe('parseAgyStream stderr', () => {
+  test('the denial notice is dropped (the denial card covers it); the denial itself still arrives', async () => {
+    const r = await runAgy(AGY_SHELL_DENIED, { stderr: [AGY_DENIAL_NOTICE] });
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.denials.length, 1);
+  });
+  test('other stderr is still reported alongside a denial notice', async () => {
+    const r = await runAgy(AGY_SHELL_DENIED, { stderr: [AGY_DENIAL_NOTICE, 'Error: quota exhausted'] });
+    assert.deepEqual(r.errors, ['Error: quota exhausted']);
+  });
+});
+
+describe('formatAgyUsage wording', () => {
+  test('bucket names that already say "Remaining" are not followed by "left" (agy 1.4.0 report)', () => {
+    const json = JSON.stringify({
+      status: 'SUCCESS',
+      command: { data: { groups: [{ name: 'Gemini Models', buckets: [
+        { id: 'gemini-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 0.9910339117050171, reset_time: '2026-10-24T02:17:05Z' },
+      ] }] } },
+    });
+    assert.equal(formatAgyUsage(json, s => s), 'Gemini Models\n  Weekly Limit Remaining: 99%, resets 2026-10-24T02:17:05Z');
+  });
+});
+
+describe('contextGenStatusForTool', () => {
+  test('Claude Code and Antigravity read tools → scanning', () => {
+    for (const t of ['Read', 'Glob', 'Grep', 'view_file', 'list_dir', 'grep_search', 'find_by_name']) {
+      assert.equal(contextGenStatusForTool(t), 'Scanning vault…', t);
+    }
+  });
+  test('write tools → writing', () => {
+    for (const t of ['Write', 'Edit', 'write_to_file', 'replace_file_content', 'multi_replace_file_content']) {
+      assert.equal(contextGenStatusForTool(t), 'Writing your context file…', t);
+    }
+  });
+  test('ToolSearch and unknown tools', () => {
+    assert.equal(contextGenStatusForTool('ToolSearch'), 'Loading tools…');
+    assert.equal(contextGenStatusForTool('run_command'), 'Thinking…');
+  });
+});
+
+describe('backend permission wording', () => {
+  test('Claude Code keeps the stock picker wording', () => {
+    assert.deepEqual(claudeCodeBackend.modeDescriptions, {});
+  });
+  test('Antigravity says Standard has no shell commands, and describes every mode it offers', () => {
+    assert.match(antigravityBackend.modeDescriptions.standard ?? '', /no shell/);
+    for (const mode of ['standard', 'readonly', 'full'] as const) {
+      assert.ok(antigravityBackend.modeDescriptions[mode], mode);
+      assert.equal(antigravityBackend.unavailableModes[mode], undefined, mode);
+    }
   });
 });

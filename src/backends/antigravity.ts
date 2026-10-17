@@ -174,9 +174,12 @@ export function formatAgyUsage(json: string, formatTime: (iso: string) => string
   for (const g of groups) {
     lines.push(firstString('Models', g.name));
     for (const b of (g.buckets ?? []) as Array<Record<string, unknown>>) {
-      const pct = typeof b.remaining_fraction === 'number' ? `${Math.round(b.remaining_fraction * 100)}% left` : 'unknown';
+      const name = firstString('Limit', b.name, b.window);
+      // agy's bucket names already say "… Remaining"
+      const left = /remaining/i.test(name) ? '' : ' left';
+      const pct = typeof b.remaining_fraction === 'number' ? `${Math.round(b.remaining_fraction * 100)}%${left}` : 'unknown';
       const reset = typeof b.reset_time === 'string' ? `, resets ${formatTime(b.reset_time)}` : '';
-      lines.push(`  ${firstString('Limit', b.name, b.window)}: ${pct}${reset}`);
+      lines.push(`  ${name}: ${pct}${reset}`);
     }
   }
   if (!lines.length) {
@@ -232,6 +235,16 @@ export async function fetchAgyPlanUsage(
 /** Tool step errors that mean "denied", as opposed to the tool failing. */
 const DENIED_PREFIX = 'permission check failed';
 
+/**
+ * agy's stderr explanation of a headless auto-denial ("a tool required the
+ * "command" permission that headless mode cannot prompt for…"). The denial
+ * itself arrives on stdout and drives the denial card, so this is noise in the
+ * chat. Pure — exported for tests.
+ */
+export function isAgyDenialNotice(text: string): boolean {
+  return /permission that headless mode cannot prompt for/.test(text);
+}
+
 export function parseAgyStream(proc: ChildProcess, cb: StreamCallbacks): void {
   const handler = createAgyStreamHandler(cb);
   let buffer = '';
@@ -253,6 +266,7 @@ export function parseAgyStream(proc: ChildProcess, cb: StreamCallbacks): void {
   proc.stderr?.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
     WARN('agy stderr:', text);
+    if (isAgyDenialNotice(text)) return;
     cb.onError(text);
   });
 
@@ -414,6 +428,11 @@ export const antigravityBackend: AgentBackend = {
   listModels: listAgyModels,
   unavailableModes: {
     restricted: "Antigravity can't block file access for a single session.",
+  },
+  modeDescriptions: {
+    readonly: 'read vault, no writes (plan mode)',
+    standard: 'read+write vault, no shell commands',
+    full: 'unrestricted, including shell',
   },
   orientation: ANTIGRAVITY_ORIENTATION,
 };
