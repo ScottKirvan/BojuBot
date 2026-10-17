@@ -141,20 +141,7 @@ Testers install betas with BRAT (user guide: `docs/guide/beta-builds.md`). `.git
 - **Pruning:** only the newest 5 `-beta.N` pre-releases are kept; older ones and their tags are deleted. Hand-named betas (not `-beta.N`) are never pruned.
 - **Docs for unreleased features:** docs deploy from `main`, so they run ahead of the marketplace. Mark pages or sections for features that are only in betas with `<Badge type="warning" text="Beta" />` after the heading, and a `::: warning Not released yet` container that links to the beta builds page (see `docs/guide/agents.md`).
 
-## Release process (post-merge checklist)
+## Release notes
 **Before merging the release-please PR:** remove the beta badges and "Not released yet" notices for features shipping in that release (`grep -rn 'text="Beta"\|Not released yet' docs/`), in a `docs:` commit.
 
-release-please only reads commit **subject lines** — commit bodies are ignored. After each release PR merges:
-
-1. Scan commit bodies for sub-features/fixes not visible in the subject:
-   ```bash
-   git log --format="%H %s%n%b%n---" <prev-tag>..HEAD
-   ```
-2. Manually expand any sparse entries in `notes/CHANGELOG.md`
-3. Sync the GitHub release page to match:
-   ```bash
-   gh release edit <tag> --notes "$(cat release-body.md)"
-   ```
-   (or paste directly via `gh release edit <tag> --notes-file <file>`)
-
-The natural checkpoint is the release-please PR review — that's the right moment to catch multi-bullet commits before the release goes public.
+The docs deployment generates release notes on its own — don't expand `notes/CHANGELOG.md` or edit GitHub release pages unless asked. Setup steps, limitations and how-tos belong in the user docs (`docs/guide/`), never the changelog.
