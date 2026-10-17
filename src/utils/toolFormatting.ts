@@ -4,6 +4,33 @@
  */
 
 /**
+ * Progress line for the context-file generator while a tool runs. Covers Claude
+ * Code's and Antigravity's tool names.
+ */
+export function contextGenStatusForTool(tool: string): string {
+  switch (tool) {
+    case 'Read':
+    case 'Glob':
+    case 'Grep':
+    case 'view_file':
+    case 'list_dir':
+    case 'grep_search':
+    case 'find_by_name':
+      return 'Scanning vault…';
+    case 'Write':
+    case 'Edit':
+    case 'write_to_file':
+    case 'replace_file_content':
+    case 'multi_replace_file_content':
+      return 'Writing your context file…';
+    case 'ToolSearch':
+      return 'Loading tools…';
+    default:
+      return 'Thinking…';
+  }
+}
+
+/**
  * Extracts a human-readable detail string from a tool call's input object.
  * Used to build the label shown in each tool event row (e.g. "Read: my-note.md").
  *

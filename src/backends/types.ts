@@ -109,5 +109,8 @@ export interface AgentBackend {
   listModels: ((binaryPath: string, env: Record<string, string>, cwd: string) => Promise<ModelOption[]>) | null;
   /** Permission modes this backend can't enforce, each with the reason the UI shows. */
   unavailableModes: Partial<Record<PermissionMode, string>>;
+  /** Short picker descriptions where the backend behaves differently from the
+   *  stock wording (e.g. which shell commands Standard allows). */
+  modeDescriptions: Partial<Record<PermissionMode, string>>;
   orientation: BackendOrientation;
 }

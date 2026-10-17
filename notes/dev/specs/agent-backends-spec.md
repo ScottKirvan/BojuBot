@@ -236,7 +236,13 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
   - `hasReadableHistory()` and `loadHistory()` choose the CLI's history or the transcript. Resume, the session list ("Remote" badge, token estimate) and exporting a past session all go through them.
   - Deleting a session deletes its transcript.
   - Sessions from before step 3 resume with a note that their earlier messages weren't recorded.
-  - Remaining for step 4: the per-model context window for the gauge, Antigravity auth onboarding, filtering agy's stderr notices, and backend-specific permission descriptions in the picker.
+- **Step 4 (polish):**
+  - agy's stderr notice about a headless auto-denial is dropped (`isAgyDenialNotice()`), because the denial card already reports it.
+  - `/usage` drops "left" after bucket names that already say "Remaining".
+  - The context-file generator shows progress for Antigravity's tool names too (`contextGenStatusForTool()`).
+  - `AgentBackend.modeDescriptions` gives the picker, Custom Session and the permission icon tooltip per-agent wording. On Antigravity, Standard reads "no shell commands".
+  - **Gauge stays hidden on Antigravity (decided):** `agy` reports no context window size (not in `agy models`, `/usage` or the stream), and a guessed size would show a misleading percentage.
+  - Antigravity onboarding moves to Phase 3.
 
 ### Phase 3: release hardening
 
