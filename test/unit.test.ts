@@ -24,6 +24,7 @@ import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID } from '../src/backends';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
@@ -2283,5 +2284,299 @@ describe('SessionCoordinator compact on a backend without compaction', () => {
     } finally {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Antigravity backend (agy 1.4.0 streams recorded on Windows, init tool list trimmed)
+// ---------------------------------------------------------------------------
+
+const AGY_HELP_1_4_0 = [
+  'Flags:',
+  '  --conversation                  Resume a previous conversation by ID',
+  '  --dangerously-skip-permissions  Auto-approve all tool permission requests without prompting',
+  '  --effort                        Reasoning effort for the current CLI session (low|medium|high|xhigh|max)',
+  '  --mode                          Set the agent execution mode for this session (accept-edits, auto, plan)',
+  '  --model                         Model for the current CLI session',
+].join('\n');
+
+const AGY_READ = [
+  { event: 'init', conversation_id: 'conv-read', init: { model: 'gemini-3.8-flash-low', tools: ['view_file'], permission_mode: 'request-review' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 0, state: 'DONE', step_type: 'user_input' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 1, state: 'DONE', step_type: 'agent_response', usage: { input_tokens: 11829, output_tokens: 120, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 11949 } } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 2, state: 'ACTIVE', step_type: 'tool', tool_name: 'view_file', tool_info: { name: 'view_file', parameters: { AbsolutePath: 'C:\\vault\\note.md' } } } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 2, state: 'DONE', step_type: 'tool', tool_name: 'view_file', tool_info: { name: 'view_file', parameters: { AbsolutePath: 'C:\\vault\\note.md' }, output: '2 lines, 27 bytes' } } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 3, state: 'ACTIVE', step_type: 'agent_response', text_delta: '77' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 3, state: 'ACTIVE', step_type: 'agent_response', text_delta: '31' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 3, state: 'DONE', step_type: 'agent_response', text_delta: '\n', usage: { input_tokens: 12220, output_tokens: 4, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 12224 } } },
+  { event: 'result', result: { conversation_id: 'conv-read', status: 'SUCCESS', response: '7731\n', num_turns: 1 } },
+];
+
+const AGY_SHELL_DENIED = [
+  { event: 'init', conversation_id: 'conv-shell', init: { model: 'gemini-3.8-flash-low', permission_mode: 'request-review' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-shell', step_index: 0, state: 'DONE', step_type: 'user_input' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-shell', step_index: 2, state: 'ACTIVE', step_type: 'tool', tool_name: 'run_command', tool_info: { name: 'run_command', parameters: { CommandLine: "Set-Content -Path shell.txt -Value 'apple'" } } } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-shell', step_index: 2, state: 'ERROR', step_type: 'tool', tool_name: 'run_command', tool_info: { name: 'run_command', parameters: { CommandLine: "Set-Content -Path shell.txt -Value 'apple'" }, error: { type: 'TOOL_ERROR', message: 'permission check failed for command "Set-Content -Path shell.txt -Value \'apple\'": user denied permission to run command' } } } },
+  { event: 'result', result: { conversation_id: 'conv-shell', status: 'SUCCESS', response: '', num_turns: 1, denied_actions: [{ action: 'command', display_name: 'RunCommand' }] } },
+];
+
+const AGY_BOJU = [
+  { event: 'init', conversation_id: 'conv-boju', init: { model: 'gemini-3.8-flash-low' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-boju', step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: '@@BOJU {"action":"open-f' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-boju', step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'ile","path":"Projects/Plan.md"}\nI\'ve opened the note.' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-boju', step_index: 1, state: 'DONE', step_type: 'agent_response', text_delta: '\n', usage: { input_tokens: 11902, output_tokens: 36, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 11938 } } },
+  { event: 'result', result: { conversation_id: 'conv-boju', status: 'SUCCESS', num_turns: 1 } },
+];
+
+const AGY_RESUMED = [
+  { event: 'init', conversation_id: 'conv-r', init: { model: 'gemini-3.8-flash-low' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-r', step_index: 2, state: 'DONE', step_type: 'user_input' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-r', step_index: 3, state: 'DONE', step_type: 'system_message' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-r', step_index: 4, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'PLUM-42' } },
+  { event: 'step_update', step_update: { conversation_id: 'conv-r', step_index: 4, state: 'DONE', step_type: 'agent_response', text_delta: '\n', usage: { input_tokens: 12044, output_tokens: 5, cache_read_tokens: 0 } } },
+  { event: 'result', result: { conversation_id: 'conv-r', status: 'SUCCESS', response: 'PLUM-42\n', num_turns: 2 } },
+];
+
+interface AgyRun {
+  texts: string[];
+  previews: string[];
+  actions: string[];
+  queries: string[];
+  tools: Array<{ name: string; input: unknown; id: string }>;
+  results: Array<{ id: string; content: string }>;
+  denials: Array<{ tool: string; input: unknown }>;
+  usage: Array<{ inputTokens: number; cacheReadTokens: number; outputTokens: number }>;
+  errors: string[];
+  sessionId?: string;
+  clean?: boolean;
+}
+
+function runAgy(events: unknown[], opts: { preview?: boolean; split?: boolean; stderr?: string[] } = {}): Promise<AgyRun> {
+  return new Promise((resolve) => {
+    const r: AgyRun = { texts: [], previews: [], actions: [], queries: [], tools: [], results: [], denials: [], usage: [], errors: [] };
+    const proc = mockProc();
+    parseAgyStream(proc, {
+      onText: (t) => r.texts.push(t),
+      onTextPreview: opts.preview === false ? undefined : (t) => r.previews.push(t),
+      onAction: (l) => r.actions.push(l),
+      onQuery: (l) => r.queries.push(l),
+      onToolCall: (name, input, id) => r.tools.push({ name, input, id }),
+      onToolResult: (id, content) => r.results.push({ id, content }),
+      onPermissionDenied: (d) => r.denials.push(...d),
+      onUsage: (u) => r.usage.push(u),
+      onDone: (id, clean) => { r.sessionId = id; r.clean = clean; resolve(r); },
+      onError: (e) => r.errors.push(e),
+    });
+    const text = events.map(e => (typeof e === 'string' ? e : JSON.stringify(e))).join('\n') + '\n';
+    if (opts.split) {
+      // One character at a time: lines must be reassembled across data events
+      for (const ch of text) proc.stdout.emit('data', Buffer.from(ch));
+    } else {
+      proc.stdout.emit('data', Buffer.from(text));
+    }
+    for (const e of opts.stderr ?? []) proc.stderr.emit('data', Buffer.from(e));
+    proc.emit('close', 0);
+  });
+}
+
+const clone = <T>(v: T): any => JSON.parse(JSON.stringify(v));
+
+describe('agyPermissionArgs', () => {
+  test('Standard accepts file edits (agy default mode denies writes outside temp)', () => {
+    assert.deepEqual(agyPermissionArgs('standard'), ['--mode', 'accept-edits']);
+  });
+  test('Full access skips permissions', () => {
+    assert.deepEqual(agyPermissionArgs('full'), ['--dangerously-skip-permissions']);
+  });
+  test('Read-only and Chat only fail closed to plan mode', () => {
+    assert.deepEqual(agyPermissionArgs('readonly'), ['--mode', 'plan']);
+    assert.deepEqual(agyPermissionArgs('restricted'), ['--mode', 'plan']);
+  });
+});
+
+describe('buildAgySpawnArgs', () => {
+  const caps = parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n');
+
+  test('first turn: stream-json in and out, Standard mode, no conversation', () => {
+    assert.deepEqual(buildAgySpawnArgs({}), ['--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'accept-edits']);
+  });
+
+  test('resumed turn with model, effort and mode', () => {
+    assert.deepEqual(
+      buildAgySpawnArgs({ resumeSessionId: 'conv-1', permissionMode: 'readonly', model: 'gemini-3.8-flash-high', effort: 'high', capabilities: caps }),
+      ['--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan', '--model', 'gemini-3.8-flash-high', '--effort', 'high', '--conversation', 'conv-1'],
+    );
+  });
+
+  test('effort dropped when capabilities are unknown or the level is not listed', () => {
+    assert.ok(!buildAgySpawnArgs({ effort: 'high' }).includes('--effort'));
+    assert.ok(!buildAgySpawnArgs({ effort: 'ultra', capabilities: caps }).includes('--effort'));
+  });
+
+  test('mode flags are sent even with unknown capabilities', () => {
+    assert.deepEqual(
+      buildAgySpawnArgs({ permissionMode: 'readonly', capabilities: UNKNOWN_CAPABILITIES }),
+      ['--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan'],
+    );
+  });
+});
+
+describe('agyPromptLine', () => {
+  test('one NDJSON user event, special characters preserved', () => {
+    const prompt = 'He said “hi” & left\n"quoted" \'single\'';
+    const line = agyPromptLine(prompt);
+    assert.equal(line.indexOf('\n'), line.length - 1);
+    assert.deepEqual(JSON.parse(line), { event: 'user', message: { role: 'user', content: prompt } });
+  });
+});
+
+describe('agy capabilities', () => {
+  test('pipe-separated effort levels are parsed', () => {
+    const caps = parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n');
+    assert.deepEqual([...caps.effortLevels], ['low', 'medium', 'high', 'xhigh', 'max']);
+    assert.ok(has(caps, '--effort'));
+    assert.ok(has(caps, '--conversation'));
+  });
+});
+
+describe('parseAgyStream', () => {
+  test('read turn: tool call + result, final text, per-step usage, conversation id', async () => {
+    const r = await runAgy(AGY_READ);
+    assert.deepEqual(r.texts, ['7731\n']);
+    assert.deepEqual(r.tools, [{ name: 'view_file', input: { AbsolutePath: 'C:\\vault\\note.md' }, id: 'conv-read:2' }]);
+    assert.deepEqual(r.results, [{ id: 'conv-read:2', content: '2 lines, 27 bytes' }]);
+    assert.deepEqual(r.usage, [
+      { inputTokens: 11829, cacheReadTokens: 0, outputTokens: 120 },
+      { inputTokens: 12220, cacheReadTokens: 0, outputTokens: 4 },
+    ]);
+    assert.deepEqual(r.denials, []);
+    assert.equal(r.sessionId, 'conv-read');
+    assert.equal(r.clean, true);
+  });
+
+  test('preview receives the growing block text, then clears', async () => {
+    const r = await runAgy(AGY_READ);
+    assert.deepEqual(r.previews, ['77', '7731', '']);
+  });
+
+  test('no preview callback → no previews, text still delivered', async () => {
+    const r = await runAgy(AGY_READ, { preview: false });
+    assert.deepEqual(r.previews, []);
+    assert.deepEqual(r.texts, ['7731\n']);
+  });
+
+  test('lines split across data events are reassembled', async () => {
+    const r = await runAgy(AGY_READ, { split: true });
+    assert.deepEqual(r.texts, ['7731\n']);
+    assert.equal(r.sessionId, 'conv-read');
+  });
+
+  test('denied shell command → denial with tool and parameters, error as tool result', async () => {
+    const r = await runAgy(AGY_SHELL_DENIED);
+    assert.deepEqual(r.denials, [{ tool: 'run_command', input: { CommandLine: "Set-Content -Path shell.txt -Value 'apple'" } }]);
+    assert.equal(r.results.length, 1);
+    assert.ok(r.results[0].content.startsWith('permission check failed'));
+    assert.deepEqual(r.texts, []);
+    assert.equal(r.clean, true);
+  });
+
+  test('denied_actions is the fallback when no denied tool step was seen', async () => {
+    const r = await runAgy(AGY_SHELL_DENIED.filter(e => clone(e).step_update?.step_type !== 'tool'));
+    assert.deepEqual(r.denials, [{ tool: 'RunCommand', input: { action: 'command' } }]);
+  });
+
+  test('tool failures that are not permission checks are not denials', async () => {
+    const events = clone(AGY_SHELL_DENIED);
+    events[3].step_update.tool_info.error.message = 'file not found';
+    delete events[4].result.denied_actions;
+    const r = await runAgy(events);
+    assert.deepEqual(r.denials, []);
+    assert.equal(r.results[0].content, 'file not found');
+  });
+
+  test('@@BOJU line is routed to onAction and stripped from text', async () => {
+    const r = await runAgy(AGY_BOJU);
+    assert.deepEqual(r.actions, ['@@BOJU {"action":"open-file","path":"Projects/Plan.md"}']);
+    assert.equal(r.texts.length, 1);
+    assert.ok(!r.texts[0].includes('@@BOJU'));
+    assert.ok(r.texts[0].includes("I've opened the note."));
+  });
+
+  test('resumed turn: step indexes continue, system_message ignored', async () => {
+    const r = await runAgy(AGY_RESUMED);
+    assert.deepEqual(r.texts, ['PLUM-42\n']);
+    assert.deepEqual(r.tools, []);
+    assert.equal(r.sessionId, 'conv-r');
+  });
+
+  test('non-SUCCESS result or missing result → not clean', async () => {
+    const failed = clone(AGY_RESUMED);
+    failed[5].result.status = 'ERROR';
+    assert.equal((await runAgy(failed)).clean, false);
+    assert.equal((await runAgy(AGY_RESUMED.slice(0, 5))).clean, false);
+  });
+
+  test('subagent steps are ignored', async () => {
+    const r = await runAgy([
+      AGY_RESUMED[0],
+      { event: 'step_update', step_update: { conversation_id: 'conv-r', step_index: 9, state: 'DONE', step_type: 'agent_response', text_delta: 'sub', subagent_info: { name: 'x' } } },
+      ...AGY_RESUMED.slice(1),
+    ]);
+    assert.deepEqual(r.texts, ['PLUM-42\n']);
+  });
+
+  test('stderr is reported and non-JSON lines are skipped', async () => {
+    const r = await runAgy(['not json', ...AGY_RESUMED], { stderr: ['boom'] });
+    assert.deepEqual(r.errors, ['boom']);
+    assert.deepEqual(r.texts, ['PLUM-42\n']);
+  });
+});
+
+describe('formatAgyUsage', () => {
+  const usageJson = (groups: unknown) => JSON.stringify({ status: 'SUCCESS', command: { data: { groups } } });
+  const at = (s: string) => `at ${s}`;
+
+  test('lists each bucket with percent left and reset time', () => {
+    const out = formatAgyUsage(usageJson([
+      { name: 'Gemini', buckets: [{ name: '5 hour', remaining_fraction: 0.734, reset_time: '2026-10-16T20:00:00Z' }, { window: 'weekly', remaining_fraction: 1 }] },
+    ]), at);
+    assert.equal(out, 'Gemini\n  5 hour: 73% left, resets at 2026-10-16T20:00:00Z\n  weekly: 100% left');
+  });
+
+  test('falls back to the response text when there are no groups', () => {
+    assert.equal(formatAgyUsage(JSON.stringify({ status: 'SUCCESS', response: ' plain report \n' }), at), 'plain report');
+  });
+
+  test('rejects on error status, empty report, or bad JSON', () => {
+    assert.throws(() => formatAgyUsage(JSON.stringify({ status: 'ERROR', error: 'not signed in' })), /not signed in/);
+    assert.throws(() => formatAgyUsage(JSON.stringify({ status: 'SUCCESS' })), /no usage information/);
+    assert.throws(() => formatAgyUsage('not json'));
+  });
+});
+
+describe('antigravityBackend', () => {
+  test('is registered; default backend is still Claude Code', () => {
+    assert.equal(getBackend('antigravity'), antigravityBackend);
+    assert.equal(antigravityBackend.compactPrompt, null);
+    assert.equal(DEFAULT_BACKEND_ID, 'claude-code');
+  });
+
+  test('orientation covers every permission mode and names agy tools', () => {
+    for (const mode of ['standard', 'readonly', 'full', 'restricted'] as const) {
+      const p = ANTIGRAVITY_ORIENTATION.permissions[mode];
+      assert.ok(p.summary && p.can && p.cannot, mode);
+    }
+    assert.ok(ANTIGRAVITY_ORIENTATION.permissions.standard.cannot.includes('run_command'));
+    assert.equal(ANTIGRAVITY_ORIENTATION.environmentNote, null);
+  });
+});
+
+describe('extractToolDetail (Antigravity tool parameters)', () => {
+  test('view_file / write_to_file show the file name', () => {
+    assert.equal(extractToolDetail('view_file', { AbsolutePath: 'C:\\vault\\Notes\\a.md' }), 'a.md');
+    assert.equal(extractToolDetail('write_to_file', { TargetFile: '/vault/b.md' }), 'b.md');
+  });
+  test('run_command shows the command line', () => {
+    assert.equal(extractToolDetail('run_command', { CommandLine: 'ls -la' }), 'ls -la');
   });
 });

@@ -86,10 +86,10 @@ function parseChoices(description: string): string[] {
   return values;
 }
 
-/** Bare comma-separated values from a parenthesised list like "(low, medium, high)". */
+/** Bare values from a parenthesised list: "(low, medium, high)" (Claude Code) or "(low|medium|high)" (Antigravity). */
 function parseBareList(description: string): string[] {
-  const m = /\(\s*([A-Za-z][\w-]*(?:\s*,\s*[A-Za-z][\w-]*)+)\s*\)/.exec(description);
-  return m ? m[1].split(',').map(s => s.trim()) : [];
+  const m = /\(\s*([A-Za-z][\w-]*(?:\s*[,|]\s*[A-Za-z][\w-]*)+)\s*\)/.exec(description);
+  return m ? m[1].split(/[,|]/).map(s => s.trim()) : [];
 }
 
 function unique(values: string[]): string[] {

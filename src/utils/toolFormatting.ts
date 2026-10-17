@@ -15,8 +15,9 @@ export function extractToolDetail(tool: string, input: unknown): string {
   if (!input || typeof input !== 'object') return '';
   const inp = input as Record<string, unknown>;
 
-  // Try path-like fields first (covers Read, Write, Edit, Glob, Grep, LS…)
-  const pathVal = (inp.file_path ?? inp.path ?? inp.filePath) as string | undefined;
+  // Try path-like fields first (covers Read, Write, Edit, Glob, Grep, LS…;
+  // AbsolutePath/TargetFile are Antigravity's view_file/write_to_file)
+  const pathVal = (inp.file_path ?? inp.path ?? inp.filePath ?? inp.AbsolutePath ?? inp.TargetFile) as string | undefined;
   if (pathVal) {
     // For commands that benefit from showing just the filename
     const key = tool.toLowerCase();
@@ -26,9 +27,10 @@ export function extractToolDetail(tool: string, input: unknown): string {
     return pathVal;
   }
 
-  // Bash: show the command
-  if (inp.command) {
-    const cmd = inp.command as string;
+  // Bash (Claude Code) / run_command (Antigravity): show the command
+  const command = (inp.command ?? inp.CommandLine) as string | undefined;
+  if (command) {
+    const cmd = command;
     return cmd.length > 70 ? cmd.substring(0, 70) + '…' : cmd;
   }
 
