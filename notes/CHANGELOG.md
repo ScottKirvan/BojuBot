@@ -7,6 +7,23 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.8.0](https://github.com/ScottKirvan/BojuBot/compare/3.7.0...3.8.0) (2026-10-17)
+
+
+### Features
+
+* add Antigravity CLI backend module ([3157e23](https://github.com/ScottKirvan/BojuBot/commit/3157e234ca9dee22358c6f2545661d34d08bfc95))
+* choose the agent backend for new sessions ([e9ab12c](https://github.com/ScottKirvan/BojuBot/commit/e9ab12c72617f3c9082ea3ecd9ebc03e0e8404ca))
+* guide Antigravity users through sign-in and model errors ([bd0e5af](https://github.com/ScottKirvan/BojuBot/commit/bd0e5af3c33e601b2894cabd4562e6f97159491b))
+* show history for Antigravity sessions ([f409969](https://github.com/ScottKirvan/BojuBot/commit/f4099695e47cadbdef9e8659915bf606592fb9d8))
+
+
+### Bug Fixes
+
+* keep Antigravity from reading BojuBot's source to learn the UI Bridge ([ac4f874](https://github.com/ScottKirvan/BojuBot/commit/ac4f87428d62e809dc59143c0730e1c4d0ce2034))
+* keep note links clickable in agent replies ([550be65](https://github.com/ScottKirvan/BojuBot/commit/550be6577e381a335d84081488daa002d28be6f4))
+* tidy Antigravity denial notices, usage and permission wording ([1ca46ff](https://github.com/ScottKirvan/BojuBot/commit/1ca46ffca5a16c4962d506bfc7d972bd96c9ae23))
+
 ## [3.7.0](https://github.com/ScottKirvan/BojuBot/compare/3.6.0...3.7.0) (2026-10-03)
 
 
