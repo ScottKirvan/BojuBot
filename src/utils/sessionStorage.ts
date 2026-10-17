@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, appendFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { estimateTokens } from './logger';
 import type { BackendId, PermissionMode } from '../backends/types';
+import { getBackend } from '../backends';
 
 export interface StoredSession {
   id: string;
@@ -33,10 +34,72 @@ export function sessionBackend(session: Pick<StoredSession, 'backend'>): Backend
   return session.backend ?? 'claude-code';
 }
 
-/** True when the session's history can be read back for display. Only Claude
- *  Code's transcripts are readable so far. */
-export function hasReadableHistory(session: Pick<StoredSession, 'backend' | 'claudeSessionId'>): boolean {
-  return !!session.claudeSessionId && sessionBackend(session) === 'claude-code' && canResumeLocally(session.claudeSessionId);
+type HistorySession = Pick<StoredSession, 'id' | 'backend' | 'claudeSessionId'>;
+
+/**
+ * True when the session's history can be shown: the CLI's own history file is on
+ * this machine (Claude Code), or BojuBot's transcript of it exists (backends
+ * whose history BojuBot can't read).
+ */
+export function hasReadableHistory(session: HistorySession, sessionsDir: string): boolean {
+  if (!session.claudeSessionId) return false;
+  if (getBackend(sessionBackend(session)).readableHistory) return canResumeLocally(session.claudeSessionId);
+  return existsSync(transcriptPath(sessionsDir, session.id));
+}
+
+/** The session's messages for display, from whichever source hasReadableHistory() checks. */
+export function loadHistory(session: HistorySession, sessionsDir: string): ChatMessage[] {
+  if (!session.claudeSessionId) return [];
+  if (getBackend(sessionBackend(session)).readableHistory) return loadSessionMessages(session.claudeSessionId);
+  return loadTranscript(sessionsDir, session.id);
+}
+
+/** BojuBot's own transcript of a session, next to its JSON (`<id>.transcript.jsonl`). */
+export function transcriptPath(sessionsDir: string, sessionFileId: string): string {
+  return join(sessionsDir, `${sessionFileId}.transcript.jsonl`);
+}
+
+/**
+ * One completed turn as transcript entries: the user message cleaned the same
+ * way Claude Code history is on replay (injected vault context and
+ * <bojubot-context> tags removed, contexts kept for badges), then the reply.
+ * Empty sides are left out. Pure — exported for tests.
+ */
+export function transcriptEntries(prompt: string, reply: string, timestamp: string): ChatMessage[] {
+  const entries: ChatMessage[] = [];
+  const user = cleanUserContent(prompt);
+  if (user) entries.push({ role: 'user', content: user.clean, timestamp, ...(user.contexts.length && { contexts: user.contexts }) });
+  if (reply.trim()) entries.push({ role: 'assistant', content: reply.trim(), timestamp });
+  return entries;
+}
+
+/** Append entries to a session's transcript, one JSON object per line. */
+export function appendTranscript(sessionsDir: string, sessionFileId: string, entries: ChatMessage[]): void {
+  if (!entries.length) return;
+  if (!existsSync(sessionsDir)) mkdirSync(sessionsDir, { recursive: true });
+  appendFileSync(transcriptPath(sessionsDir, sessionFileId), entries.map(e => JSON.stringify(e)).join('\n') + '\n');
+}
+
+/** Read a transcript written by appendTranscript. Malformed lines are skipped; a missing file yields []. */
+export function loadTranscript(sessionsDir: string, sessionFileId: string): ChatMessage[] {
+  const path = transcriptPath(sessionsDir, sessionFileId);
+  if (!existsSync(path)) return [];
+  const messages: ChatMessage[] = [];
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const m = JSON.parse(line) as Partial<ChatMessage>;
+      if ((m.role === 'user' || m.role === 'assistant' || m.role === 'separator') && typeof m.content === 'string') {
+        messages.push({
+          role: m.role,
+          content: m.content,
+          timestamp: typeof m.timestamp === 'string' ? m.timestamp : '',
+          ...(Array.isArray(m.contexts) && m.contexts.length && { contexts: m.contexts }),
+        });
+      }
+    } catch { /* skip malformed line */ }
+  }
+  return messages;
 }
 
 export function getSessionsDir(vaultRoot: string, configDir: string): string {
@@ -140,8 +203,9 @@ export function saveSessionAtTop(vaultRoot: string, session: StoredSession, sess
 
 export function deleteSession(vaultRoot: string, sessionId: string, fromDir: string | undefined, sessionsDir: string): void {
   const dir = fromDir ?? sessionsDir;
-  const filePath = join(dir, `${sessionId}.json`);
-  if (existsSync(filePath)) unlinkSync(filePath);
+  for (const filePath of [join(dir, `${sessionId}.json`), transcriptPath(dir, sessionId)]) {
+    if (existsSync(filePath)) unlinkSync(filePath);
+  }
 }
 
 export function titleFromPrompt(prompt: string): string {
@@ -211,6 +275,17 @@ function extractBojuBotContexts(content: string): { clean: string; contexts: Inj
   });
 
   return { clean: clean.trim(), contexts };
+}
+
+/**
+ * A user message as shown on replay: injected vault context removed (it only
+ * ever leads the first message), <bojubot-context> tags stripped and kept as
+ * badge metadata. Null when nothing is left to show.
+ */
+function cleanUserContent(content: string, stripVaultContext = true): { clean: string; contexts: InjectedContext[] } | null {
+  const text = stripVaultContext ? content.replace(/<vault_context>[\s\S]*?<\/vault_context>\s*/g, '').trim() : content;
+  const { clean, contexts } = extractBojuBotContexts(text);
+  return clean || contexts.length > 0 ? { clean, contexts } : null;
 }
 
 const COMPACTION_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
@@ -287,20 +362,14 @@ export function loadSessionMessages(claudeSessionId: string): ChatMessage[] {
           // Belt-and-suspenders: catch any compaction summary not preceded by compact_boundary
           if (content.startsWith(COMPACTION_SUMMARY_PREFIX)) continue;
 
-          if (isFirstUser) {
-            // Strip injected vault context from display
-            content = content.replace(/<vault_context>[\s\S]*?<\/vault_context>\s*/g, '').trim();
-            isFirstUser = false;
-          }
-
-          // Strip <bojubot-context> tags and collect metadata for badge rendering
-          const { clean, contexts } = extractBojuBotContexts(content);
-          if (clean || contexts.length > 0) {
+          const user = cleanUserContent(content, isFirstUser);
+          isFirstUser = false;
+          if (user) {
             messages.push({
               role: 'user',
-              content: clean,
+              content: user.clean,
               timestamp: entry.timestamp as string,
-              contexts: contexts.length > 0 ? contexts : undefined,
+              contexts: user.contexts.length > 0 ? user.contexts : undefined,
             });
           }
 

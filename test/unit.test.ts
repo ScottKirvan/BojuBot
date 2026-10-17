@@ -12,12 +12,12 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, sessionBackend, ChatMessage } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, ChatMessage } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
 import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
@@ -2777,17 +2777,145 @@ describe('backend registry helpers', () => {
   });
 });
 
-describe('hasReadableHistory', () => {
-  test('no conversation yet → false', () => {
-    assert.equal(hasReadableHistory({ claudeSessionId: '' }), false);
-  });
-  test('Antigravity sessions are never read back (no transcript store yet)', () => {
-    assert.equal(hasReadableHistory({ claudeSessionId: 'conv-1', backend: 'antigravity' }), false);
-  });
+describe('hasReadableHistory / loadHistory', () => {
+  const base = { id: 'sess-1', createdAt: '', updatedAt: '', title: 't' };
+
+  test('no conversation yet → false', withSessionsDir((dir) => {
+    assert.equal(hasReadableHistory({ ...base, claudeSessionId: '' }, dir), false);
+    assert.deepEqual(loadHistory({ ...base, claudeSessionId: '' }, dir), []);
+  }));
+
+  test('Antigravity: readable once BojuBot has a transcript for the session', withSessionsDir((dir) => {
+    const session = { ...base, claudeSessionId: 'conv-1', backend: 'antigravity' as const };
+    assert.equal(hasReadableHistory(session, dir), false);
+    appendTranscript(dir, 'sess-1', transcriptEntries('hi', 'hello', '2026-10-16T00:00:00Z'));
+    assert.equal(hasReadableHistory(session, dir), true);
+    assert.deepEqual(loadHistory(session, dir).map(m => [m.role, m.content]), [['user', 'hi'], ['assistant', 'hello']]);
+  }));
+
+  test('Claude Code ignores BojuBot transcripts (it reads ~/.claude history)', withSessionsDir((dir) => {
+    appendTranscript(dir, 'sess-1', transcriptEntries('hi', 'hello', '2026-10-16T00:00:00Z'));
+    assert.equal(hasReadableHistory({ ...base, claudeSessionId: 'no-such-claude-session' }, dir), false);
+  }));
+
   test('sessionBackend defaults to Claude Code', () => {
     assert.equal(sessionBackend({}), 'claude-code');
     assert.equal(sessionBackend({ backend: 'antigravity' }), 'antigravity');
   });
+
+  test('backends declare whether BojuBot can read their history', () => {
+    assert.equal(claudeCodeBackend.readableHistory, true);
+    assert.equal(antigravityBackend.readableHistory, false);
+  });
+});
+
+describe('transcriptEntries', () => {
+  const ts = '2026-10-16T12:00:00Z';
+
+  test('strips injected vault context and keeps <bojubot-context> tags as badges', () => {
+    const prompt = '<vault_context>\nlots of orientation\n</vault_context>\n\n' +
+      '<bojubot-context type="active-note" path="Notes/a.md"></bojubot-context>\n\nWrite me a story';
+    const [user, reply] = transcriptEntries(prompt, 'Done.\n', ts);
+    assert.deepEqual(user, { role: 'user', content: 'Write me a story', timestamp: ts, contexts: [{ type: 'active-note', path: 'Notes/a.md' }] });
+    assert.deepEqual(reply, { role: 'assistant', content: 'Done.', timestamp: ts });
+  });
+
+  test('keeps @@BOJU lines in the reply so replay can rebuild query cards', () => {
+    const reply = '@@BOJU {"query":"backlinks","path":"a.md","mode":"show"}\nHere you go.';
+    assert.equal(transcriptEntries('q', reply, ts)[1].content, reply);
+  });
+
+  test('empty reply (interrupted turn) records only the user side', () => {
+    assert.deepEqual(transcriptEntries('hello', '  \n', ts), [{ role: 'user', content: 'hello', timestamp: ts }]);
+  });
+
+  test('a prompt that is only injected context records only the reply', () => {
+    assert.deepEqual(transcriptEntries('<vault_context>x</vault_context>', 'ok', ts), [{ role: 'assistant', content: 'ok', timestamp: ts }]);
+  });
+});
+
+describe('appendTranscript / loadTranscript', () => {
+  test('appends across turns and reads back in order', withSessionsDir((dir) => {
+    appendTranscript(dir, 's', transcriptEntries('one', 'first', 't1'));
+    appendTranscript(dir, 's', transcriptEntries('two', 'second', 't2'));
+    assert.deepEqual(loadTranscript(dir, 's').map(m => m.content), ['one', 'first', 'two', 'second']);
+  }));
+
+  test('creates the sessions folder if needed; nothing to append writes nothing', withSessionsDir((dir) => {
+    const nested = join(dir, 'a', 'b');
+    appendTranscript(nested, 's', []);
+    assert.equal(existsSync(transcriptPath(nested, 's')), false);
+    appendTranscript(nested, 's', transcriptEntries('x', 'y', 't'));
+    assert.equal(loadTranscript(nested, 's').length, 2);
+  }));
+
+  test('skips malformed lines and unknown roles; a missing file reads as []', withSessionsDir((dir) => {
+    writeFileSync(transcriptPath(dir, 's'), [
+      '{"role":"user","content":"ok","timestamp":"t"}',
+      'not json',
+      '{"role":"tool","content":"x"}',
+      '{"role":"assistant","content":42}',
+      '{"role":"assistant","content":"fine"}',
+      '',
+    ].join('\n'));
+    assert.deepEqual(loadTranscript(dir, 's'), [
+      { role: 'user', content: 'ok', timestamp: 't' },
+      { role: 'assistant', content: 'fine', timestamp: '' },
+    ]);
+    assert.deepEqual(loadTranscript(dir, 'missing'), []);
+  }));
+
+  test('transcripts are not listed as sessions, and deleteSession removes them', withSessionsDir((dir) => {
+    saveSession(dir, { id: 's', title: 'S', createdAt: 't', updatedAt: 't', claudeSessionId: 'c', backend: 'antigravity' }, dir);
+    appendTranscript(dir, 's', transcriptEntries('x', 'y', 't'));
+    assert.deepEqual(loadAllSessions(dir, dir, '.obsidian').map(x => x.id), ['s']);
+    deleteSession(dir, 's', undefined, dir);
+    assert.equal(existsSync(transcriptPath(dir, 's')), false);
+    assert.deepEqual(loadAllSessions(dir, dir, '.obsidian'), []);
+  }));
+});
+
+describe('SessionCoordinator transcript', () => {
+  test('an Antigravity turn is recorded and shows on reload', withSessionsDir(async (dir) => {
+    const { host, agy } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ backend: 'antigravity' });
+    coordinator.send('<vault_context>ctx</vault_context>\n\nhello', 'hello');
+    const cb = agy.streams[0];
+    cb.onQuery!('@@BOJU {"query":"tags","mode":"show"}');
+    cb.onText('Hi there.\n');
+    cb.onDone('conv-1', true);
+
+    const [stored] = storedSessions(dir);
+    const loaded: SessionLoadedPayload[] = [];
+    const reloaded = new SessionCoordinator(host);
+    reloaded.on('session:loaded', (p) => loaded.push(p));
+    await reloaded.loadSession(stored);
+    assert.equal(loaded[0].canResume, true);
+    assert.deepEqual(loaded[0].messages.map(m => [m.role, m.content]), [
+      ['user', 'hello'],
+      ['assistant', '@@BOJU {"query":"tags","mode":"show"}\nHi there.'],
+    ]);
+  }));
+
+  test('a Claude Code turn writes no transcript', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('hello', 'hello');
+    claude.streams[0].onText('hi');
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(existsSync(transcriptPath(dir, coordinator.sessionFileId!)), false);
+  }));
+
+  test('a turn that never got a conversation ID records nothing', withSessionsDir((dir) => {
+    const { host, agy } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ backend: 'antigravity' });
+    coordinator.send('hello', 'hello');
+    agy.streams[0].onDone(undefined, false);
+    assert.equal(existsSync(transcriptPath(dir, coordinator.sessionFileId!)), false);
+  }));
 });
 
 describe('parseAgyModels', () => {

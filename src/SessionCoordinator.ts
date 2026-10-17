@@ -12,8 +12,10 @@ import {
   saveSession,
   saveSessionAtTop,
   hasReadableHistory,
-  loadSessionMessages,
+  loadHistory,
   sessionBackend,
+  appendTranscript,
+  transcriptEntries,
   titleFromPrompt,
 } from './utils/sessionStorage';
 import { log } from './utils/logger';
@@ -325,11 +327,11 @@ export class SessionCoordinator {
     await this.host.saveLastActiveSessionId(session.id);
 
     const isNew = !session.claudeSessionId;
-    const canResume = hasReadableHistory(session);
+    const canResume = hasReadableHistory(session, this.host.getSessionsDir());
 
     if (isNew) this._placeholderSessionId = session.id;
 
-    const messages: ChatMessage[] = canResume ? loadSessionMessages(session.claudeSessionId) : [];
+    const messages: ChatMessage[] = canResume ? loadHistory(session, this.host.getSessionsDir()) : [];
 
     this.emit('session:loaded', { session, messages, isNew, canResume });
     log(
@@ -449,6 +451,9 @@ export class SessionCoordinator {
     this.emit('turn:start');
 
     let accumulated = '';
+    // The reply as the CLI produced it, @@BOJU lines included — what a transcript
+    // keeps, so replay can rebuild query cards the way Claude Code history does.
+    let transcriptReply = '';
     const pendingQueries: VaultQuery[] = [];
     let pendingPermissionRequest: { tool: string; reason: string } | null = null;
 
@@ -466,6 +471,7 @@ export class SessionCoordinator {
     backend.parseStream(proc, {
       onText: (delta) => {
         // The complete block replaces its live preview.
+        transcriptReply += delta;
         accumulated += delta;
         if (this.host.isUiBridgeEnabled()) {
           const { clean, actions } = extractActions(accumulated);
@@ -481,6 +487,7 @@ export class SessionCoordinator {
         ? (blockText) => this.emit('turn:text', composeStreamingText(accumulated, blockText), accumulated)
         : undefined,
       onAction: (line) => {
+        transcriptReply += line + '\n';
         if (!this.host.isUiBridgeEnabled()) return;
         try {
           const { actions } = extractActions(line + '\n');
@@ -488,6 +495,7 @@ export class SessionCoordinator {
         } catch { /* malformed action line */ }
       },
       onQuery: (line) => {
+        transcriptReply += line + '\n';
         try {
           const q = JSON.parse(line.slice(BOJU_PREFIX.length)) as VaultQuery;
           pendingQueries.push(q);
@@ -516,7 +524,10 @@ export class SessionCoordinator {
       },
       onDone: (sessionId, clean) => {
         this._activeProc = null;
-        if (sessionId) this._persistSessionAfterTurn(sessionId, firstUserInput);
+        if (sessionId) {
+          this._persistSessionAfterTurn(sessionId, firstUserInput);
+          if (!backend.readableHistory) this._appendTranscript(prompt, transcriptReply);
+        }
         this.emit('turn:done', { sessionId, clean, pendingQueries, pendingPermissionRequest });
       },
     });
@@ -528,6 +539,18 @@ export class SessionCoordinator {
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
+
+  /** Record a finished turn for backends whose own history BojuBot can't read.
+   *  Best-effort: a failed write costs the replay, never the turn. */
+  private _appendTranscript(prompt: string, reply: string): void {
+    const fileId = this._sessionFileId;
+    if (!fileId) return;
+    try {
+      appendTranscript(this.host.getSessionsDir(), fileId, transcriptEntries(prompt, reply, new Date().toISOString()));
+    } catch (e) {
+      log('Transcript write failed:', e instanceof Error ? e.message : String(e));
+    }
+  }
 
   /** The session record as persisted. Optional fields are only written when set,
    *  so a plain Claude Code session's JSON is unchanged from before backends. */
