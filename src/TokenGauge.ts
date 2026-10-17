@@ -5,6 +5,9 @@ export interface TokenGaugeHost {
   getSessionId(): string | undefined;
   /** Delegates to SessionCoordinator.compact() so the reentrancy guard applies. */
   compact(onDone: () => void, onError: (message: string) => void): void;
+  /** False when the session's backend can't compact (and its context window
+   *  isn't known), which keeps the gauge hidden. Optional, omitted means true. */
+  isSupported?(): boolean;
 }
 
 /**
@@ -74,6 +77,10 @@ export class TokenGauge {
   /** Update gauge to reflect current token count; shows the gauge if hidden. */
   update(tokens: number): void {
     this.contextTokens = tokens;
+    if (this.host.isSupported?.() === false) {
+      this.gaugeEl.classList.add('bojubot-hidden');
+      return;
+    }
     this.gaugeEl.classList.remove('bojubot-hidden');
 
     const arc = this.gaugeEl.querySelector('.bojubot-gauge-arc');

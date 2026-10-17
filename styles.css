@@ -1936,6 +1936,12 @@
   color: var(--interactive-accent);
 }
 
+/* Mode the session's agent can't enforce — shown with the reason, not selectable */
+.bojubot-perm-row--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Permission picker popover (icon click) ── */
 .bojubot-perm-popover {
   position: fixed;

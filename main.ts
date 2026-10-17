@@ -2,11 +2,12 @@ import { Plugin, Notice, addIcon } from 'obsidian';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
-import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab } from './src/settings';
+import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab, CLAUDE_MODELS, DEFAULT_MODEL_ID } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
-import { getBackend } from './src/backends';
-import type { AgentBackend, PermissionMode } from './src/backends/types';
-import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
+import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
+import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
+import { loadCustomModels } from './src/utils/customModels';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, formatCliVersion, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
@@ -16,15 +17,23 @@ import { AppInternal } from './src/obsidianInternal';
 import { resolveSkillsFolder, scanSkillFolder } from './src/SkillLoader';
 import { PermissionPickerModal } from './src/modals/PermissionPickerModal';
 
+interface BackendRuntime {
+  binaryPath: string | null;
+  caps: CliCapabilities;
+  models: ModelOption[];
+  probeSeq: number;
+}
+
 export default class BojuBotPlugin extends Plugin {
   settings: BojuBotSettings;
   /** Fully-resolved brand — always populated (loadSettings runs before use). */
   brand: ResolvedBrand = resolveBrand(undefined);
   shellEnv: Record<string, string> = {};
-  claudeBinaryPath: string | null = null;
-  /** What the installed CLI supports. Unknown until the async probe finishes (or if it fails). */
-  cliCapabilities: CliCapabilities = UNKNOWN_CAPABILITIES;
-  private cliProbeSeq = 0;
+  /** Per-backend detection results. Capabilities and the model list stay
+   *  unknown/empty until the async probe finishes (or if it fails). */
+  private runtime: Record<BackendId, BackendRuntime> = Object.fromEntries(
+    BACKEND_IDS.map(id => [id, { binaryPath: null, caps: UNKNOWN_CAPABILITIES, models: [], probeSeq: 0 }]),
+  ) as Record<BackendId, BackendRuntime>;
   private skillCommandIds = new Set<string>();
 
   /** Recompute the resolved brand and mirror it to the module-level accessor. */
@@ -66,15 +75,15 @@ export default class BojuBotPlugin extends Plugin {
       })
     );
 
-    this.claudeBinaryPath = this.getBackend().findBinary(this.settings.binaryPath);
-    // Probe after the shell env resolves — on Mac/Linux claude may need its PATH.
+    for (const id of BACKEND_IDS) this.runtime[id].binaryPath = getBackend(id).findBinary(this.binaryOverride(id));
+    // Probe after the shell env resolves — on Mac/Linux the CLI may need its PATH.
     void resolveShellEnv().then(env => {
       this.shellEnv = env;
-      void this.refreshCliCapabilities();
+      for (const id of BACKEND_IDS) void this.refreshCliCapabilities(id);
     });
 
-    if (!this.claudeBinaryPath) {
-      new Notice(`${this.brand.name}: Claude binary not found. Check plugin settings.`);
+    if (!this.getBinaryPath(this.settings.backend)) {
+      new Notice(`${this.brand.name}: ${this.getBackend().displayName} binary not found. Check plugin settings.`);
     }
 
     // Register custom icon — three S-curves suggesting bojubot folds (gyri).
@@ -266,7 +275,7 @@ export default class BojuBotPlugin extends Plugin {
       name: 'Switch effort',
       // Hidden from the palette when the installed CLI doesn't support --effort.
       checkCallback: (checking) => {
-        const caps = this.cliCapabilities;
+        const caps = this.getCapabilities(this.getActiveBackendId());
         if (!has(caps, '--effort') || caps.effortLevels.length === 0) return false;
         if (checking) return true;
         const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
@@ -433,7 +442,7 @@ export default class BojuBotPlugin extends Plugin {
         this.app,
         this,
         contextPath,
-        this.claudeBinaryPath ?? '',
+        this.getBinaryPath(this.settings.backend) ?? '',
         this.getVaultRoot(),
         this.shellEnv,
         this.settings.vaultTreeDepth,
@@ -452,6 +461,7 @@ export default class BojuBotPlugin extends Plugin {
     // is what fills every field field-by-field, so a partial brand never drops
     // sibling defaults.
     this.refreshBrand();
+    if (!isBackendId(this.settings.backend)) this.settings.backend = DEFAULT_BACKEND_ID;
     // Migrate old hardcoded log paths → empty so the dynamic default takes over
     if (this.settings.logFilePath === '_bojubot-debug.log') {
       this.settings.logFilePath = '';
@@ -474,27 +484,98 @@ export default class BojuBotPlugin extends Plugin {
     this.refreshBrand();
   }
 
-  /** The CLI backend BojuBot drives. Only Claude Code so far (agent-backends spec, Phase 1). */
-  getBackend(): AgentBackend {
-    return getBackend();
+  /** A backend by ID; defaults to the one new sessions use (settings.backend). */
+  getBackend(id: BackendId = this.settings.backend): AgentBackend {
+    return getBackend(id);
+  }
+
+  /** The backend of the session open in the panel, or the default when no panel is open. */
+  getActiveBackendId(): BackendId {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (leaves.length) return (leaves[0].view as ClaudeView).getBackendId();
+    return this.settings.backend;
+  }
+
+  getBinaryPath(id: BackendId): string | null {
+    return this.runtime[id].binaryPath;
+  }
+
+  /** What the installed CLI supports. Unknown until its probe finishes (or if it fails). */
+  getCapabilities(id: BackendId): CliCapabilities {
+    return this.runtime[id].caps;
+  }
+
+  /** Models for the picker: Claude Code's built-in list plus custom-models.json,
+   *  or what the CLI itself listed (empty until its probe finishes). */
+  getModels(id: BackendId): ModelOption[] {
+    if (id !== 'claude-code') return this.runtime[id].models;
+    const customModelsPath = join(this.getVaultRoot(), this.app.vault.configDir, 'plugins', 'bojubot', 'custom-models.json');
+    return [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
+  }
+
+  /** Global default model for a backend. '' = let the CLI choose (Antigravity only). */
+  getDefaultModel(id: BackendId): string {
+    return id === 'claude-code' ? (this.settings.defaultModel || DEFAULT_MODEL_ID) : this.settings.agyDefaultModel;
+  }
+
+  setDefaultModel(id: BackendId, model: string): void {
+    if (id === 'claude-code') this.settings.defaultModel = model;
+    else this.settings.agyDefaultModel = model;
+  }
+
+  private binaryOverride(id: BackendId): string {
+    return id === 'claude-code' ? this.settings.binaryPath : this.settings.agyBinaryPath;
+  }
+
+  /** Re-detect a backend's binary (e.g. after the user installs it) and re-probe it. */
+  detectBinary(id: BackendId): string | null {
+    const binary = getBackend(id).findBinary(this.binaryOverride(id));
+    this.runtime[id].binaryPath = binary;
+    void this.refreshCliCapabilities(id);
+    return binary;
+  }
+
+  /** "Claude Code 2.1.286", or "<agent>: unknown" before the probe finishes. For the About modal. */
+  agentVersionText(): string {
+    const id = this.getActiveBackendId();
+    const name = getBackend(id).displayName;
+    const caps = this.getCapabilities(id);
+    return caps.version ? formatCliVersion(caps, name) : `${name}: unknown`;
+  }
+
+  /** Settings changed the backend for new sessions. */
+  onDefaultBackendChanged(): void {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (leaves.length) (leaves[0].view as ClaudeView).onDefaultBackendChanged();
   }
 
   /**
-   * Re-probe the CLI at claudeBinaryPath. Call after (re-)detecting the binary.
-   * Capabilities reset to unknown immediately, so turns started while the probe
-   * runs use the default args; a stale probe (binary changed again) is discarded.
+   * Re-probe a backend's binary. Call after (re-)detecting it. Capabilities
+   * reset to unknown immediately, so turns started while the probe runs use the
+   * default args; a stale probe (binary changed again) is discarded.
    */
-  async refreshCliCapabilities(): Promise<void> {
-    const seq = ++this.cliProbeSeq;
-    this.cliCapabilities = UNKNOWN_CAPABILITIES;
-    const binary = this.claudeBinaryPath;
+  async refreshCliCapabilities(id: BackendId): Promise<void> {
+    const rt = this.runtime[id];
+    const seq = ++rt.probeSeq;
+    rt.caps = UNKNOWN_CAPABILITIES;
+    const binary = rt.binaryPath;
     if (!binary) return;
+    const backend = getBackend(id);
     const env = Object.keys(this.shellEnv).length ? this.shellEnv : { ...process.env } as Record<string, string>;
-    const caps = await this.getBackend().probe(binary, env, this.getVaultRoot());
-    if (seq !== this.cliProbeSeq) return;
-    this.cliCapabilities = caps;
+    const caps = await backend.probe(binary, env, this.getVaultRoot());
+    if (seq !== rt.probeSeq) return;
+    rt.caps = caps;
+    if (backend.listModels) {
+      try {
+        const models = await backend.listModels(binary, env, this.getVaultRoot());
+        if (seq !== rt.probeSeq) return;
+        rt.models = models;
+      } catch (e) {
+        warn(`${backend.displayName} model list failed:`, e instanceof Error ? e.message : String(e));
+      }
+    }
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) (leaves[0].view as ClaudeView).onCliCapabilitiesChanged();
+    if (leaves.length) (leaves[0].view as ClaudeView).onCliCapabilitiesChanged(id);
   }
 
   notifyPermissionChanged(): void {
