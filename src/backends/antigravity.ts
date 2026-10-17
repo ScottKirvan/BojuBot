@@ -430,7 +430,9 @@ export function createAgyStreamHandler(cb: StreamCallbacks) {
 /** Orientation wording for Antigravity. Tool names match agy's built-in tools. */
 export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
   agentLabel: 'Antigravity CLI',
-  environmentNote: null,
+  // Without this, agy goes digging in BojuBot's main.js and GitHub source to learn
+  // how to drive Obsidian (test/agy-bridge-check.ts), burning quota and turns.
+  environmentNote: 'This orientation is all you need to work with {{BRAND}}. Do not read {{BRAND}} plugin files (main.js, manifest.json) or fetch its source code online. If unsure of an action or query, emit the help query for its reference instead.',
   editToolHint: 'your file tools (write_to_file or replace_file_content)',
   permissions: {
     restricted: {
