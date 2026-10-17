@@ -10,6 +10,7 @@ import { execSync, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from '../utils/logger';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from '../utils/cliCapabilities';
 import { splitBojuLines } from '../utils/bojuLines';
+import type { ApiError } from '../utils/apiError';
 import { launchCli, runCli, runCliCapture } from './process';
 import type {
   AgentBackend,
@@ -245,9 +246,33 @@ export function isAgyDenialNotice(text: string): boolean {
   return /permission that headless mode cannot prompt for/.test(text);
 }
 
+/**
+ * An agy failure as an ApiError, so it gets the same error card as Claude
+ * Code's API errors. `errorCode` picks the guidance (see formatApiError).
+ * Pure — exported for tests.
+ */
+export function agyApiError(text: string): ApiError {
+  const message = text.trim().replace(/^error:\s*/i, '');
+  const errorCode = /authentication required|not (?:signed|logged) in|unauthenticated|sign in again/i.test(message)
+    ? 'agy_auth'
+    : /invalid model selection|not recognized as a known model/i.test(message)
+      ? 'agy_invalid_model'
+      : 'agy_error';
+  return { status: null, message, errorCode, raw: text };
+}
+
+function reportAgyError(cb: StreamCallbacks, text: string): void {
+  const err = agyApiError(text);
+  if (cb.onApiError) cb.onApiError(err);
+  else cb.onText(`Antigravity error: ${err.message}`);
+}
+
 export function parseAgyStream(proc: ChildProcess, cb: StreamCallbacks): void {
   const handler = createAgyStreamHandler(cb);
   let buffer = '';
+  // agy prints fatal errors to stderr as "error: …" and usually again in
+  // result.error. Held until close so the error card shows it once.
+  let heldError = '';
 
   proc.stdout?.on('data', (chunk: Buffer) => {
     buffer += chunk.toString();
@@ -267,11 +292,21 @@ export function parseAgyStream(proc: ChildProcess, cb: StreamCallbacks): void {
     const text = chunk.toString();
     WARN('agy stderr:', text);
     if (isAgyDenialNotice(text)) return;
+    if (/^\s*error:/i.test(text) || heldError) {
+      heldError += text;
+      return;
+    }
     cb.onError(text);
   });
 
   proc.on('close', (code) => {
-    const { sessionId, clean } = handler.finish();
+    const { sessionId, clean, errorReported, resultSeen } = handler.finish();
+    if (heldError.trim() && !errorReported) {
+      // No result at all (agy exited before the turn): stderr is the only report of why.
+      // After a result that wasn't an error, it's an ordinary stderr message.
+      if (resultSeen) cb.onError(heldError);
+      else reportAgyError(cb, heldError);
+    }
     LOG('agy closed — exit code:', code, '— conversation:', sessionId, '— clean:', clean);
     cb.onDone(sessionId, clean);
   });
@@ -286,6 +321,8 @@ export function parseAgyStream(proc: ChildProcess, cb: StreamCallbacks): void {
 export function createAgyStreamHandler(cb: StreamCallbacks) {
   let sessionId: string | undefined;
   let clean = false;
+  let errorReported = false;
+  let resultSeen = false;
   const stepText = new Map<number, string>();
   const startedTools = new Set<number>();
   const deniedTools: PermissionDenial[] = [];
@@ -360,8 +397,13 @@ export function createAgyStreamHandler(cb: StreamCallbacks) {
           break;
         case 'result': {
           const r = (msg.result ?? {}) as Record<string, unknown>;
+          resultSeen = true;
           if (typeof r.conversation_id === 'string' && r.conversation_id) sessionId = r.conversation_id;
           clean = r.status === 'SUCCESS';
+          if (!clean && typeof r.error === 'string' && r.error.trim()) {
+            reportAgyError(cb, r.error);
+            errorReported = true;
+          }
           const denied = (r.denied_actions ?? []) as Array<Record<string, unknown>>;
           if (deniedTools.length) {
             cb.onPermissionDenied([...deniedTools]);
@@ -375,8 +417,8 @@ export function createAgyStreamHandler(cb: StreamCallbacks) {
         }
       }
     },
-    finish(): { sessionId: string | undefined; clean: boolean } {
-      return { sessionId, clean };
+    finish(): { sessionId: string | undefined; clean: boolean; errorReported: boolean; resultSeen: boolean } {
+      return { sessionId, clean, errorReported, resultSeen };
     },
   };
 }

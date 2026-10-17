@@ -26,7 +26,7 @@ import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
@@ -2349,13 +2349,14 @@ interface AgyRun {
   denials: Array<{ tool: string; input: unknown }>;
   usage: Array<{ inputTokens: number; cacheReadTokens: number; outputTokens: number }>;
   errors: string[];
+  apiErrors: ApiError[];
   sessionId?: string;
   clean?: boolean;
 }
 
 function runAgy(events: unknown[], opts: { preview?: boolean; split?: boolean; stderr?: string[] } = {}): Promise<AgyRun> {
   return new Promise((resolve) => {
-    const r: AgyRun = { texts: [], previews: [], actions: [], queries: [], tools: [], results: [], denials: [], usage: [], errors: [] };
+    const r: AgyRun = { texts: [], previews: [], actions: [], queries: [], tools: [], results: [], denials: [], usage: [], errors: [], apiErrors: [] };
     const proc = mockProc();
     parseAgyStream(proc, {
       onText: (t) => r.texts.push(t),
@@ -2366,6 +2367,7 @@ function runAgy(events: unknown[], opts: { preview?: boolean; split?: boolean; s
       onToolResult: (id, content) => r.results.push({ id, content }),
       onPermissionDenied: (d) => r.denials.push(...d),
       onUsage: (u) => r.usage.push(u),
+      onApiError: (e) => r.apiErrors.push(e),
       onDone: (id, clean) => { r.sessionId = id; r.clean = clean; resolve(r); },
       onError: (e) => r.errors.push(e),
     });
@@ -3031,5 +3033,83 @@ describe('backend permission wording', () => {
       assert.ok(antigravityBackend.modeDescriptions[mode], mode);
       assert.equal(antigravityBackend.unavailableModes[mode], undefined, mode);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Antigravity errors (Phase 3 onboarding)
+// ---------------------------------------------------------------------------
+
+// agy 1.4.0 with --model no-such-model: the result carries the error, and stderr repeats it
+const AGY_BAD_MODEL_ERROR = 'invalid model selection (--model "no-such-model" --effort ""): model no-such-model is not recognized as a known model or custom model in settings\nAvailable models:\n  Gemini 3.8 Flash (High)\n  Gemini 3.8 Flash (Low)';
+const AGY_BAD_MODEL = [
+  { event: 'result', result: { conversation_id: '', status: 'ERROR', response: '', error: AGY_BAD_MODEL_ERROR, num_turns: 0 } },
+];
+
+describe('agyApiError', () => {
+  test('classifies sign-in, model and other errors', () => {
+    assert.equal(agyApiError('error: authentication required').errorCode, 'agy_auth');
+    assert.equal(agyApiError('You are not signed in').errorCode, 'agy_auth');
+    assert.equal(agyApiError(AGY_BAD_MODEL_ERROR).errorCode, 'agy_invalid_model');
+    assert.equal(agyApiError('quota exhausted for Gemini Models').errorCode, 'agy_error');
+  });
+  test('drops the "error:" prefix and keeps the raw text', () => {
+    const e = agyApiError('error: authentication required\n');
+    assert.equal(e.message, 'authentication required');
+    assert.equal(e.raw, 'error: authentication required\n');
+    assert.equal(e.status, null);
+  });
+});
+
+describe('formatApiError (Antigravity)', () => {
+  test('sign-in error points at the terminal', () => {
+    const d = formatApiError(agyApiError('authentication required'), 'win32');
+    assert.equal(d.title, "Antigravity isn't signed in");
+    assert.match(d.details[0], /run "agy" in a terminal/);
+  });
+  test('invalid model: first line without the flag echo, plus picker guidance', () => {
+    const d = formatApiError(agyApiError(AGY_BAD_MODEL_ERROR), 'win32');
+    assert.equal(d.title, 'Model not available');
+    assert.equal(d.details[0], 'invalid model selection: model no-such-model is not recognized as a known model or custom model in settings');
+    assert.match(d.details[1], /model picker/);
+  });
+  test('anything else is shown as-is under an Antigravity title', () => {
+    assert.deepEqual(formatApiError(agyApiError('quota exhausted'), 'win32'), { title: 'Antigravity error', details: ['quota exhausted'] });
+  });
+  test('Claude API errors are unchanged', () => {
+    assert.equal(formatApiError({ status: 529, message: 'Overloaded', errorCode: null, raw: '' }, 'win32').title, 'API error (529)');
+  });
+});
+
+describe('parseAgyStream errors', () => {
+  test('a failed result shows one error card; the stderr copy is held back', async () => {
+    const r = await runAgy(AGY_BAD_MODEL, { stderr: ['error: ' + AGY_BAD_MODEL_ERROR + '\n'] });
+    assert.equal(r.apiErrors.length, 1);
+    assert.equal(r.apiErrors[0].errorCode, 'agy_invalid_model');
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.clean, false);
+  });
+  test('stderr error with no result (agy exited early) still becomes an error card', async () => {
+    const r = await runAgy([], { stderr: ['error: authentication required\n'] });
+    assert.deepEqual(r.apiErrors.map(e => e.errorCode), ['agy_auth']);
+    assert.deepEqual(r.errors, []);
+  });
+  test('a successful turn reports no error card', async () => {
+    const r = await runAgy(AGY_READ);
+    assert.deepEqual(r.apiErrors, []);
+  });
+  test('without onApiError the error text reaches onText', async () => {
+    const texts: string[] = [];
+    await new Promise<void>((resolve) => {
+      const proc = mockProc();
+      parseAgyStream(proc, {
+        onText: (t) => texts.push(t), onAction: () => {}, onToolCall: () => {}, onPermissionDenied: () => {},
+        onUsage: () => {}, onError: () => {}, onDone: () => resolve(),
+      });
+      proc.stdout.emit('data', Buffer.from(JSON.stringify(AGY_BAD_MODEL[0]) + '\n'));
+      proc.emit('close', 0);
+    });
+    assert.equal(texts.length, 1);
+    assert.match(texts[0], /^Antigravity error: invalid model selection/);
   });
 });
