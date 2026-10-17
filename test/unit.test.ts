@@ -2654,16 +2654,22 @@ describe('SessionCoordinator backend binding', () => {
     assert.equal(claude.spawns[0].model, 'claude-sonnet-5-5');
   }));
 
-  test('Custom Session backend wins over the default and is persisted; Claude sessions store no backend key', withSessionsDir((dir) => {
-    const { host } = twoBackendHost(dir);
-    const coordinator = new SessionCoordinator(host);
+  // Separate folders: session IDs come from the millisecond clock, so two sessions
+  // started back to back in one folder can share an ID on a fast machine.
+  test('Custom Session backend wins over the default and is persisted', withSessionsDir((dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
     coordinator.startNewSession({ name: 'Agy', backend: 'antigravity' });
-    coordinator.startNewSession({ name: 'Claude' });
+    const [stored] = storedSessions(dir);
+    assert.equal(stored.title, 'Agy');
+    assert.equal(stored.backend, 'antigravity');
+  }));
 
-    const byTitle = new Map(storedSessions(dir).map(s => [s.title, s]));
-    assert.equal(byTitle.get('Agy')?.backend, 'antigravity');
-    assert.ok(byTitle.get('Claude'));
-    assert.equal('backend' in byTitle.get('Claude')!, false);
+  test('Claude Code sessions store no backend key', withSessionsDir((dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    coordinator.startNewSession({ name: 'Claude' });
+    const [stored] = storedSessions(dir);
+    assert.equal(stored.title, 'Claude');
+    assert.equal('backend' in stored, false);
   }));
 
   test('first turn binds the conversation ID and keeps the backend', withSessionsDir((dir) => {
