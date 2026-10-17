@@ -10,8 +10,6 @@ import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSession
 import { openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type BojuBotPlugin from '../main';
 import type { PermissionDenial, PermissionMode } from './backends/types';
@@ -21,7 +19,9 @@ import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMess
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
-import { CLAUDE_MODELS, ClaudeModel, DEFAULT_MODEL_ID } from './settings';
+import { ClaudeModel } from './settings';
+import { BACKEND_IDS } from './backends';
+import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError } from './utils/apiError';
@@ -34,7 +34,8 @@ import {
   saveSession,
   loadAllSessions,
   resolveSessionsDir,
-  canResumeLocally,
+  hasReadableHistory,
+  sessionBackend,
   loadSessionMessages,
   estimateSessionTokens,
 } from './utils/sessionStorage';
@@ -163,13 +164,14 @@ export class ClaudeView extends ItemView {
     this.plugin = plugin;
     this.currentAssistantLabel = plugin.brand.name;
     this.coordinator = new SessionCoordinator({
-      getBackend: () => this.plugin.getBackend(),
-      getBinaryPath: () => this.plugin.claudeBinaryPath,
+      getBackend: (id) => this.plugin.getBackend(id),
+      getBinaryPath: (id) => this.plugin.getBinaryPath(id),
+      getDefaultBackend: () => this.plugin.settings.backend,
       getVaultRoot: () => this.plugin.getVaultRoot(),
       getConfigDir: () => this.app.vault.configDir,
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
-      getModel: () => this.plugin.settings.defaultModel || DEFAULT_MODEL_ID,
+      getModel: (id) => this.plugin.getDefaultModel(id),
       getEffort: () => this.plugin.settings.defaultEffort ?? '',
       getSessionsDir: () => this.getSessionsDir(),
       saveLastActiveSessionId: async (id) => {
@@ -178,12 +180,13 @@ export class ClaudeView extends ItemView {
       },
       isUiBridgeEnabled: () => this.plugin.settings.uiBridgeEnabled,
       isStreamingEnabled: () => this.plugin.settings.streamPartialMessages,
-      getCliCapabilities: () => this.plugin.cliCapabilities,
+      getCliCapabilities: (id) => this.plugin.getCapabilities(id),
     });
     this._setupCoordinatorEvents();
     this.tokenGauge = new TokenGauge({
       getSessionId: () => this.coordinator.sessionId,
       compact: (onDone, onError) => this.coordinator.compact(onDone, onError),
+      isSupported: () => this.coordinator.backend.compactPrompt !== null,
     });
     this.attachmentHandler = new AttachmentHandler({
       getVaultRoot: () => this.plugin.getVaultRoot(),
@@ -433,20 +436,24 @@ export class ClaudeView extends ItemView {
     newSessionBtn.title = 'New session (Shift+click to configure)';
     newSessionBtn.addEventListener('click', (evt) => {
       if (evt.shiftKey) {
-        const customModelsPath = join(
-          this.plugin.getVaultRoot(),
-          this.app.vault.configDir,
-          'plugins', 'bojubot', 'custom-models.json',
-        );
-        const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
         new CustomSessionModal(
           this.app,
           this.plugin.getVaultRoot(),
           this.app.vault.configDir,
-          allModels,
+          BACKEND_IDS.map(id => {
+            const backend = this.plugin.getBackend(id);
+            return {
+              id,
+              displayName: backend.displayName,
+              installed: !!this.plugin.getBinaryPath(id),
+              models: this.plugin.getModels(id),
+              defaultModel: this.plugin.getDefaultModel(id),
+              effortLevels: this.supportedEffortLevels(id),
+              unavailableModes: backend.unavailableModes,
+            };
+          }),
+          this.plugin.settings.backend,
           this.plugin.settings.permissionMode,
-          this.plugin.settings.defaultModel || DEFAULT_MODEL_ID,
-          this.supportedEffortLevels(),
           this.plugin.settings.defaultEffort ?? '',
           (opts) => this.startNewSession(opts),
         ).open();
@@ -637,8 +644,8 @@ export class ClaudeView extends ItemView {
       void this.attachmentHandler.handleDroppedFiles(e.dataTransfer.files);
     });
 
-    // If Claude binary is missing, show setup guide and stop here
-    if (!this.plugin.claudeBinaryPath) {
+    // If the default agent's binary is missing, show setup guide and stop here
+    if (!this.plugin.getBinaryPath(this.plugin.settings.backend)) {
       this.renderSetupPanel();
       return;
     }
@@ -671,7 +678,7 @@ export class ClaudeView extends ItemView {
         this.app,
         this.plugin,
         this.plugin.settings.contextFilePath,
-        this.plugin.claudeBinaryPath,
+        this.plugin.getBinaryPath(this.plugin.settings.backend) ?? '',
         vaultRoot,
         this.plugin.shellEnv,
         this.plugin.settings.vaultTreeDepth,
@@ -685,15 +692,36 @@ export class ClaudeView extends ItemView {
     return this.coordinator.getEffectivePermissionMode();
   }
 
-  /** Called by the plugin when the CLI capability probe finishes. */
-  onCliCapabilitiesChanged(): void {
-    log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.cliCapabilities));
+  /** The agent CLI the open session is bound to. */
+  getBackendId(): BackendId {
+    return this.coordinator.backendId;
+  }
+
+  /** Called by the plugin when a backend's capability probe finishes. */
+  onCliCapabilitiesChanged(id: BackendId): void {
+    const backend = this.plugin.getBackend(id);
+    log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.getCapabilities(id), backend.displayName));
     this.updateModelIndicator();
   }
 
-  /** Effort levels the installed CLI lists, or [] when it doesn't support --effort (hides all effort UI). */
-  private supportedEffortLevels(): readonly string[] {
-    const caps = this.plugin.cliCapabilities;
+  /** The backend for new sessions changed in settings. An untouched new session follows it. */
+  onDefaultBackendChanged(): void {
+    if (this.coordinator.followDefaultBackend(this.plugin.settings.backend)) {
+      log('ClaudeView: new session moved to', this.plugin.settings.backend);
+      if (this.messagesEl.querySelector('.bojubot-welcome')) {
+        this.messagesEl.empty();
+        this.renderWelcomeScreen();
+      }
+      this.tokenGauge.reset();
+      this.updateModelIndicator();
+      this.updatePermissionIcon();
+    }
+  }
+
+  /** Effort levels a backend's CLI lists (default: the open session's), or [] when
+   *  it doesn't support --effort (hides all effort UI). */
+  private supportedEffortLevels(id: BackendId = this.coordinator.backendId): readonly string[] {
+    const caps = this.plugin.getCapabilities(id);
     return has(caps, '--effort') ? caps.effortLevels : [];
   }
 
@@ -701,7 +729,7 @@ export class ClaudeView extends ItemView {
     this.coordinator.setPermissionOverride(null);
     this.updatePermissionIcon();
     if (this.coordinator.sessionId) {
-      const perm = this.plugin.getBackend().orientation.permissions[this.plugin.settings.permissionMode];
+      const perm = this.coordinator.backend.orientation.permissions[this.plugin.settings.permissionMode];
       this.coordinator.setPendingSystemMessage(
         `[System: Permission mode changed to ${perm.summary}. ` +
         `You can now: ${perm.can}. ` +
@@ -768,6 +796,7 @@ export class ClaudeView extends ItemView {
       model: custom.model,
       effort: custom.effort,
       rawSession: custom.rawSession,
+      backend: custom.backend,
     } : undefined);
     // DOM updates are handled by the 'session:new' event handler in _setupCoordinatorEvents
     this.updatePermissionIcon();
@@ -780,7 +809,7 @@ export class ClaudeView extends ItemView {
 
     const sessionTokens = new Map<string, number>();
     for (const session of sessions) {
-      if (!session.claudeSessionId || !canResumeLocally(session.claudeSessionId)) continue;
+      if (!hasReadableHistory(session)) continue;
       const messages = loadSessionMessages(session.claudeSessionId);
       if (messages.length > 0) sessionTokens.set(session.id, estimateSessionTokens(messages));
     }
@@ -812,7 +841,7 @@ export class ClaudeView extends ItemView {
       const effectiveMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
         this.app,
-        this.plugin.getBackend().orientation,
+        this.coordinator.backend.orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
@@ -1057,7 +1086,7 @@ export class ClaudeView extends ItemView {
     const effectiveMode = this.coordinator.getEffectivePermissionMode();
     const ctx = new ContextManager(
       this.app,
-      this.plugin.getBackend().orientation,
+      this.coordinator.backend.orientation,
       this.plugin.settings.contextFilePath,
       this.plugin.settings.autonomousMemory,
       this.plugin.settings.vaultTreeDepth,
@@ -1078,7 +1107,7 @@ export class ClaudeView extends ItemView {
     // Coordinator updates session state and emits 'session:loaded' — we also
     // need the payload data synchronously for DOM rendering, so capture it here.
     const isNew = !session.claudeSessionId;
-    const canResume = !isNew && canResumeLocally(session.claudeSessionId);
+    const canResume = hasReadableHistory(session);
 
     await this.coordinator.loadSession(session);
 
@@ -1132,6 +1161,9 @@ export class ClaudeView extends ItemView {
       }
     } else if (isNew) {
       this.appendMessage('system', `New session: ${session.title}`);
+    } else if (sessionBackend(session) !== 'claude-code') {
+      // Not readable yet: BojuBot will keep its own transcript for these (agent-backends spec, step 3)
+      this.appendMessage('system', `Resumed: ${session.title} — earlier messages aren't shown for ${this.coordinator.backend.displayName} sessions yet.`);
     } else {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }
@@ -1168,8 +1200,8 @@ export class ClaudeView extends ItemView {
       return;
     }
 
-    if (!this.plugin.claudeBinaryPath) {
-      this.appendMessage('system', `Claude binary not found. Check ${this.plugin.brand.name} settings.`);
+    if (!this.plugin.getBinaryPath(this.coordinator.backendId)) {
+      this.appendMessage('system', `${this.coordinator.backend.displayName} binary not found. Check ${this.plugin.brand.name} settings.`);
       return;
     }
 
@@ -1273,7 +1305,7 @@ export class ClaudeView extends ItemView {
       const effectiveCwd = this.coordinator.sessionCwd ?? vaultRoot;
       const ctx = new ContextManager(
         this.app,
-        this.plugin.getBackend().orientation,
+        this.coordinator.backend.orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
@@ -1358,10 +1390,7 @@ export class ClaudeView extends ItemView {
     headerLogo.draggable = false;
     header.createSpan({ cls: 'bojubot-welcome-header-name', text: brandName });
     header.createSpan({ cls: 'bojubot-welcome-version', text: `v${this.plugin.manifest.version}` });
-    const activeModel = CLAUDE_MODELS.find(m => m.id === (this.plugin.settings.defaultModel || DEFAULT_MODEL_ID));
-    if (activeModel) {
-      header.createSpan({ cls: 'bojubot-welcome-model', text: activeModel.displayName });
-    }
+    header.createSpan({ cls: 'bojubot-welcome-model', text: this.effectiveModelName() });
 
     // Recent sessions — loaded here (not just at the footer below) because the
     // sponsor-variant recency check needs it too.
@@ -1438,6 +1467,11 @@ export class ClaudeView extends ItemView {
     const isWin = process.platform === 'win32';
     const card = this.messagesEl.createDiv({ cls: 'bojubot-setup-card' });
 
+    if (this.plugin.settings.backend !== 'claude-code') {
+      this.renderAgentNotFound(card);
+      return;
+    }
+
     card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'bojubot-setup-title' });
     card.createEl('p', {
       text: `${this.plugin.brand.name} requires the Claude Code CLI (included with Claude Pro/Max). ` +
@@ -1506,9 +1540,7 @@ export class ClaudeView extends ItemView {
 
     const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
     checkBtn.addEventListener('click', () => {
-      this.plugin.claudeBinaryPath = this.plugin.getBackend().findBinary(this.plugin.settings.binaryPath);
-      if (this.plugin.claudeBinaryPath) {
-        void this.plugin.refreshCliCapabilities();
+      if (this.plugin.detectBinary(this.plugin.settings.backend)) {
         void this.onOpen();
       } else {
         const err = card.createEl('p', {
@@ -1517,6 +1549,37 @@ export class ClaudeView extends ItemView {
             : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
           cls: 'bojubot-setup-error',
         });
+        window.setTimeout(() => err.remove(), 6000);
+      }
+    });
+  }
+
+  /** Setup card for a non-Claude default agent whose CLI wasn't found. */
+  private renderAgentNotFound(card: HTMLElement) {
+    const id = this.plugin.settings.backend;
+    const name = this.plugin.getBackend(id).displayName;
+    card.createEl('h3', { text: `Error: ${name} not found`, cls: 'bojubot-setup-title' });
+    card.createEl('p', {
+      text: `New sessions are set to run on ${name}, but its CLI wasn't found. ` +
+        `Install it and sign in, set its path in ${this.plugin.brand.name} settings, ` +
+        'or switch the agent back to Claude Code. Then click Check again.',
+      cls: 'bojubot-setup-intro',
+    });
+
+    const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
+    const settingsBtn = btnRow.createEl('button', { text: 'Open settings', cls: 'bojubot-setup-check-btn' });
+    settingsBtn.addEventListener('click', () => {
+      this.appInternal.setting.open();
+      this.appInternal.setting.openTabById('bojubot');
+    });
+    const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
+    checkBtn.addEventListener('click', () => {
+      // The user may have switched the agent in settings meanwhile
+      const current = this.plugin.settings.backend;
+      if (current !== id || this.plugin.detectBinary(current)) {
+        void this.onOpen();
+      } else {
+        const err = card.createEl('p', { text: `Still not found. Check the ${name} binary path in settings.`, cls: 'bojubot-setup-error' });
         window.setTimeout(() => err.remove(), 6000);
       }
     });
@@ -1550,7 +1613,7 @@ export class ClaudeView extends ItemView {
 
     const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
     loginBtn.addEventListener('click', () => {
-      const binaryPath = this.plugin.claudeBinaryPath;
+      const binaryPath = this.plugin.getBinaryPath('claude-code');
       const isWin = process.platform === 'win32';
 
       if (isWin) {
@@ -2052,10 +2115,8 @@ export class ClaudeView extends ItemView {
 
   private updateModelIndicator() {
     if (!this.modelIndicatorEl) return;
-    const effectiveModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel || DEFAULT_MODEL_ID;
-    const active = CLAUDE_MODELS.find(m => m.id === effectiveModel);
     const effort = this.coordinator.getEffectiveEffort();
-    this.modelIndicatorEl.setText(modelIndicatorText(active?.displayName ?? 'Claude Sonnet', effort));
+    this.modelIndicatorEl.setText(modelIndicatorText(this.effectiveModelName(), effort));
 
     if (!this.effortBtnEl) return;
     if (this.supportedEffortLevels().length === 0) {
@@ -2066,20 +2127,30 @@ export class ClaudeView extends ItemView {
     }
   }
 
+  /** Display name of the model the next turn uses ("<agent> default" when the CLI picks). */
+  private effectiveModelName(): string {
+    const backend = this.coordinator.backend;
+    const id = this.coordinator.getEffectiveModel();
+    if (!id) return `${backend.displayName} default`;
+    return this.plugin.getModels(this.coordinator.backendId).find(m => m.id === id)?.displayName ?? id;
+  }
+
   /**
-   * Show the plan usage report from Claude Code's /usage in a system card.
+   * Show the plan usage report from the CLI's /usage in a system card.
    * Runs as a separate throwaway process, so it never touches the conversation,
    * the session, or the token gauge, and can run alongside an in-progress turn.
    */
   showPlanUsage() {
-    const binary = this.plugin.claudeBinaryPath;
+    const id = this.coordinator.backendId;
+    const backend = this.plugin.getBackend(id);
+    const binary = this.plugin.getBinaryPath(id);
     if (!binary) {
-      this.appendMessage('system', `Claude binary not found. Check ${this.plugin.brand.name} settings.`);
+      this.appendMessage('system', `${backend.displayName} binary not found. Check ${this.plugin.brand.name} settings.`);
       return;
     }
     this.messagesEl.querySelector('.bojubot-welcome')?.remove();
     const card = this.appendMessage('system', 'Checking plan usage…');
-    this.plugin.getBackend().fetchPlanUsage(binary, this.plugin.shellEnv, this.plugin.getVaultRoot(), this.plugin.cliCapabilities)
+    backend.fetchPlanUsage(binary, this.plugin.shellEnv, this.plugin.getVaultRoot(), this.plugin.getCapabilities(id))
       .then((text) => {
         card.addClass('bojubot-usage-card');
         card.setText(text);
@@ -2095,7 +2166,7 @@ export class ClaudeView extends ItemView {
   openEffortPicker() {
     const levels = this.supportedEffortLevels();
     if (levels.length === 0) {
-      new Notice(`${this.plugin.brand.name}: your Claude Code version doesn't support effort levels.`);
+      new Notice(`${this.plugin.brand.name}: your ${this.coordinator.backend.displayName} version doesn't support effort levels.`);
       return;
     }
     const current = this.coordinator.getEffectiveEffort() ?? '';
@@ -2118,17 +2189,18 @@ export class ClaudeView extends ItemView {
   }
 
   openModelPicker() {
-    const customModelsPath = join(
-      this.plugin.getVaultRoot(),
-      this.app.vault.configDir,
-      'plugins', 'bojubot', 'custom-models.json',
-    );
-    const allModels = [...CLAUDE_MODELS, ...loadCustomModels(customModelsPath)];
+    // The session is bound to its backend, so only that backend's models are offered.
+    const id = this.coordinator.backendId;
+    const allModels = this.plugin.getModels(id);
+    if (allModels.length === 0) {
+      new Notice(`${this.plugin.brand.name}: ${this.coordinator.backend.displayName} hasn't listed its models yet — try again in a moment.`);
+      return;
+    }
 
-    const currentModel = this.coordinator.sessionModel || this.plugin.settings.defaultModel || DEFAULT_MODEL_ID;
+    const currentModel = this.coordinator.getEffectiveModel() ?? '';
     new ModelPickerModal(this.app, currentModel, allModels, (model) => {
-      const previous = this.plugin.settings.defaultModel;
-      this.plugin.settings.defaultModel = model.id;
+      const previous = this.plugin.getDefaultModel(id);
+      this.plugin.setDefaultModel(id, model.id);
       void this.plugin.saveSettings().then(() => {
         // The session continues — every turn passes --model alongside --resume
         this.coordinator.switchSessionModel(model.id);
@@ -2137,7 +2209,7 @@ export class ClaudeView extends ItemView {
           this.appendMessage('system', `Switched to ${model.displayName} — takes effect on your next message.`);
         }
       }).catch((err: unknown) => {
-        this.plugin.settings.defaultModel = previous;
+        this.plugin.setDefaultModel(id, previous);
         log('error', 'Failed to save model setting', err);
         new Notice('Failed to save model setting. Please try again.');
       });
@@ -2233,26 +2305,6 @@ export class ClaudeView extends ItemView {
 // ---------------------------------------------------------------------------
 // Attach modals
 // ---------------------------------------------------------------------------
-
-function loadCustomModels(filePath: string): ClaudeModel[] {
-  if (!existsSync(filePath)) return [];
-  try {
-    const raw: unknown = JSON.parse(readFileSync(filePath, 'utf8'));
-    if (!Array.isArray(raw)) return [];
-    return (raw as unknown[]).filter((e): e is ClaudeModel => {
-      if (!e || typeof e !== 'object') return false;
-      const obj = e as Record<string, unknown>;
-      return typeof obj.id === 'string' && obj.id.trim() !== '' &&
-        typeof obj.displayName === 'string' && obj.displayName.trim() !== '';
-    }).map(e => ({
-      id: e.id.trim(),
-      displayName: e.displayName.trim(),
-      description: typeof e.description === 'string' ? e.description.trim() : '',
-    }));
-  } catch {
-    return [];
-  }
-}
 
 class ModelPickerModal extends Modal {
   constructor(

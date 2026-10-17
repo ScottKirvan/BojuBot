@@ -17,14 +17,16 @@ import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, ChatMessage } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, sessionBackend, ChatMessage } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
 import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation } from '../src/utils/orientation';
-import { getBackend, DEFAULT_BACKEND_ID } from '../src/backends';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
+import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
+import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
+import { loadCustomModels } from '../src/utils/customModels';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
@@ -33,7 +35,7 @@ import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
-import { SessionCoordinator, SessionCoordinatorHost } from '../src/SessionCoordinator';
+import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 
@@ -2578,5 +2580,258 @@ describe('extractToolDetail (Antigravity tool parameters)', () => {
   });
   test('run_command shows the command line', () => {
     assert.equal(extractToolDetail('run_command', { CommandLine: 'ls -la' }), 'ls -la');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Backend selection: sessions bound to an agent CLI
+// ---------------------------------------------------------------------------
+
+/** A backend that records its spawns and stream callbacks instead of running a CLI. */
+function recordingBackend(base: AgentBackend) {
+  const spawns: TurnOptions[] = [];
+  const streams: StreamCallbacks[] = [];
+  const backend: AgentBackend = {
+    ...base,
+    spawnTurn: (opts) => { spawns.push(opts); return mockProc(); },
+    parseStream: (_proc, cb) => { streams.push(cb); },
+  };
+  return { backend, spawns, streams };
+}
+
+const AGY_CAPS = parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n');
+
+function twoBackendHost(sessionsDir: string, overrides: Partial<SessionCoordinatorHost> = {}) {
+  const claude = recordingBackend(claudeCodeBackend);
+  const agy = recordingBackend(antigravityBackend);
+  const host = makeTestHost(sessionsDir, {
+    getBackend: (id: BackendId) => (id === 'antigravity' ? agy.backend : claude.backend),
+    getBinaryPath: (id: BackendId) => (id === 'antigravity' ? 'C:\\agy.exe' : 'C:\\claude.exe'),
+    getModel: (id: BackendId) => (id === 'antigravity' ? '' : 'claude-sonnet-5-5'),
+    getCliCapabilities: (id: BackendId) => (id === 'antigravity' ? AGY_CAPS : UNKNOWN_CAPABILITIES),
+    ...overrides,
+  });
+  return { host, claude, agy };
+}
+
+function withSessionsDir(fn: (dir: string) => void | Promise<void>) {
+  return async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bojubot-backend-test-'));
+    try {
+      await fn(dir);
+    } finally {
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+    }
+  };
+}
+
+const storedSessions = (dir: string) => loadAllSessions(dir, dir, '.obsidian');
+
+describe('SessionCoordinator backend binding', () => {
+  test('a new session runs on the host default backend, with that backend\'s binary, caps and model', withSessionsDir((dir) => {
+    const { host, claude, agy } = twoBackendHost(dir, { getDefaultBackend: () => 'antigravity' });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    assert.equal(coordinator.backendId, 'antigravity');
+
+    coordinator.send('hello');
+    assert.equal(claude.spawns.length, 0);
+    assert.equal(agy.spawns.length, 1);
+    assert.equal(agy.spawns[0].binaryPath, 'C:\\agy.exe');
+    assert.equal(agy.spawns[0].capabilities, AGY_CAPS);
+    assert.equal(agy.spawns[0].model, undefined, "'' default model → the CLI picks");
+  }));
+
+  test('without getDefaultBackend the coordinator stays on Claude Code', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    assert.equal(coordinator.backendId, 'claude-code');
+    coordinator.send('hi');
+    assert.equal(claude.spawns[0].binaryPath, 'C:\\claude.exe');
+    assert.equal(claude.spawns[0].model, 'claude-sonnet-5-5');
+  }));
+
+  test('Custom Session backend wins over the default and is persisted; Claude sessions store no backend key', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ name: 'Agy', backend: 'antigravity' });
+    coordinator.startNewSession({ name: 'Claude' });
+
+    const byTitle = new Map(storedSessions(dir).map(s => [s.title, s]));
+    assert.equal(byTitle.get('Agy')?.backend, 'antigravity');
+    assert.ok(byTitle.get('Claude'));
+    assert.equal('backend' in byTitle.get('Claude')!, false);
+  }));
+
+  test('first turn binds the conversation ID and keeps the backend', withSessionsDir((dir) => {
+    const { host, agy } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ backend: 'antigravity' });
+    coordinator.send('hello', 'hello');
+    agy.streams[0].onDone('conv-9', true);
+
+    const [stored] = storedSessions(dir);
+    assert.equal(stored.claudeSessionId, 'conv-9');
+    assert.equal(stored.backend, 'antigravity');
+
+    coordinator.send('again');
+    assert.equal(agy.spawns[1].resumeSessionId, 'conv-9');
+  }));
+
+  test('loadSession restores the backend; Antigravity history is not readable yet', withSessionsDir(async (dir) => {
+    const { host, agy } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    const loaded: SessionLoadedPayload[] = [];
+    coordinator.on('session:loaded', (p) => loaded.push(p));
+    await coordinator.loadSession({
+      id: 's-agy', title: 'A', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      claudeSessionId: 'conv-1', backend: 'antigravity',
+    });
+    assert.equal(coordinator.backendId, 'antigravity');
+    assert.equal(loaded[0].canResume, false);
+    assert.equal(loaded[0].isNew, false);
+    coordinator.send('next');
+    assert.equal(agy.spawns[0].resumeSessionId, 'conv-1');
+  }));
+
+  test('a session without a backend field loads as Claude Code', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir, { getDefaultBackend: () => 'antigravity' });
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession({
+      id: 'old', title: 'Old', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), claudeSessionId: '',
+    });
+    assert.equal(coordinator.backendId, 'claude-code');
+  }));
+
+  test('an untouched new session follows a default-backend change and drops its model pin', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ model: 'claude-opus-5-5' });
+    assert.equal(coordinator.followDefaultBackend('antigravity'), true);
+    assert.equal(coordinator.backendId, 'antigravity');
+    assert.equal(coordinator.sessionModel, undefined, 'a Claude model pin means nothing to Antigravity');
+    assert.equal(storedSessions(dir)[0].backend, 'antigravity');
+    assert.equal(coordinator.followDefaultBackend('antigravity'), false, 'already there');
+  }));
+
+  test('a started or explicitly chosen session does not follow the default', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const started = new SessionCoordinator(host);
+    started.startNewSession();
+    started.send('hi', 'hi');
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(started.followDefaultBackend('antigravity'), false);
+    assert.equal(started.backendId, 'claude-code');
+
+    const pinned = new SessionCoordinator(host);
+    pinned.startNewSession({ backend: 'claude-code' });
+    assert.equal(pinned.followDefaultBackend('antigravity'), false);
+    assert.equal(pinned.backendId, 'claude-code');
+  }));
+
+  test('the live preview callback is only passed when streaming is on', withSessionsDir((dir) => {
+    const off = twoBackendHost(dir, { isStreamingEnabled: () => false });
+    const a = new SessionCoordinator(off.host);
+    a.startNewSession({ backend: 'antigravity' });
+    a.send('x');
+    assert.equal(off.agy.streams[0].onTextPreview, undefined);
+    assert.equal(off.agy.spawns[0].includePartialMessages, false);
+
+    const on = twoBackendHost(dir, { isStreamingEnabled: () => true });
+    const b = new SessionCoordinator(on.host);
+    b.startNewSession({ backend: 'antigravity' });
+    b.send('x');
+    assert.equal(typeof on.agy.streams[0].onTextPreview, 'function');
+  }));
+
+  test('effort is checked against the session backend\'s levels', withSessionsDir((dir) => {
+    const { host, agy } = twoBackendHost(dir, { getEffort: () => 'high' });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ backend: 'antigravity' });
+    assert.equal(coordinator.getEffectiveEffort(), 'high');
+    coordinator.send('x');
+    assert.equal(agy.spawns[0].effort, 'high');
+
+    const claudeSession = new SessionCoordinator(host);
+    claudeSession.startNewSession();
+    assert.equal(claudeSession.getEffectiveEffort(), undefined, 'Claude caps unknown here → no effort');
+  }));
+});
+
+describe('backend registry helpers', () => {
+  test('isBackendId accepts registered IDs only', () => {
+    assert.equal(isBackendId('claude-code'), true);
+    assert.equal(isBackendId('antigravity'), true);
+    for (const v of ['gemini', '', undefined, null, 1, 'toString']) assert.equal(isBackendId(v), false, String(v));
+  });
+
+  test('every registered backend declares its own ID', () => {
+    for (const id of BACKEND_IDS) assert.equal(getBackend(id).id, id);
+  });
+
+  test('Chat only is unavailable on Antigravity, everything is available on Claude Code', () => {
+    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes), []);
+    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes), ['restricted']);
+    assert.equal(claudeCodeBackend.listModels, null);
+  });
+});
+
+describe('hasReadableHistory', () => {
+  test('no conversation yet → false', () => {
+    assert.equal(hasReadableHistory({ claudeSessionId: '' }), false);
+  });
+  test('Antigravity sessions are never read back (no transcript store yet)', () => {
+    assert.equal(hasReadableHistory({ claudeSessionId: 'conv-1', backend: 'antigravity' }), false);
+  });
+  test('sessionBackend defaults to Claude Code', () => {
+    assert.equal(sessionBackend({}), 'claude-code');
+    assert.equal(sessionBackend({ backend: 'antigravity' }), 'antigravity');
+  });
+});
+
+describe('parseAgyModels', () => {
+  test('reads id<TAB>name lines and skips the progress line', () => {
+    const out = 'Fetching available models...\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)\r\nclaude-opus-4-6-thinking\tClaude Opus 4.6 (Thinking)\n';
+    assert.deepEqual(parseAgyModels(out), [
+      { id: 'gemini-3.8-flash-high', displayName: 'Gemini 3.8 Flash (High)', description: '' },
+      { id: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6 (Thinking)', description: '' },
+    ]);
+  });
+  test('missing name falls back to the id; odd ids and blank lines are skipped', () => {
+    assert.deepEqual(parseAgyModels('m1\t\n\nbad id\tX\n\tno id\n'), [{ id: 'm1', displayName: 'm1', description: '' }]);
+  });
+  test('empty output → no models', () => {
+    assert.deepEqual(parseAgyModels(''), []);
+  });
+});
+
+describe('loadCustomModels', () => {
+  test('keeps valid entries, trims them, and drops invalid ones', withSessionsDir((dir) => {
+    const file = join(dir, 'custom-models.json');
+    writeFileSync(file, JSON.stringify([
+      { id: ' my-model ', displayName: ' Mine ', description: ' d ' },
+      { id: 'no-name' },
+      { id: '', displayName: 'Empty id' },
+      'string',
+      { id: 'x', displayName: 'X' },
+    ]));
+    assert.deepEqual(loadCustomModels(file), [
+      { id: 'my-model', displayName: 'Mine', description: 'd' },
+      { id: 'x', displayName: 'X', description: '' },
+    ]);
+  }));
+  test('missing file, bad JSON or a non-array → []', withSessionsDir((dir) => {
+    assert.deepEqual(loadCustomModels(join(dir, 'nope.json')), []);
+    writeFileSync(join(dir, 'bad.json'), '{not json');
+    assert.deepEqual(loadCustomModels(join(dir, 'bad.json')), []);
+    writeFileSync(join(dir, 'obj.json'), '{"id":"x"}');
+    assert.deepEqual(loadCustomModels(join(dir, 'obj.json')), []);
+  }));
+});
+
+describe('formatCliVersion product name', () => {
+  test('names the given product', () => {
+    assert.equal(formatCliVersion(AGY_CAPS, 'Antigravity'), 'Antigravity 1.4.0');
   });
 });

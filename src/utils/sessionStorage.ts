@@ -2,14 +2,17 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlink
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { estimateTokens } from './logger';
-import type { PermissionMode } from '../backends/types';
+import type { BackendId, PermissionMode } from '../backends/types';
 
 export interface StoredSession {
   id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
+  /** The CLI's conversation ID (kept under this name for every backend). '' until the first turn. */
   claudeSessionId: string;
+  /** Agent CLI the session is bound to. Absent = Claude Code (every session from before backends existed). */
+  backend?: BackendId;
   sortOrder?: number;
   userLabel?: string;
   assistantLabel?: string;
@@ -24,6 +27,16 @@ export interface StoredSession {
   /** Skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge)
    *  for a bare Claude Code experience — the per-session equivalent of global Minimal mode. */
   rawSession?: boolean;
+}
+
+export function sessionBackend(session: Pick<StoredSession, 'backend'>): BackendId {
+  return session.backend ?? 'claude-code';
+}
+
+/** True when the session's history can be read back for display. Only Claude
+ *  Code's transcripts are readable so far. */
+export function hasReadableHistory(session: Pick<StoredSession, 'backend' | 'claudeSessionId'>): boolean {
+  return !!session.claudeSessionId && sessionBackend(session) === 'claude-code' && canResumeLocally(session.claudeSessionId);
 }
 
 export function getSessionsDir(vaultRoot: string, configDir: string): string {

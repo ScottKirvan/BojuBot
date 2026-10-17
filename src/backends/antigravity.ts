@@ -14,6 +14,7 @@ import { launchCli, runCli, runCliCapture } from './process';
 import type {
   AgentBackend,
   BackendOrientation,
+  ModelOption,
   PermissionDenial,
   PermissionMode,
   StreamCallbacks,
@@ -184,6 +185,32 @@ export function formatAgyUsage(json: string, formatTime: (iso: string) => string
     return text;
   }
   return lines.join('\n');
+}
+
+/** `agy models` stdout ("id<TAB>name" per line) → model options. Pure — exported for tests. */
+export function parseAgyModels(text: string): ModelOption[] {
+  const models: ModelOption[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const tab = raw.indexOf('\t');
+    if (tab <= 0) continue; // progress lines ("Fetching available models...") have no tab
+    const id = raw.slice(0, tab).trim();
+    const name = raw.slice(tab + 1).trim();
+    if (!/^[\w.-]+$/.test(id)) continue;
+    models.push({ id, displayName: name || id, description: '' });
+  }
+  return models;
+}
+
+const MODELS_TIMEOUT_MS = 20_000;
+
+export async function listAgyModels(
+  binaryPath: string,
+  env: Record<string, string>,
+  cwd: string,
+): Promise<ModelOption[]> {
+  const models = parseAgyModels(await runCli(binaryPath, ['models'], cwd, env, MODELS_TIMEOUT_MS));
+  if (!models.length) throw new Error('Antigravity listed no models.');
+  return models;
 }
 
 const USAGE_TIMEOUT_MS = 30_000;
@@ -382,5 +409,9 @@ export const antigravityBackend: AgentBackend = {
   parseStream: parseAgyStream,
   fetchPlanUsage: (binary, env, cwd) => fetchAgyPlanUsage(binary, env, cwd),
   compactPrompt: null,
+  listModels: listAgyModels,
+  unavailableModes: {
+    restricted: "Antigravity can't block file access for a single session.",
+  },
   orientation: ANTIGRAVITY_ORIENTATION,
 };

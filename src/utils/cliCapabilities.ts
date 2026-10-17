@@ -126,6 +126,6 @@ export function parseCliCapabilities(helpText: string, versionText: string): Cli
 }
 
 /** "Claude Code 2.1.286", or "unknown" before/without a successful probe. */
-export function formatCliVersion(caps: CliCapabilities): string {
-  return caps.version ? `Claude Code ${caps.version}` : 'unknown';
+export function formatCliVersion(caps: CliCapabilities, product = 'Claude Code'): string {
+  return caps.version ? `${product} ${caps.version}` : 'unknown';
 }

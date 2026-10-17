@@ -1,17 +1,14 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type BojuBotPlugin from '../main';
-import type { PermissionMode } from './backends/types';
+import type { BackendId, ModelOption, PermissionMode } from './backends/types';
 export type { PermissionMode };
+import { BACKEND_IDS, getBackend } from './backends';
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
 import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
 import { formatCliVersion } from './utils/cliCapabilities';
 
-export interface ClaudeModel {
-  id: string;
-  displayName: string;
-  description: string;
-}
+export type ClaudeModel = ModelOption;
 
 export const CLAUDE_MODELS: ClaudeModel[] = [
   { id: 'claude-haiku-4-5', displayName: 'Claude Haiku 4.5', description: 'Fastest — great for quick tasks' },
@@ -26,7 +23,14 @@ export const CLAUDE_MODELS: ClaudeModel[] = [
 export const DEFAULT_MODEL_ID = 'claude-sonnet-5-5';
 
 export interface BojuBotSettings {
+  /** Agent CLI for new sessions. Existing sessions keep the backend they started on. */
+  backend: BackendId;
+  /** Claude Code binary. Empty = auto-detect. */
   binaryPath: string;
+  /** Antigravity (`agy`) binary. Empty = auto-detect. */
+  agyBinaryPath: string;
+  /** Antigravity model ID for --model. Empty = Antigravity's own default. */
+  agyDefaultModel: string;
   contextFilePath: string;
   sendOnEnter: boolean;
   resumeLastSession: boolean;
@@ -107,7 +111,10 @@ export interface BojuBotSettings {
 }
 
 export const DEFAULT_SETTINGS: BojuBotSettings = {
+  backend: 'claude-code',
   binaryPath: '',
+  agyBinaryPath: '',
+  agyDefaultModel: '',
   contextFilePath: '_claude-context.md',
   sendOnEnter: true,
   resumeLastSession: true,
@@ -155,14 +162,41 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
+      .setName('Agent')
+      .setDesc('The agent CLI new sessions run on. Existing sessions keep the agent they started with.')
+      .addDropdown((drop) => {
+        for (const id of BACKEND_IDS) drop.addOption(id, getBackend(id).displayName);
+        drop
+          .setValue(this.plugin.settings.backend)
+          .onChange(async (value) => {
+            this.plugin.settings.backend = value as BackendId;
+            await this.plugin.saveSettings();
+            this.plugin.onDefaultBackendChanged();
+          });
+      });
+
+    new Setting(containerEl)
       .setName('Claude binary path')
-      .setDesc(`Path to the Claude CLI binary. Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.cliCapabilities)}.`)
+      .setDesc(`Path to the Claude CLI binary. Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.getCapabilities('claude-code'))}.`)
       .addText((text) =>
         text
           .setPlaceholder('(Auto-detect)')
           .setValue(this.plugin.settings.binaryPath)
           .onChange(async (value) => {
             this.plugin.settings.binaryPath = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Antigravity binary path')
+      .setDesc(`Path to the Antigravity CLI (agy). Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.getCapabilities('antigravity'), 'Antigravity')}.`)
+      .addText((text) =>
+        text
+          .setPlaceholder('(Auto-detect)')
+          .setValue(this.plugin.settings.agyBinaryPath)
+          .onChange(async (value) => {
+            this.plugin.settings.agyBinaryPath = value;
             await this.plugin.saveSettings();
           })
       );

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import type { ChildProcess } from 'child_process';
-import type { AgentBackend, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
+import type { AgentBackend, BackendId, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
 import { killProcess } from './backends/process';
 import { resolveSpawnCwd } from './backends/modes';
 import { VaultQuery } from './QueryHandler';
@@ -11,8 +11,9 @@ import {
   ChatMessage,
   saveSession,
   saveSessionAtTop,
-  canResumeLocally,
+  hasReadableHistory,
   loadSessionMessages,
+  sessionBackend,
   titleFromPrompt,
 } from './utils/sessionStorage';
 import { log } from './utils/logger';
@@ -24,14 +25,16 @@ import { composeStreamingText } from './utils/streamPreview';
 // ── Host interface ───────────────────────────────────────────────────────────
 
 export interface SessionCoordinatorHost {
-  /** The CLI backend this session runs on. */
-  getBackend(): AgentBackend;
-  getBinaryPath(): string | null;
+  getBackend(id: BackendId): AgentBackend;
+  getBinaryPath(id: BackendId): string | null;
+  /** Backend for new sessions that don't pick one. Optional — omitted means Claude Code. */
+  getDefaultBackend?(): BackendId;
   getVaultRoot(): string;
   getConfigDir(): string;
   getEnv(): Record<string, string>;
   getPermissionMode(): PermissionMode;
-  getModel(): string;
+  /** Global default model for the backend; '' = let the CLI choose. */
+  getModel(id: BackendId): string;
   /** Global default effort level; '' = Default (flag left off). Optional — omitted means ''. */
   getEffort?(): string;
   getSessionsDir(): string;
@@ -41,7 +44,7 @@ export interface SessionCoordinatorHost {
   isStreamingEnabled?(): boolean;
   /** What the installed CLI supports. Optional — omitted (or before the probe
    *  finishes) means unknown, which keeps spawn args at their defaults. */
-  getCliCapabilities?(): CliCapabilities;
+  getCliCapabilities?(id: BackendId): CliCapabilities;
 }
 
 // ── Event payload types ──────────────────────────────────────────────────────
@@ -110,6 +113,9 @@ export class SessionCoordinator {
   private _sessionFileId: string | undefined;
   private _sessionTitle: string | undefined;
   private _sessionCreatedAt: string | undefined;
+  private _backend: BackendId;
+  /** Chosen explicitly (Custom Session), so a change to the default backend doesn't move it. */
+  private _backendPinned = false;
   private _sessionCwd: string | undefined;
   private _suppressVaultContext = false;
   private _sessionPermissionMode: PermissionMode | undefined;
@@ -122,7 +128,9 @@ export class SessionCoordinator {
   private _pendingSystemMessage: string | null = null;
   private _activeProc: ChildProcess | null = null;
 
-  constructor(private readonly host: SessionCoordinatorHost) { }
+  constructor(private readonly host: SessionCoordinatorHost) {
+    this._backend = host.getDefaultBackend?.() ?? 'claude-code';
+  }
 
   // ── Typed event API ────────────────────────────────────────────────────────
 
@@ -156,6 +164,9 @@ export class SessionCoordinator {
   get sessionTitle(): string | undefined { return this._sessionTitle; }
   get sessionCreatedAt(): string | undefined { return this._sessionCreatedAt; }
   get sessionCwd(): string | undefined { return this._sessionCwd; }
+  /** The agent CLI this session is bound to. */
+  get backendId(): BackendId { return this._backend; }
+  get backend(): AgentBackend { return this.host.getBackend(this._backend); }
   get suppressVaultContext(): boolean { return this._suppressVaultContext; }
   get sessionModel(): string | undefined { return this._sessionModel; }
   get sessionEffort(): string | undefined { return this._sessionEffort; }
@@ -169,7 +180,7 @@ export class SessionCoordinator {
 
   /** Read fresh on every spawn so a probe that finishes mid-session applies from the next turn. */
   get capabilities(): CliCapabilities {
-    return this.host.getCliCapabilities?.() ?? UNKNOWN_CAPABILITIES;
+    return this.host.getCliCapabilities?.(this._backend) ?? UNKNOWN_CAPABILITIES;
   }
 
   /** Session-level overrides (Custom Session) win over the global default, but a
@@ -177,6 +188,11 @@ export class SessionCoordinator {
    *  it represents an explicit in-the-moment decision for the rest of the session. */
   getEffectivePermissionMode(): PermissionMode {
     return this._permissionOverride ?? this._sessionPermissionMode ?? this.host.getPermissionMode();
+  }
+
+  /** The model for the next turn: the session pin, then the backend's global default. */
+  getEffectiveModel(): string | undefined {
+    return this._sessionModel || this.host.getModel(this._backend) || undefined;
   }
 
   setPermissionOverride(mode: PermissionMode | null): void {
@@ -206,6 +222,8 @@ export class SessionCoordinator {
     /** '' or omitted = no pin (follows the global default). */
     effort?: string;
     rawSession?: boolean;
+    /** Omitted = the host's default backend. */
+    backend?: BackendId;
   }): void {
     this._permissionOverride = null;
     const vaultRoot = this.host.getVaultRoot();
@@ -219,21 +237,6 @@ export class SessionCoordinator {
     const effort = custom?.effort?.trim() || undefined;
     const rawSession = custom?.rawSession ?? false;
 
-    const session: StoredSession = {
-      id: sessionId,
-      title,
-      createdAt: now,
-      updatedAt: now,
-      claudeSessionId: '',
-      ...(cwd && { cwd }),
-      ...(suppressVaultContext && { suppressVaultContext }),
-      ...(permissionMode && { permissionMode }),
-      ...(model && { model }),
-      ...(effort && { effort }),
-      ...(rawSession && { rawSession }),
-    };
-
-    saveSessionAtTop(vaultRoot, session, this.host.getSessionsDir(), this.host.getConfigDir());
     this._placeholderSessionId = sessionId;
     this._sessionId = undefined;
     this._sessionFileId = sessionId;
@@ -245,7 +248,12 @@ export class SessionCoordinator {
     this._sessionModel = model;
     this._sessionEffort = effort;
     this._rawSession = rawSession;
+    this._backend = custom?.backend ?? this.host.getDefaultBackend?.() ?? 'claude-code';
+    this._backendPinned = !!custom?.backend;
     this._hasCustomTitle = !!custom?.name?.trim();
+
+    const session = this._storedSession(sessionId, '', now);
+    saveSessionAtTop(vaultRoot, session, this.host.getSessionsDir(), this.host.getConfigDir());
     void this.host.saveLastActiveSessionId(sessionId);
 
     this.emit('session:new', session);
@@ -283,6 +291,21 @@ export class SessionCoordinator {
     if (this._sessionEffort) this._sessionEffort = level || undefined;
   }
 
+  /**
+   * The default backend changed. A session that hasn't run a turn and wasn't
+   * given a backend explicitly follows it; any other session stays bound to the
+   * CLI that holds its conversation. Returns true when the session moved.
+   */
+  followDefaultBackend(id: BackendId): boolean {
+    if (this._sessionId || this._backendPinned || !this._placeholderSessionId || this._backend === id) return false;
+    this._backend = id;
+    // A model pin belongs to the old backend's model list.
+    this._sessionModel = undefined;
+    const now = new Date().toISOString();
+    saveSession(this.host.getVaultRoot(), this._storedSession(this._placeholderSessionId, '', now), this.host.getSessionsDir());
+    return true;
+  }
+
   async loadSession(session: StoredSession): Promise<void> {
     this._placeholderSessionId = undefined;
     this._sessionId = session.claudeSessionId || undefined;
@@ -295,12 +318,14 @@ export class SessionCoordinator {
     this._sessionModel = session.model;
     this._sessionEffort = session.effort || undefined;
     this._rawSession = session.rawSession ?? false;
+    this._backend = sessionBackend(session);
+    this._backendPinned = !!session.backend;
     this._hasCustomTitle = false;
 
     await this.host.saveLastActiveSessionId(session.id);
 
     const isNew = !session.claudeSessionId;
-    const canResume = !isNew && canResumeLocally(session.claudeSessionId);
+    const canResume = hasReadableHistory(session);
 
     if (isNew) this._placeholderSessionId = session.id;
 
@@ -342,12 +367,12 @@ export class SessionCoordinator {
       onError('No active session to compact.');
       return;
     }
-    const backend = this.host.getBackend();
+    const backend = this.backend;
     if (!backend.compactPrompt) {
       onError(`${backend.displayName} doesn't support compacting a session.`);
       return;
     }
-    const binary = this.host.getBinaryPath();
+    const binary = this.host.getBinaryPath(this._backend);
     if (!binary) {
       onError(`${backend.displayName} binary not found.`);
       return;
@@ -362,7 +387,7 @@ export class SessionCoordinator {
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
-        model: this._sessionModel || this.host.getModel() || undefined,
+        model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
         capabilities: this.capabilities,
       });
@@ -393,13 +418,14 @@ export class SessionCoordinator {
       return;
     }
 
-    const backend = this.host.getBackend();
-    const binary = this.host.getBinaryPath();
+    const backend = this.backend;
+    const binary = this.host.getBinaryPath(this._backend);
     if (!binary) {
       this.emit('turn:error', `${backend.displayName} binary not found.`);
       return;
     }
 
+    const streaming = this.host.isStreamingEnabled?.() ?? false;
     let proc: ChildProcess;
     try {
       proc = backend.spawnTurn({
@@ -409,9 +435,9 @@ export class SessionCoordinator {
         env: this.host.getEnv(),
         resumeSessionId: this._sessionId,
         permissionMode: this.getEffectivePermissionMode(),
-        model: this._sessionModel || this.host.getModel() || undefined,
+        model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
-        includePartialMessages: this.host.isStreamingEnabled?.() ?? false,
+        includePartialMessages: streaming,
         capabilities: this.capabilities,
       });
       this._activeProc = proc;
@@ -448,11 +474,12 @@ export class SessionCoordinator {
         }
         this.emit('turn:text', accumulated, accumulated);
       },
-      onTextPreview: (blockText) => {
-        // Display only — never parsed for actions or queries. @@BOJU lines (and
-        // partial lines that could become one) are filtered out of what's shown.
-        this.emit('turn:text', composeStreamingText(accumulated, blockText), accumulated);
-      },
+      // Display only — never parsed for actions or queries. @@BOJU lines (and
+      // partial lines that could become one) are filtered out of what's shown.
+      // Omitted when streaming is off: some CLIs stream deltas regardless of flags.
+      onTextPreview: streaming
+        ? (blockText) => this.emit('turn:text', composeStreamingText(accumulated, blockText), accumulated)
+        : undefined,
       onAction: (line) => {
         if (!this.host.isUiBridgeEnabled()) return;
         try {
@@ -502,6 +529,31 @@ export class SessionCoordinator {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
+  /** The session record as persisted. Optional fields are only written when set,
+   *  so a plain Claude Code session's JSON is unchanged from before backends. */
+  private _storedSession(
+    id: string,
+    claudeSessionId: string,
+    updatedAt: string,
+    title = this._sessionTitle ?? 'Untitled session',
+    createdAt = this._sessionCreatedAt ?? updatedAt,
+  ): StoredSession {
+    return {
+      id,
+      title,
+      createdAt,
+      updatedAt,
+      claudeSessionId,
+      ...(this._backend !== 'claude-code' && { backend: this._backend }),
+      ...(this._sessionCwd && { cwd: this._sessionCwd }),
+      ...(this._suppressVaultContext && { suppressVaultContext: true }),
+      ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
+      ...(this._sessionModel && { model: this._sessionModel }),
+      ...(this._sessionEffort && { effort: this._sessionEffort }),
+      ...(this._rawSession && { rawSession: true }),
+    };
+  }
+
   private _persistSessionAfterTurn(sessionId: string, firstUserInput?: string): void {
     const vaultRoot = this.host.getVaultRoot();
     const sessionsDir = this.host.getSessionsDir();
@@ -512,19 +564,7 @@ export class SessionCoordinator {
       // First turn on a placeholder session → bind the real Claude session ID
       this._sessionId = sessionId;
       if (firstUserInput && !this._hasCustomTitle) this._sessionTitle = titleFromPrompt(firstUserInput);
-      saveSession(vaultRoot, {
-        id: this._placeholderSessionId,
-        title: this._sessionTitle ?? 'Untitled session',
-        createdAt: this._sessionCreatedAt ?? now,
-        updatedAt: now,
-        claudeSessionId: sessionId,
-        ...(this._sessionCwd && { cwd: this._sessionCwd }),
-        ...(this._suppressVaultContext && { suppressVaultContext: true }),
-        ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
-        ...(this._sessionModel && { model: this._sessionModel }),
-        ...(this._sessionEffort && { effort: this._sessionEffort }),
-        ...(this._rawSession && { rawSession: true }),
-      }, sessionsDir);
+      saveSession(vaultRoot, this._storedSession(this._placeholderSessionId, sessionId, now, this._sessionTitle ?? 'Untitled session', this._sessionCreatedAt ?? now), sessionsDir);
       const placeholderId = this._placeholderSessionId;
       this._placeholderSessionId = undefined;
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
@@ -538,38 +578,14 @@ export class SessionCoordinator {
       this._sessionFileId = sessionId;
       this._sessionTitle = titleFromPrompt(firstUserInput);
       this._sessionCreatedAt = now;
-      saveSession(vaultRoot, {
-        id: sessionId,
-        title: this._sessionTitle,
-        createdAt: now,
-        updatedAt: now,
-        claudeSessionId: sessionId,
-        ...(this._sessionCwd && { cwd: this._sessionCwd }),
-        ...(this._suppressVaultContext && { suppressVaultContext: true }),
-        ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
-        ...(this._sessionModel && { model: this._sessionModel }),
-        ...(this._sessionEffort && { effort: this._sessionEffort }),
-        ...(this._rawSession && { rawSession: true }),
-      }, sessionsDir);
+      saveSession(vaultRoot, this._storedSession(sessionId, sessionId, now, this._sessionTitle, now), sessionsDir);
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
       log('Session saved:', sessionId, this._sessionTitle);
     } else if (this._sessionId) {
       // Continuing session — update the updatedAt timestamp
       this._sessionId = sessionId;
       const fileId = this._sessionFileId ?? this._sessionId;
-      saveSession(vaultRoot, {
-        id: fileId,
-        title: this._sessionTitle ?? this._sessionId.substring(0, 8),
-        createdAt: this._sessionCreatedAt ?? now,
-        updatedAt: now,
-        claudeSessionId: this._sessionId,
-        ...(this._sessionCwd && { cwd: this._sessionCwd }),
-        ...(this._suppressVaultContext && { suppressVaultContext: true }),
-        ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
-        ...(this._sessionModel && { model: this._sessionModel }),
-        ...(this._sessionEffort && { effort: this._sessionEffort }),
-        ...(this._rawSession && { rawSession: true }),
-      }, sessionsDir);
+      saveSession(vaultRoot, this._storedSession(fileId, this._sessionId, now, this._sessionTitle ?? this._sessionId.substring(0, 8), this._sessionCreatedAt ?? now), sessionsDir);
     }
   }
 }
