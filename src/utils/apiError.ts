@@ -70,6 +70,30 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
     };
   }
 
+  if (err.errorCode === 'agy_auth') {
+    return {
+      title: "Antigravity isn't signed in",
+      details: [
+        'Click Open terminal below, or run "agy" in a terminal yourself. It opens a browser window where you sign in.',
+        'Once you\'re signed in, close the terminal and send your message again.',
+      ],
+    };
+  }
+
+  if (err.errorCode === 'agy_invalid_model') {
+    return {
+      title: 'Model not available',
+      details: [
+        err.message.split('\n')[0].replace(/\s*\(--model[^)]*\)/, ''),
+        'Pick another model from the model picker (click the model name below the message box), then send your message again.',
+      ],
+    };
+  }
+
+  if (err.errorCode === 'agy_error') {
+    return { title: 'Antigravity error', details: [err.message] };
+  }
+
   return {
     title: err.status !== null ? `API error (${err.status})` : 'API error',
     details: [err.message],

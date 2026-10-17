@@ -1570,8 +1570,26 @@ export class ClaudeView extends ItemView {
         'or switch the agent back to Claude Code. Then click Check again.',
       cls: 'bojubot-setup-intro',
     });
+    if (id === 'antigravity') {
+      const step = card.createDiv({ cls: 'bojubot-setup-step' });
+      step.createEl('p', { text: 'To sign in after installing', cls: 'bojubot-setup-step-title' });
+      step.createEl('p', {
+        text: 'Run this once in a terminal. It opens a browser window where you sign in; close the terminal afterwards.',
+        cls: 'bojubot-setup-note',
+      });
+      this.renderCodeRow(step, 'agy');
+    }
 
     const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
+    if (id === 'antigravity') {
+      const docsLink = btnRow.createEl('a', {
+        text: 'Antigravity CLI install guide ↗',
+        href: 'https://antigravity.google/docs/getting-started?tab=cli#download-and-install',
+        cls: 'bojubot-setup-docs-link',
+      });
+      docsLink.setAttr('target', '_blank');
+      docsLink.setAttr('rel', 'noopener');
+    }
     const settingsBtn = btnRow.createEl('button', { text: 'Open settings', cls: 'bojubot-setup-check-btn' });
     settingsBtn.addEventListener('click', () => {
       this.appInternal.setting.open();
@@ -1595,6 +1613,31 @@ export class ClaudeView extends ItemView {
     el.empty();
     el.createEl('p', { text: title, cls: 'bojubot-setup-step-title' });
     for (const line of details) el.createEl('p', { text: line, cls: 'bojubot-setup-note' });
+
+    // Antigravity signs in from its interactive mode, which opens a browser
+    const agyBinary = this.plugin.getBinaryPath('antigravity');
+    if (err.errorCode === 'agy_auth' && agyBinary) {
+      const btnRow = el.createDiv({ cls: 'bojubot-setup-btn-row' });
+      const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
+      loginBtn.addEventListener('click', () => {
+        this.openTerminalWith(agyBinary);
+        loginBtn.setText('Opened — sign in, then send your message again');
+        loginBtn.disabled = true;
+      });
+    }
+  }
+
+  /** Open a new terminal window running a CLI interactively (for signing in). */
+  private openTerminalWith(binaryPath: string | null): void {
+    if (process.platform === 'win32') {
+      spawn('cmd.exe', ['/c', 'start', 'powershell.exe', '-NoExit', '-Command', `& '${binaryPath}'`], { detached: true });
+    } else {
+      const term = process.platform === 'darwin' ? 'open' : 'x-terminal-emulator';
+      const args = process.platform === 'darwin'
+        ? ['-a', 'Terminal', '--args', binaryPath ?? '']
+        : ['-e', binaryPath ?? ''];
+      spawn(term, args, { detached: true });
+    }
   }
 
   private isAuthError(text: string): boolean {
@@ -1618,18 +1661,7 @@ export class ClaudeView extends ItemView {
 
     const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
     loginBtn.addEventListener('click', () => {
-      const binaryPath = this.plugin.getBinaryPath('claude-code');
-      const isWin = process.platform === 'win32';
-
-      if (isWin) {
-        spawn('cmd.exe', ['/c', 'start', 'powershell.exe', '-NoExit', '-Command', `& '${binaryPath}'`], { detached: true });
-      } else {
-        const term = process.platform === 'darwin' ? 'open' : 'x-terminal-emulator';
-        const args = process.platform === 'darwin'
-          ? ['-a', 'Terminal', '--args', binaryPath]
-          : ['-e', binaryPath];
-        spawn(term, args, { detached: true });
-      }
+      this.openTerminalWith(this.plugin.getBinaryPath('claude-code'));
 
       loginBtn.setText('Opened — log in, then click done');
       loginBtn.disabled = true;
