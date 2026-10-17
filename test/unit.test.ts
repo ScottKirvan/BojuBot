@@ -2571,7 +2571,7 @@ describe('antigravityBackend', () => {
       assert.ok(p.summary && p.can && p.cannot, mode);
     }
     assert.ok(ANTIGRAVITY_ORIENTATION.permissions.standard.cannot.includes('run_command'));
-    assert.equal(ANTIGRAVITY_ORIENTATION.environmentNote, null);
+    assert.match(ANTIGRAVITY_ORIENTATION.environmentNote ?? '', /Do not read \{\{BRAND\}\} plugin files/);
   });
 });
 
