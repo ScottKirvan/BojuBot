@@ -133,18 +133,5 @@ npm run dev                    # watch mode
 After submitting a PR, always switch back to `main`: `git checkout main && git pull`.
 When Scott says a branch is merged or deleted, immediately run `git checkout main && git pull`, then create a new branch before continuing any work.
 
-## Release process (post-merge checklist)
-release-please only reads commit **subject lines** — commit bodies are ignored. After each release PR merges:
-
-1. Scan commit bodies for sub-features/fixes not visible in the subject:
-   ```bash
-   git log --format="%H %s%n%b%n---" <prev-tag>..HEAD
-   ```
-2. Manually expand any sparse entries in `notes/CHANGELOG.md`
-3. Sync the GitHub release page to match:
-   ```bash
-   gh release edit <tag> --notes "$(cat release-body.md)"
-   ```
-   (or paste directly via `gh release edit <tag> --notes-file <file>`)
-
-The natural checkpoint is the release-please PR review — that's the right moment to catch multi-bullet commits before the release goes public.
+## Release notes
+The docs deployment generates release notes on its own — don't expand `notes/CHANGELOG.md` or edit GitHub release pages unless asked. Setup steps, limitations and how-tos belong in the user docs (`docs/guide/`), never the changelog.
