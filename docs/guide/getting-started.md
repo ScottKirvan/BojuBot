@@ -6,6 +6,8 @@
 - **Claude Code CLI** — installed and authenticated. ([Full install guide](https://code.claude.com/docs/en/overview#native-install-recommended))
 - **Claude Pro or Max subscription** — BojuBot rides your existing subscription. No separate API key needed.
 
+Prefer not to spend your Claude quota in Obsidian? BojuBot can also run on Google's **Antigravity CLI** instead. See [Choosing an Agent](./agents) for setup.
+
 ### Installing Claude Code
 
 ::: code-group

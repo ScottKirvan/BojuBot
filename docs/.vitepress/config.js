@@ -36,6 +36,7 @@ export default {
         items: [
           { text: 'Requirements & Installation', link: '/guide/getting-started' },
           { text: 'First Launch', link: '/guide/first-launch' },
+          { text: 'Choosing an Agent', link: '/guide/agents' },
         ]
       },
       {
