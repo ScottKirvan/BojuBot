@@ -63,6 +63,13 @@ export interface TurnOptions {
   capabilities?: CliCapabilities;
 }
 
+/** One entry in a model picker. */
+export interface ModelOption {
+  id: string;
+  displayName: string;
+  description: string;
+}
+
 export interface PermissionDescription {
   summary: string;
   can: string;
@@ -94,5 +101,10 @@ export interface AgentBackend {
   fetchPlanUsage(binaryPath: string, env: Record<string, string>, cwd: string, caps: CliCapabilities): Promise<string>;
   /** Prompt that compacts the resumed conversation, or null when unsupported. */
   compactPrompt: string | null;
+  /** Asks the CLI which models it offers. Null when BojuBot keeps the list
+   *  itself (Claude Code). Rejects on failure. */
+  listModels: ((binaryPath: string, env: Record<string, string>, cwd: string) => Promise<ModelOption[]>) | null;
+  /** Permission modes this backend can't enforce, each with the reason the UI shows. */
+  unavailableModes: Partial<Record<PermissionMode, string>>;
   orientation: BackendOrientation;
 }

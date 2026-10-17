@@ -23,13 +23,21 @@ function applyPermission(plugin: BojuBotPlugin, mode: PermissionMode): void {
   plugin.notifyPermissionChanged();
 }
 
-export function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean): void {
+/** Modes the active backend can't enforce, each with the reason shown in place of its description. */
+export type UnavailableModes = Partial<Record<PermissionMode, string>>;
+
+export function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean, unavailableReason?: string): void {
   if (isCurrent) el.addClass('bojubot-perm-row--active');
+  if (unavailableReason) el.addClass('bojubot-perm-row--disabled');
   const iconEl = el.createDiv({ cls: `bojubot-perm-row-icon ${opt.colorClass}` });
   setIcon(iconEl, opt.icon);
   const textEl = el.createDiv({ cls: 'bojubot-perm-row-text' });
   textEl.createSpan({ cls: 'bojubot-perm-row-label', text: opt.label });
-  textEl.createSpan({ cls: 'bojubot-perm-row-desc', text: opt.description });
+  textEl.createSpan({ cls: 'bojubot-perm-row-desc', text: unavailableReason ?? opt.description });
+}
+
+function activeUnavailableModes(plugin: BojuBotPlugin): UnavailableModes {
+  return plugin.getBackend(plugin.getActiveBackendId()).unavailableModes;
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +55,10 @@ export class PermissionPickerModal extends FuzzySuggestModal<ModeOption> {
     this.modalEl.addClass('bojubot-permission-picker-modal');
   }
 
-  getItems(): ModeOption[] { return PERMISSION_MODES; }
+  getItems(): ModeOption[] {
+    const unavailable = activeUnavailableModes(this.plugin);
+    return PERMISSION_MODES.filter(m => !unavailable[m.mode]);
+  }
   getItemText(opt: ModeOption): string { return opt.label; }
 
   renderSuggestion(fuzzy: { item: ModeOption }, el: HTMLElement): void {
@@ -74,8 +85,14 @@ export function openModePickerPopover(
   anchorEl: HTMLElement,
   currentMode: PermissionMode,
   onSelect: (mode: PermissionMode) => void,
+  unavailable: UnavailableModes = {},
 ): void {
   activeDocument.querySelector('.bojubot-perm-popover')?.remove();
+  const choose = (mode: PermissionMode) => {
+    if (unavailable[mode]) return;
+    close();
+    onSelect(mode);
+  };
 
   const rect = anchorEl.getBoundingClientRect();
   const popover = activeDocument.body.createDiv({ cls: 'bojubot-perm-popover' });
@@ -106,17 +123,14 @@ export function openModePickerPopover(
 
   PERMISSION_MODES.forEach((opt, i) => {
     const row = popover.createDiv({ cls: 'bojubot-perm-popover-row bojubot-perm-row' });
-    renderRow(row, opt, opt.mode === currentMode);
+    renderRow(row, opt, opt.mode === currentMode, unavailable[opt.mode]);
 
     row.addEventListener('mouseenter', () => {
       focusedIndex = i;
       updateFocus();
     });
 
-    row.addEventListener('click', () => {
-      close();
-      onSelect(opt.mode);
-    });
+    row.addEventListener('click', () => choose(opt.mode));
 
     rows.push(row);
   });
@@ -147,8 +161,7 @@ export function openModePickerPopover(
       updateFocus();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      close();
-      onSelect(PERMISSION_MODES[focusedIndex].mode);
+      choose(PERMISSION_MODES[focusedIndex].mode);
     }
   };
 
@@ -170,5 +183,5 @@ export function openPermissionPopover(
   iconEl: HTMLElement,
   currentMode: PermissionMode,
 ): void {
-  openModePickerPopover(iconEl, currentMode, (mode) => applyPermission(plugin, mode));
+  openModePickerPopover(iconEl, currentMode, (mode) => applyPermission(plugin, mode), activeUnavailableModes(plugin));
 }

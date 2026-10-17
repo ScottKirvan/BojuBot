@@ -1,8 +1,7 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile, setIcon } from 'obsidian';
 import type { PendingContext } from '../AttachmentHandler';
-import type { PermissionMode } from '../backends/types';
-import type { ClaudeModel } from '../settings';
-import { PERMISSION_MODES, openModePickerPopover } from './PermissionPickerModal';
+import type { BackendId, ModelOption, PermissionMode } from '../backends/types';
+import { PERMISSION_MODES, UnavailableModes, openModePickerPopover } from './PermissionPickerModal';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
@@ -24,6 +23,22 @@ export interface CustomSessionOptions {
   /** Bare Claude Code experience — no BojuBot context injection at all (the
    *  per-session equivalent of global Minimal mode). */
   rawSession: boolean;
+  /** Agent CLI the session runs on. */
+  backend: BackendId;
+}
+
+/** What the form needs to know about one agent backend. */
+export interface BackendChoice {
+  id: BackendId;
+  displayName: string;
+  /** False when the CLI wasn't found — listed, but can't be chosen. */
+  installed: boolean;
+  models: ModelOption[];
+  /** The global default model; '' = the CLI's own default. */
+  defaultModel: string;
+  /** Levels the CLI lists for --effort. Empty → the effort field is hidden. */
+  effortLevels: readonly string[];
+  unavailableModes: UnavailableModes;
 }
 
 const TEXT_EXTS = new Set([
@@ -44,9 +59,10 @@ export class CustomSessionModal extends Modal {
   private attachments: PendingContext[] = [];
   private attachListEl: HTMLElement | null = null;
   private permissionMode: PermissionMode;
-  private model: string;
-  private effort: string;
+  private model = '';
+  private effort = '';
   private rawSession = false;
+  private backend: BackendChoice;
   private readonly vaultRoot: string;
   private readonly configDir: string;
 
@@ -54,20 +70,26 @@ export class CustomSessionModal extends Modal {
     app: App,
     vaultRoot: string,
     configDir: string,
-    private readonly allModels: ClaudeModel[],
+    private readonly backends: BackendChoice[],
+    defaultBackend: BackendId,
     defaultPermissionMode: PermissionMode,
-    defaultModel: string,
-    /** Levels the installed CLI lists for --effort. Empty → the field is hidden. */
-    private readonly effortLevels: readonly string[],
-    defaultEffort: string,
+    private readonly defaultEffort: string,
     private readonly onSubmit: (opts: CustomSessionOptions) => void,
   ) {
     super(app);
     this.vaultRoot = vaultRoot;
     this.configDir = configDir;
     this.permissionMode = defaultPermissionMode;
-    this.model = defaultModel;
-    this.effort = effortLevels.includes(defaultEffort) ? defaultEffort : '';
+    this.backend = backends.find(b => b.id === defaultBackend) ?? backends[0];
+    this.applyBackendDefaults();
+  }
+
+  /** Model and effort pre-fill from the chosen backend's defaults; a permission
+   *  mode it can't enforce falls back to Read only (the safer neighbour). */
+  private applyBackendDefaults(): void {
+    this.model = this.backend.defaultModel;
+    this.effort = this.backend.effortLevels.includes(this.defaultEffort) ? this.defaultEffort : '';
+    if (this.backend.unavailableModes[this.permissionMode]) this.permissionMode = 'readonly';
   }
 
   onOpen() {
@@ -76,6 +98,27 @@ export class CustomSessionModal extends Modal {
     contentEl.createEl('h2', { text: 'New session' });
 
     const form = contentEl.createEl('form');
+    let renderPermissionBtn = () => { /* set by the permission field below */ };
+    let renderBackendFields = () => { /* set by the model/effort fields below */ };
+
+    // ── Agent ────────────────────────────────────────────────────────────────
+    if (this.backends.length > 1) {
+      const field = form.createDiv({ cls: 'bojubot-param-field' });
+      field.createEl('label', { text: 'Agent', cls: 'bojubot-param-label' });
+      field.createDiv({ text: 'The agent CLI this session runs on. A session stays on its agent.', cls: 'bojubot-param-desc' });
+      const select = field.createEl('select', { cls: 'bojubot-param-input' });
+      for (const b of this.backends) {
+        const opt = select.createEl('option', { text: b.installed ? b.displayName : `${b.displayName} (not installed)`, value: b.id });
+        opt.disabled = !b.installed;
+        if (b.id === this.backend.id) opt.selected = true;
+      }
+      select.addEventListener('change', () => {
+        this.backend = this.backends.find(b => b.id === select.value) ?? this.backend;
+        this.applyBackendDefaults();
+        renderPermissionBtn();
+        renderBackendFields();
+      });
+    }
 
     // ── Session name ─────────────────────────────────────────────────────────
     {
@@ -129,7 +172,7 @@ export class CustomSessionModal extends Modal {
       field.createEl('label', { text: 'Permission mode', cls: 'bojubot-param-label' });
       field.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
       const btn = field.createEl('button', { cls: 'bojubot-param-input bojubot-custom-session-perm-btn', attr: { type: 'button' } });
-      const renderBtn = () => {
+      const renderBtn = renderPermissionBtn = () => {
         btn.empty();
         const opt = PERMISSION_MODES.find(o => o.mode === this.permissionMode) ?? PERMISSION_MODES[2];
         const iconEl = btn.createSpan({ cls: `bojubot-custom-session-perm-btn-icon ${opt.colorClass}` });
@@ -143,43 +186,50 @@ export class CustomSessionModal extends Modal {
         openModePickerPopover(btn, this.permissionMode, (mode) => {
           this.permissionMode = mode;
           renderBtn();
-        });
+        }, this.backend.unavailableModes);
       });
     }
 
-    // ── Model ──────────────────────────────────────────────────────────────────
-    {
-      const field = form.createDiv({ cls: 'bojubot-param-field' });
-      field.createEl('label', { text: 'Model', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
-      const select = field.createEl('select', { cls: 'bojubot-param-input' });
-      for (const m of this.allModels) {
-        const opt = select.createEl('option', { text: m.displayName, value: m.id });
+    // ── Model + effort (rebuilt when the agent changes) ──────────────────────
+    const backendFieldsEl = form.createDiv();
+    renderBackendFields = () => {
+      backendFieldsEl.empty();
+      const b = this.backend;
+
+      const modelField = backendFieldsEl.createDiv({ cls: 'bojubot-param-field' });
+      modelField.createEl('label', { text: 'Model', cls: 'bojubot-param-label' });
+      modelField.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
+      const modelSelect = modelField.createEl('select', { cls: 'bojubot-param-input' });
+      // '' = let the CLI pick (only offered when the backend's default is unset)
+      const models = b.defaultModel === '' ? [{ id: '', displayName: `${b.displayName} default`, description: '' }, ...b.models] : b.models;
+      for (const m of models) {
+        const opt = modelSelect.createEl('option', { text: m.displayName, value: m.id });
         if (m.id === this.model) opt.selected = true;
       }
-      select.addEventListener('change', () => { this.model = select.value; });
-    }
+      modelSelect.addEventListener('change', () => { this.model = modelSelect.value; });
 
-    // ── Effort (only when the CLI supports --effort) ─────────────────────────
-    if (this.effortLevels.length > 0) {
-      const field = form.createDiv({ cls: 'bojubot-param-field' });
-      field.createEl('label', { text: 'Effort', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'How much thinking Claude does per turn. Pre-filled from your global default. Default lets Claude Code decide and follows the global setting.', cls: 'bojubot-param-desc' });
-      const select = field.createEl('select', { cls: 'bojubot-param-input' });
-      for (const level of ['', ...this.effortLevels]) {
-        const opt = select.createEl('option', { text: level || 'Default', value: level });
-        if (level === this.effort) opt.selected = true;
+      // Only when the CLI supports --effort
+      if (b.effortLevels.length > 0) {
+        const field = backendFieldsEl.createDiv({ cls: 'bojubot-param-field' });
+        field.createEl('label', { text: 'Effort', cls: 'bojubot-param-label' });
+        field.createDiv({ text: `How much thinking the model does per turn. Pre-filled from your global default. Default lets ${b.displayName} decide and follows the global setting.`, cls: 'bojubot-param-desc' });
+        const select = field.createEl('select', { cls: 'bojubot-param-input' });
+        for (const level of ['', ...b.effortLevels]) {
+          const opt = select.createEl('option', { text: level || 'Default', value: level });
+          if (level === this.effort) opt.selected = true;
+        }
+        select.addEventListener('change', () => { this.effort = select.value; });
       }
-      select.addEventListener('change', () => { this.effort = select.value; });
-    }
+    };
+    renderBackendFields();
 
     // ── Raw session ────────────────────────────────────────────────────────────
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       const row = field.createEl('label', { cls: 'bojubot-custom-session-toggle-row' });
       const cb = row.createEl('input', { attr: { type: 'checkbox' } });
-      row.createSpan({ text: 'Raw Claude Code session', cls: 'bojubot-param-label bojubot-custom-session-toggle-label' });
-      field.createDiv({ text: 'Bare CLI experience — skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge). Claude Code still reads CLAUDE.md from the working directory on its own.', cls: 'bojubot-param-desc' });
+      row.createSpan({ text: 'Raw session', cls: 'bojubot-param-label bojubot-custom-session-toggle-label' });
+      field.createDiv({ text: 'Bare CLI experience — skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge). The CLI still reads its own instruction files (e.g. CLAUDE.md) from the working directory.', cls: 'bojubot-param-desc' });
       cb.addEventListener('change', () => { this.rawSession = cb.checked; });
     }
 
@@ -245,6 +295,7 @@ export class CustomSessionModal extends Modal {
         model: this.model,
         effort: this.effort,
         rawSession: this.rawSession,
+        backend: this.backend.id,
       });
     });
 

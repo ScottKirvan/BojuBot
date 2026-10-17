@@ -218,6 +218,20 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 - `/usage` via `agy --print "/usage"` JSON.
 - **Done when:** a Standard-mode Antigravity session in the test vault can chat, read and write notes, trigger UI Bridge actions and vault queries, survive an Obsidian restart and resume, run skills, and show a denial card for a shell command.
 
+**As built so far:**
+- **Step 1 (#361):** `src/backends/antigravity.ts` with fixture tests.
+- **Step 2 (backend selection):**
+  - `settings.backend` (the "Agent" dropdown), `agyBinaryPath` and `agyDefaultModel` (`''` = Antigravity's own default).
+  - Per-backend runtime on the plugin: binary, capabilities, and the model list from `agy models`.
+  - `StoredSession.backend`, and `SessionCoordinator` bound to a backend. An unstarted, unpinned new session follows a change of the default.
+  - Custom Session "Agent" field.
+  - Unavailable modes greyed out with their reason (`AgentBackend.unavailableModes`).
+  - Gauge and compact hidden when `compactPrompt` is null.
+  - Per-backend `/usage`, model picker and effort.
+  - A not-found card for a non-Claude default agent.
+  - The live preview callback is passed only when streaming is on.
+  - Deferred to the remaining steps: the transcript store (history for Antigravity sessions), the per-model context window for the gauge, Antigravity auth onboarding, filtering agy's stderr notices, and backend-specific permission descriptions in the picker.
+
 ### Phase 3: release hardening
 
 - Onboarding: clear states for "agy not installed", "not authenticated" (with an Open terminal button, mirroring `renderAuthError()`), and "model unavailable".
