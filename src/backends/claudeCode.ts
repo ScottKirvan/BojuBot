@@ -438,5 +438,6 @@ export const claudeCodeBackend: AgentBackend = {
   readableHistory: true,
   listModels: null,
   unavailableModes: {},
+  modeDescriptions: {},
   orientation: CLAUDE_CODE_ORIENTATION,
 };

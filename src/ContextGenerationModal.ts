@@ -7,6 +7,7 @@ import { log } from './utils/logger';
 import { brandName } from './brand';
 import { existsSync, readdirSync } from 'fs';
 import { join, isAbsolute } from 'path';
+import { contextGenStatusForTool } from './utils/toolFormatting';
 
 /**
  * Blocks the user from starting a chat session while the background context-file
@@ -61,22 +62,6 @@ class ContextGenerationProgressModal extends Modal {
 }
 
 /** Friendly status text for the progress modal, based on which tool Claude is using. */
-function statusForTool(tool: string): string {
-  switch (tool) {
-    case 'Read':
-    case 'Glob':
-    case 'Grep':
-      return 'Scanning vault…';
-    case 'Write':
-    case 'Edit':
-      return 'Writing your context file…';
-    case 'ToolSearch':
-      return 'Loading tools…';
-    default:
-      return 'Thinking…';
-  }
-}
-
 export class ContextGenerationModal extends Modal {
   private plugin: BojuBotPlugin;
   private contextFilePath: string;
@@ -295,7 +280,7 @@ export class ContextGenerationModal extends Modal {
       onAction: () => { /* background — discard UI actions */ },
       onToolCall: (tool) => {
         log('ContextGenerationModal: tool call:', tool);
-        progressModal.updateStatus(statusForTool(tool));
+        progressModal.updateStatus(contextGenStatusForTool(tool));
       },
       onPermissionDenied: () => { /* background generation — denials not surfaced */ },
       onUsage: () => { /* background generation — usage not surfaced */ },

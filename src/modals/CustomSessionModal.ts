@@ -39,6 +39,7 @@ export interface BackendChoice {
   /** Levels the CLI lists for --effort. Empty → the effort field is hidden. */
   effortLevels: readonly string[];
   unavailableModes: UnavailableModes;
+  modeDescriptions: Partial<Record<PermissionMode, string>>;
 }
 
 const TEXT_EXTS = new Set([
@@ -186,7 +187,7 @@ export class CustomSessionModal extends Modal {
         openModePickerPopover(btn, this.permissionMode, (mode) => {
           this.permissionMode = mode;
           renderBtn();
-        }, this.backend.unavailableModes);
+        }, { unavailable: this.backend.unavailableModes, descriptions: this.backend.modeDescriptions });
       });
     }
 

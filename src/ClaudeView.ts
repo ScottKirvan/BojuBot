@@ -7,7 +7,7 @@ import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
 import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
-import { openPermissionPopover } from './modals/PermissionPickerModal';
+import { PERMISSION_MODES, openPermissionPopover } from './modals/PermissionPickerModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
@@ -450,6 +450,7 @@ export class ClaudeView extends ItemView {
               defaultModel: this.plugin.getDefaultModel(id),
               effortLevels: this.supportedEffortLevels(id),
               unavailableModes: backend.unavailableModes,
+              modeDescriptions: backend.modeDescriptions,
             };
           }),
           this.plugin.settings.backend,
@@ -778,6 +779,10 @@ export class ClaudeView extends ItemView {
         this.permissionIconEl.title = 'Permissions: Standard — files + web, read-only shell commands. Click to change.';
         this.permissionIconEl.addClass('bojubot-perm-standard');
     }
+    // The session's agent may behave differently from Claude Code's wording above
+    const description = this.coordinator.backend.modeDescriptions[mode];
+    const label = PERMISSION_MODES.find(m => m.mode === mode)?.label;
+    if (description && label) this.permissionIconEl.title = `Permissions: ${label} — ${description}. Click to change.`;
   }
 
   startNewSession(custom?: CustomSessionOptions) {
