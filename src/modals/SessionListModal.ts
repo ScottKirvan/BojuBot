@@ -18,7 +18,7 @@ class ConfirmDeleteModal extends Modal {
   }
   onClose() { this.contentEl.empty(); }
 }
-import { StoredSession, saveSession, canResumeLocally, deleteSession } from '../utils/sessionStorage';
+import { StoredSession, saveSession, hasReadableHistory, deleteSession } from '../utils/sessionStorage';
 import { formatTokenCount } from '../utils/logger';
 
 export class SessionListModal extends Modal {
@@ -134,7 +134,7 @@ export class SessionListModal extends Modal {
 
   private renderSessionItem(list: HTMLElement, session: StoredSession) {
     const isNew = !session.claudeSessionId;
-    const resumable = !isNew && canResumeLocally(session.claudeSessionId);
+    const resumable = !isNew && hasReadableHistory(session, this.sessionsDir);
     const isActive = session.id === this.activeSessionFileId;
     const cls = [
       'bojubot-session-item',

@@ -435,6 +435,7 @@ export const claudeCodeBackend: AgentBackend = {
   parseStream: parseStreamOutput,
   fetchPlanUsage,
   compactPrompt: '/compact',
+  readableHistory: true,
   listModels: null,
   unavailableModes: {},
   orientation: CLAUDE_CODE_ORIENTATION,

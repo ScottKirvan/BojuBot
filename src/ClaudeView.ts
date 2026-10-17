@@ -35,8 +35,8 @@ import {
   loadAllSessions,
   resolveSessionsDir,
   hasReadableHistory,
+  loadHistory,
   sessionBackend,
-  loadSessionMessages,
   estimateSessionTokens,
 } from './utils/sessionStorage';
 import { SessionListModal } from './modals/SessionListModal';
@@ -809,8 +809,8 @@ export class ClaudeView extends ItemView {
 
     const sessionTokens = new Map<string, number>();
     for (const session of sessions) {
-      if (!hasReadableHistory(session)) continue;
-      const messages = loadSessionMessages(session.claudeSessionId);
+      if (!hasReadableHistory(session, sessionsDir)) continue;
+      const messages = loadHistory(session, sessionsDir);
       if (messages.length > 0) sessionTokens.set(session.id, estimateSessionTokens(messages));
     }
     const contextTokens = await this.estimateFreshContextTokens();
@@ -926,7 +926,7 @@ export class ClaudeView extends ItemView {
 
   /** Export any session (by StoredSession) from the history modal. */
   private exportSessionToVault(session: StoredSession): void {
-    const messages = loadSessionMessages(session.claudeSessionId);
+    const messages = loadHistory(session, this.getSessionsDir());
     if (messages.length === 0) { new Notice('No messages found for this session'); return; }
     const date = new Date(session.updatedAt).toISOString().slice(0, 10);
     const safeName = session.title.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
@@ -1107,7 +1107,7 @@ export class ClaudeView extends ItemView {
     // Coordinator updates session state and emits 'session:loaded' — we also
     // need the payload data synchronously for DOM rendering, so capture it here.
     const isNew = !session.claudeSessionId;
-    const canResume = hasReadableHistory(session);
+    const canResume = hasReadableHistory(session, this.getSessionsDir());
 
     await this.coordinator.loadSession(session);
 
@@ -1117,7 +1117,7 @@ export class ClaudeView extends ItemView {
     this.updateModelIndicator();
 
     if (canResume) {
-      const messages = loadSessionMessages(session.claudeSessionId);
+      const messages = loadHistory(session, this.getSessionsDir());
       if (messages.length > 0) {
         for (const msg of messages) {
           if (msg.role === 'separator') {
@@ -1161,9 +1161,9 @@ export class ClaudeView extends ItemView {
       }
     } else if (isNew) {
       this.appendMessage('system', `New session: ${session.title}`);
-    } else if (sessionBackend(session) !== 'claude-code') {
-      // Not readable yet: BojuBot will keep its own transcript for these (agent-backends spec, step 3)
-      this.appendMessage('system', `Resumed: ${session.title} — earlier messages aren't shown for ${this.coordinator.backend.displayName} sessions yet.`);
+    } else if (!this.plugin.getBackend(sessionBackend(session)).readableHistory) {
+      // No BojuBot transcript: the session predates it, or the file was removed. The conversation still resumes.
+      this.appendMessage('system', `Resumed: ${session.title} — earlier messages weren't recorded for this session.`);
     } else {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }

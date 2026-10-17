@@ -101,6 +101,9 @@ export interface AgentBackend {
   fetchPlanUsage(binaryPath: string, env: Record<string, string>, cwd: string, caps: CliCapabilities): Promise<string>;
   /** Prompt that compacts the resumed conversation, or null when unsupported. */
   compactPrompt: string | null;
+  /** True when BojuBot can read the CLI's own conversation history (Claude Code's
+   *  .jsonl files). False → BojuBot keeps its own transcript of the session. */
+  readableHistory: boolean;
   /** Asks the CLI which models it offers. Null when BojuBot keeps the list
    *  itself (Claude Code). Rejects on failure. */
   listModels: ((binaryPath: string, env: Record<string, string>, cwd: string) => Promise<ModelOption[]>) | null;

@@ -409,6 +409,8 @@ export const antigravityBackend: AgentBackend = {
   parseStream: parseAgyStream,
   fetchPlanUsage: (binary, env, cwd) => fetchAgyPlanUsage(binary, env, cwd),
   compactPrompt: null,
+  // Its history is a private SQLite store, so BojuBot keeps a transcript instead.
+  readableHistory: false,
   listModels: listAgyModels,
   unavailableModes: {
     restricted: "Antigravity can't block file access for a single session.",

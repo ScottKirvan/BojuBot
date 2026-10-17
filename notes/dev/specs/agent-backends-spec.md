@@ -230,7 +230,13 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
   - Per-backend `/usage`, model picker and effort.
   - A not-found card for a non-Claude default agent.
   - The live preview callback is passed only when streaming is on.
-  - Deferred to the remaining steps: the transcript store (history for Antigravity sessions), the per-model context window for the gauge, Antigravity auth onboarding, filtering agy's stderr notices, and backend-specific permission descriptions in the picker.
+- **Step 3 (transcript store):**
+  - `AgentBackend.readableHistory`.
+  - `sessions/<id>.transcript.jsonl`, appended once per completed turn that has a conversation ID. The user text is cleaned exactly like Claude Code history (vault context and `<bojubot-context>` tags removed, contexts kept for badges). The reply keeps its @@BOJU lines so query cards replay.
+  - `hasReadableHistory()` and `loadHistory()` choose the CLI's history or the transcript. Resume, the session list ("Remote" badge, token estimate) and exporting a past session all go through them.
+  - Deleting a session deletes its transcript.
+  - Sessions from before step 3 resume with a note that their earlier messages weren't recorded.
+  - Remaining for step 4: the per-model context window for the gauge, Antigravity auth onboarding, filtering agy's stderr notices, and backend-specific permission descriptions in the picker.
 
 ### Phase 3: release hardening
 
