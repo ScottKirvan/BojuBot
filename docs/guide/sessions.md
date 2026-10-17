@@ -8,14 +8,15 @@ Click the **+** button in the toolbar to start a new session with default settin
 
 | Field | What it does |
 |---|---|
+| **Agent** | Which agent CLI the session runs on (Claude Code or Antigravity), pre-filled from the **Agent** setting. Changing it refills the model and effort fields for that agent. Agents that aren't installed are listed but can't be picked. See [Choosing an Agent](./agents). |
 | **Session name** | Pre-fills the title instead of waiting for auto-naming from the first message. Leave blank to use the default. |
 | **Working directory** | Sets the directory Claude runs in (useful for code projects outside the vault). The folder browser opens at your vault root. Leave blank to use the vault root. |
 | **Permission mode** | Pre-filled with your current global default (with its colored icon), so you can see exactly what you're starting from. Click a different mode to pin this session to it instead. |
 | **Model** | Pre-filled with your current global default model. Pick a different one to pin this session to it instead. |
 | **Effort** | Pre-filled with your current global [effort](./chat-panel.md#effort) level. Pick a level to pin this session to it; **Default** leaves it unpinned so it follows the global setting. Hidden when your Claude Code CLI doesn't support effort levels. |
-| **Raw Claude Code session** | Skips *all* BojuBot context injection — no orientation, vault tree, context file, active-note note, or UI Bridge. Claude Code still reads `CLAUDE.md` from the working directory on its own, exactly as it would from a terminal. This is the per-session equivalent of the global Minimal mode setting. |
+| **Raw session** | Skips *all* BojuBot context injection — no orientation, vault tree, context file, active-note note, or UI Bridge. The CLI still reads its own instruction files (e.g. Claude Code's `CLAUDE.md`) from the working directory, exactly as it would from a terminal. This is the per-session equivalent of the global Minimal mode setting. |
 | **Initial instructions** | A system prompt injected at session start — role, focus, standing rules. Leave blank for none. |
-| **Include vault context** | Checked by default. Uncheck to suppress the vault tree, `_claude-context.md`, and pinned notes — useful for focused code sessions where Obsidian-specific context is noise. The system orientation (permission mode, tools) is always injected regardless. Ignored when "Raw Claude Code session" is on, since that already suppresses everything. |
+| **Include vault context** | Checked by default. Uncheck to suppress the vault tree, `_claude-context.md`, and pinned notes — useful for focused code sessions where Obsidian-specific context is noise. The system orientation (permission mode, tools) is always injected regardless. Ignored when "Raw session" is on, since that already suppresses everything. |
 | **Context attachments** | Attach files, vault notes, or URLs before the first message. Same attachment support as the main chat. |
 
 Empty fields fall back to normal defaults — you can fill in one field and leave the rest blank.
