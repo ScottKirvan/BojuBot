@@ -254,6 +254,21 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 
 **Releasable when:** every Claude Code behavior is unchanged; an Antigravity user can complete the Phase 2 checklist from a clean install by following the docs; and the unavailable features (Chat only, compact, any untested modes) are hidden with a reason rather than broken.
 
+**As built so far (Phase 3):**
+- **Errors and onboarding:**
+  - `agyApiError()` turns a failed `result.error`, or a stderr error with no result, into an error card.
+  - Not signed in gets an Open terminal button that runs `agy`. An unknown model points at the model picker.
+  - The not-found card links the install guide and the one-time `agy` sign-in.
+  - "Not signed in" couldn't be reproduced without signing the user out, because agy keeps its sign-in in the OS keyring. Detection matches agy's documented `authentication required` text.
+- **Docs:** `docs/guide/agents.md` ("Choosing an Agent"), linked from requirements, permissions, settings and Custom Session.
+- **UI Bridge reliability:** `test/agy-bridge-check.ts` runs 20 one-turn prompts with the real Standard orientation. Results on Antigravity's default model (agy 1.4.0, 2026-10-17):
+  - Before Antigravity's `environmentNote`: 15/20 passed, 21/21 lines valid. Three prompts went digging in BojuBot's `main.js` and its GitHub source instead of acting.
+  - After the note ("this orientation is all you need… don't read plugin files or fetch source… use the help query"): 17/20 passed, 23/23 lines valid. The three misses are acceptable:
+    - a `help` inject query before the move, which the app follows up automatically
+    - reading frontmatter instead of a `tags` query
+    - one missing follow-up `show-notice`
+  - Cost: about 0.2% of the Gemini 5-hour window per prompt. Other models (`gemini-3.8-flash-high`, and the Claude/GPT models on their separate quota) are not yet checked.
+
 ### Later
 
 - Gemini CLI adapter for paid-API-key and Code Assist users, with the vault-trust consent step.

@@ -65,6 +65,7 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` â
 | `src/modals/SlashParamModal.ts`  | Param form modal for skills; `SlashParam` + `SlashParamAttachment` types                       |
 | `src/modals/CustomSessionModal.ts` | Custom session config modal (Shift+click +); `CustomSessionOptions` type exported from here |
 | `test/spawn-test.mjs`           | Standalone spawn test (node, no Obsidian)                                                      |
+| `test/agy-bridge-check.ts`      | UI Bridge reliability check against real `agy` (`npx tsx`; uses agy quota, not in `npm test`) |
 | `docs/`                         | Root VitePress folder user-facing guide                                                        |
 | `docs/guide/skills.md`          | Skills reference doc (field types, examples, Ctrl+P API)                                       |
 | `notes/COMMIT_DRAFT.md`         | Commit msg staging (gitignored)                                                                |
