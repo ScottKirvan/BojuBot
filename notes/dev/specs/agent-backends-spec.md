@@ -244,7 +244,7 @@ Claude Code's `~/.claude/projects/*.jsonl` is readable; Antigravity's SQLite sto
 - Scott tests from `dev`: the test vaults' plugin junction points at the repo root, so checking out `dev` and building is enough.
 - Keep `dev` current by merging `main` into it whenever `main` moves (e.g. after #356 merges), so the final merge back is small.
 - release-please only runs on `main`, so nothing on `dev` is released or added to the changelog until `dev` merges.
-- **Feature PRs into `dev` are squash-merged with clean conventional subjects** (`feat:`, `fix:`, `refactor:`). Each one becomes a changelog line when `dev` reaches `main`, so the subject is the changelog entry.
+- **Feature PRs into `dev` are rebase-merged**, so every commit on a PR branch lands as-is. Each commit subject must be a clean conventional subject (`feat:`, `fix:`, `refactor:`, `docs:`): each one becomes a changelog line when `dev` reaches `main`.
 - **The final `dev` → `main` merge is a merge commit (decided).** release-please builds the changelog from every commit subject that lands on `main`; a squash would collapse the whole effort into one entry. A rebase merge would also keep the entries, but it replays commits one by one: the merges from `main` that `dev` accumulates often can't be rebased cleanly, and the rewritten commit IDs would leave `dev` diverged from `main` afterward.
 
 ## Testing
