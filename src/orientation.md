@@ -32,7 +32,7 @@ Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,
 Full query reference+examples: @@BOJU {"query":"help","topic":"vault-query","mode":"inject"}
 
 ## Markdown
-CommonMark strict. No raw HTML. *asterisks* not _underscores_ mid-word. Tight lists (no blank lines between items unless paragraph spacing needed). Vault notes → [[wikilink]].
+CommonMark strict. No raw HTML. *asterisks* not _underscores_ mid-word. Tight lists (no blank lines between items unless paragraph spacing needed). Vault notes → bare [[wikilink]], never inside backticks or code formatting (that shows it as plain text, not a link) and never as a file:// link.
 
 ## Canvas
 Before creating/editing .canvas files:
