@@ -46,6 +46,7 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` �
 | `src/ClaudeView.ts`             | Chat UI, session state, context injection, history modal, bridgeOptions, refreshSessionContext |
 | `src/backends/types.ts`         | `AgentBackend` seam: the interface every CLI backend implements, plus shared stream types      |
 | `src/backends/claudeCode.ts`    | Claude Code backend: binary detect, spawn args, capability probe, stream-json parse            |
+| `src/backends/antigravity.ts`   | Antigravity (`agy`) backend: stdin stream-json, `step_update` adapter, denials, `/usage` JSON  |
 | `src/backends/process.ts`       | Shared CLI launch (PowerShell on Win), run-to-completion, process-tree kill                    |
 | `src/ContextManager.ts`         | Vault tree + context file + allowlist assembly; all session-start context layers               |
 | `src/UIBridge.ts`               | @@BOJU action parsing + execution; ConfirmCommandModal; allowlist/denylist enforcement         |
@@ -101,7 +102,7 @@ Run all three before opening any PR — all must pass clean:
 ```bash
 npm run build   # TypeScript check + bundle
 npm run lint    # ESLint — zero warnings or errors
-npm test        # 231 unit tests via tsx --test
+npm test        # 259 unit tests via tsx --test
 ```
 Lint and TypeScript violations are `fix:` commits, not `chore:`.
 

@@ -61,11 +61,14 @@ stdin:  {"event":"user","message":{"role":"user","content":"<prompt>"}}\n   then
 | Run | Result |
 | --- | --- |
 | Default (`permission_mode: request-review`), read a workspace file | Allowed |
-| Default, write a workspace file (`write_to_file`) | **Allowed, no prompt** |
+| Default, write a file inside the system temp folder (`write_to_file`) | Allowed, no prompt. The first test ran there, which made default mode look writable |
+| Default, write or overwrite a file anywhere else (e.g. a vault on `D:`) | **Denied:** "requires the write_file permission that headless mode cannot prompt for", reported like a shell denial (found in Obsidian testing) |
 | Default, shell command that writes (`run_command`) | **Soft-denied:** tool step `ERROR`, run continues and exits 0, `result.denied_actions: [{"action":"command","display_name":"RunCommand"}]` |
 | `--mode plan`, write a workspace file | Workspace untouched; it wrote a plan into its own `~/.gemini/antigravity-cli/brain/<id>/` and asked for approval |
 | `--dangerously-skip-permissions` | Approves all tool calls (per docs, not tested) |
-| `--mode accept-edits`, `--mode auto` | Not tested |
+| `--mode accept-edits`, create and overwrite files outside temp | **Allowed** |
+| `--mode accept-edits`, shell command | **Soft-denied**, same as default mode. This is Standard |
+| `--mode auto` | Not tested |
 
 Pre-granted rules use `action(target)` (`command(git)`, `write_file(src/)`, `read_file(*)`, `mcp(server/*)`) in `permissions.allow/ask/deny` of `~/.gemini/antigravity-cli/settings.json`, with Deny > Ask > Allow. **There is no per-run flag for rules**, so BojuBot can't express Read-only or Chat only as rules without editing the user's global settings.
 
@@ -145,7 +148,7 @@ The `@@BOJU` line parsing moves out of Claude's `handleMessage()` into a shared 
 
 | BojuBot mode | Claude Code (today) | Antigravity | Support |
 | --- | --- | --- | --- |
-| Standard | `acceptEdits` + `--permission-prompts none` | default (`request-review`): workspace writes allowed, commands soft-denied → `denied_actions` | **native** (verified) |
+| Standard | `acceptEdits` + `--permission-prompts none` | `--mode accept-edits`: file writes allowed, commands soft-denied → `denied_actions` | **native** (verified) |
 | Full access | `bypassPermissions` | `--dangerously-skip-permissions` | **native** |
 | Read only | `manual` + `--allowedTools Read,Glob,Grep,WebFetch,WebSearch` | `--mode plan` | **approximate:** no workspace writes (verified), but it answers with plans and asks for approval rather than refusing |
 | Chat only | `--allowedTools WebFetch,WebSearch` + temp-dir cwd | no per-run equivalent | **unavailable** in the MVP (see open questions) |
