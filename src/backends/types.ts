@@ -9,7 +9,7 @@ import type { ChildProcess } from 'child_process';
 import type { ApiError } from '../utils/apiError';
 import type { CliCapabilities } from '../utils/cliCapabilities';
 
-export type BackendId = 'claude-code';
+export type BackendId = 'claude-code' | 'antigravity';
 
 /** BojuBot's own permission vocabulary; each backend maps it to its CLI's flags. */
 export type PermissionMode = 'standard' | 'readonly' | 'full' | 'restricted';

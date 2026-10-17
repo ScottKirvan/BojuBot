@@ -45,7 +45,7 @@ export function launchCli(binaryPath: string, args: string[], cwd: string, baseE
  * written, and stdin is always closed so the CLI never waits for more input.
  * Rejects on spawn error, non-zero exit, or timeout (the process tree is killed).
  */
-export function runCli(
+export async function runCli(
   binaryPath: string,
   args: string[],
   cwd: string,
@@ -53,6 +53,18 @@ export function runCli(
   timeoutMs: number,
   stdin = '',
 ): Promise<string> {
+  return (await runCliCapture(binaryPath, args, cwd, env, timeoutMs, stdin)).stdout;
+}
+
+/** Like runCli, but resolves with both streams — some CLIs print help to stderr. */
+export function runCliCapture(
+  binaryPath: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  timeoutMs: number,
+  stdin = '',
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let proc: ChildProcess;
     try {
@@ -81,7 +93,7 @@ export function runCli(
     proc.stderr?.on('data', (chunk: Buffer) => { errText += chunk.toString(); });
     proc.on('error', (e) => settle(() => reject(e)));
     proc.on('close', (code) => settle(() => {
-      if (code === 0) resolve(out);
+      if (code === 0) resolve({ stdout: out, stderr: errText });
       else reject(new Error(`exit code ${code}${errText.trim() ? `: ${errText.trim().substring(0, 200)}` : ''}`));
     }));
 
