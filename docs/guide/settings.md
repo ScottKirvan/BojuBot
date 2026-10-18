@@ -55,7 +55,6 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 | **Enable debug log**    | **Off**                                        | Write a debug log file. See [Troubleshooting](./troubleshooting#logging).                                          |
 | **Log file path**       | `.obsidian/plugins/bojubot/bojubot-debug.log` | Vault-relative path for the log file. Defaults to the plugin folder so it stays out of your vault and git history. |
 | **Log verbosity**       | Normal                                         | **Normal** logs session events and errors. **Verbose** adds raw stream data and token breakdowns.                  |
-| **Hide sponsorship messages** | Off                                      | Suppress the [periodic welcome-screen message](./chat-panel#welcome-screen) about supporting the project. Not shown on white-labeled installs regardless of this setting.  |
 
 Branding (name, icon, logo, mascot, links) has its own dedicated [Branding](#branding) section below.
 
@@ -115,6 +114,20 @@ Configure under **Settings → BojuBot → Branding**:
 ::: info Attribution stays intact
 Once any display name other than "BojuBot" is set, the About modal adds a small "Based on BojuBot by Scott Kirvan · MIT" credit line below the usual content. This line isn't configurable — it's how upstream attribution is preserved on white-label builds.
 :::
+
+## Help & feedback
+
+Links to the [documentation](/), help on [Discord](https://discord.gg/TN6XJSNK5Y), and GitHub forms to **Report a problem** or **Request a feature**. On white-labeled installs these follow the brand's own links.
+
+## Support the project
+
+The last section in settings: ways to support BojuBot (Ko-fi, GitHub Sponsors, starring the repo, and [more ways to help](https://www.scottkirvan.com/BojuBot/support)), plus one setting:
+
+| Setting                        | Default | Description |
+| ------------------------------ | ------- | ----------- |
+| **Hide the support message**   | Off     | Stop the [occasional welcome-screen message](./chat-panel#welcome-screen) and the small support link. Shares its setting with the message's **I already donated** checkbox. |
+
+This section isn't shown on white-labeled installs.
 
 ## Session storage location
 

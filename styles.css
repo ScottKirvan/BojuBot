@@ -733,11 +733,6 @@
   color: var(--text-normal);
 }
 
-.bojubot-welcome-version {
-  font-size: 0.72em;
-  color: var(--text-faint);
-}
-
 .bojubot-welcome-model {
   font-size: 0.72em;
   color: var(--text-faint);
@@ -798,6 +793,19 @@
 
 .bojubot-welcome-sponsor-message p {
   margin: 0 0 0.6em;
+}
+
+/* Scott's handwritten signature: black ink on transparent, inverted for dark themes */
+.bojubot-sponsor-signature {
+  height: 40px;
+  width: auto;
+  margin-top: -6px;
+  opacity: 0.85;
+  user-select: none;
+}
+
+.theme-dark .bojubot-sponsor-signature {
+  filter: invert(1);
 }
 
 .bojubot-welcome-sponsor-message p:last-child {
@@ -909,6 +917,31 @@
   font-size: 0.78em;
   color: var(--text-faint);
   cursor: pointer;
+}
+
+/* Quiet, always-there support link at the foot of the welcome screen */
+.bojubot-welcome-support {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 0.78em;
+  color: var(--text-faint);
+  text-decoration: none;
+}
+
+.bojubot-welcome-support:hover {
+  color: var(--text-accent);
+}
+
+.bojubot-welcome-support-icon {
+  display: inline-flex;
+}
+
+.bojubot-welcome-support-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .bojubot-welcome-recent-more:hover {
@@ -1994,4 +2027,9 @@
 /* ── Utility ── */
 .bojubot-invisible {
   visibility: hidden;
+}
+/* Inline thank-you after turning off the support message in settings */
+.bojubot-settings-thankyou {
+  color: var(--text-accent);
+  font-weight: 600;
 }

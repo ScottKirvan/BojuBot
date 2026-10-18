@@ -74,6 +74,9 @@ export interface SessionCoordinatorEvents {
   'session:loaded': [payload: SessionLoadedPayload];
   /** Fired each time the current session's title or ID is persisted. */
   'session:updated': [updates: { title?: string; sessionId?: string }];
+  /** Fired once per session, when its first turn binds a conversation ID — the
+   *  session has had at least one reply from the agent. */
+  'session:started': [sessionId: string];
   /** Fired when a Claude turn begins (process spawned). */
   'turn:start': [];
   /** Fired on each text chunk. `accumulated` is the text to display so far — the
@@ -591,6 +594,7 @@ export class SessionCoordinator {
       const placeholderId = this._placeholderSessionId;
       this._placeholderSessionId = undefined;
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
+      this.emit('session:started', sessionId);
       log('Placeholder session updated:', placeholderId, '→', sessionId);
     } else if (wasNew && firstUserInput) {
       // Brand-new session with no pre-created placeholder.
@@ -603,6 +607,7 @@ export class SessionCoordinator {
       this._sessionCreatedAt = now;
       saveSession(vaultRoot, this._storedSession(sessionId, sessionId, now, this._sessionTitle, now), sessionsDir);
       this.emit('session:updated', { title: this._sessionTitle, sessionId });
+      this.emit('session:started', sessionId);
       log('Session saved:', sessionId, this._sessionTitle);
     } else if (this._sessionId) {
       // Continuing session — update the updatedAt timestamp

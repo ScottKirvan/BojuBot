@@ -38,6 +38,7 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
+import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -3117,5 +3118,144 @@ describe('parseAgyStream errors', () => {
     });
     assert.equal(texts.length, 1);
     assert.match(texts[0], /^Antigravity error: invalid model selection/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sponsorship milestones — welcome-screen sponsorship gate (#384)
+// ---------------------------------------------------------------------------
+
+describe('sponsor milestones', () => {
+  test('ladder: 10, 20, 30, 50, then every 50th', () => {
+    const ladder: number[] = [];
+    for (let m = nextSponsorMilestone(0); m <= 300; m = nextSponsorMilestone(m)) ladder.push(m);
+    assert.deepEqual(ladder, [10, 20, 30, 50, 100, 150, 200, 250, 300]);
+  });
+
+  test('nextSponsorMilestone from values between milestones', () => {
+    assert.equal(nextSponsorMilestone(9), 10);
+    assert.equal(nextSponsorMilestone(10), 20);
+    assert.equal(nextSponsorMilestone(35), 50);
+    assert.equal(nextSponsorMilestone(50), 100);
+    assert.equal(nextSponsorMilestone(149), 150);
+  });
+
+  test('reachedSponsorMilestone: highest milestone above the last one shown', () => {
+    assert.equal(reachedSponsorMilestone(9, 0), 0);
+    assert.equal(reachedSponsorMilestone(10, 0), 10);
+    assert.equal(reachedSponsorMilestone(19, 10), 0);
+    assert.equal(reachedSponsorMilestone(20, 10), 20);
+    assert.equal(reachedSponsorMilestone(73, 20), 50, 'skipped 30 and 50 → only the highest, once');
+    assert.equal(reachedSponsorMilestone(73, 50), 0);
+    assert.equal(reachedSponsorMilestone(100, 50), 100);
+  });
+
+  test('seedSponsorProgress: existing installs start past every milestone already reached', () => {
+    assert.deepEqual(seedSponsorProgress(0), { startedSessionCount: 0, lastSponsorMilestone: 0 });
+    assert.deepEqual(seedSponsorProgress(7), { startedSessionCount: 7, lastSponsorMilestone: 0 });
+    assert.deepEqual(seedSponsorProgress(73), { startedSessionCount: 73, lastSponsorMilestone: 50 });
+    assert.deepEqual(seedSponsorProgress(-3), { startedSessionCount: 0, lastSponsorMilestone: 0 });
+  });
+});
+
+describe('sponsorMilestoneToShow', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = Date.parse('2026-10-10T12:00:00Z');
+  // A qualifying input: 10 started sessions, three others this week, never shown.
+  const base = (over: Partial<SponsorGateInput> = {}): SponsorGateInput => ({
+    whiteLabeled: false,
+    optedOut: false,
+    startedSessionCount: 10,
+    lastMilestone: 0,
+    otherStartedSessionUpdatedAt: [NOW - 1 * DAY, NOW - 2 * DAY, NOW - 3 * DAY],
+    lastShownAt: 0,
+    now: NOW,
+    ...over,
+  });
+
+  test('shows the reached milestone when every condition holds', () => {
+    assert.equal(sponsorMilestoneToShow(base()), 10);
+  });
+
+  test('never on a white-labeled build or once opted out', () => {
+    assert.equal(sponsorMilestoneToShow(base({ whiteLabeled: true })), 0);
+    assert.equal(sponsorMilestoneToShow(base({ optedOut: true })), 0);
+  });
+
+  test('each milestone shows once: same count after showing → nothing', () => {
+    assert.equal(sponsorMilestoneToShow(base({ lastMilestone: 10, lastShownAt: NOW - 5 * DAY })), 0);
+    assert.equal(sponsorMilestoneToShow(base({ startedSessionCount: 20, lastMilestone: 10, lastShownAt: NOW - 5 * DAY })), 20);
+  });
+
+  test('below the first milestone → nothing', () => {
+    assert.equal(sponsorMilestoneToShow(base({ startedSessionCount: 9 })), 0);
+  });
+
+  test('needs at least three other started sessions within the window', () => {
+    assert.equal(sponsorMilestoneToShow(base({ otherStartedSessionUpdatedAt: [] })), 0);
+    assert.equal(sponsorMilestoneToShow(base({ otherStartedSessionUpdatedAt: [NOW - DAY, NOW - 2 * DAY] })), 0);
+  });
+
+  test('returning user: one fresh session after a long absence does not qualify', () => {
+    const longAgo = NOW - 90 * DAY;
+    const input = base({ otherStartedSessionUpdatedAt: [NOW - 60_000, longAgo, longAgo - DAY, longAgo - 2 * DAY] });
+    assert.equal(sponsorMilestoneToShow(input), 0);
+  });
+
+  test('a session exactly at the window edge still counts; one just past it does not', () => {
+    const edge = NOW - SPONSOR_ACTIVITY_WINDOW_MS;
+    assert.equal(sponsorMilestoneToShow(base({ otherStartedSessionUpdatedAt: [NOW - DAY, NOW - 2 * DAY, edge] })), 10);
+    assert.equal(sponsorMilestoneToShow(base({ otherStartedSessionUpdatedAt: [NOW - DAY, NOW - 2 * DAY, edge - 1] })), 0);
+  });
+
+  test('minimum gap: a milestone reached within a day of the last showing waits', () => {
+    const due = base({ startedSessionCount: 20, lastMilestone: 10 });
+    assert.equal(sponsorMilestoneToShow({ ...due, lastShownAt: NOW - SPONSOR_MIN_GAP_MS + 1 }), 0);
+    assert.equal(sponsorMilestoneToShow({ ...due, lastShownAt: NOW - SPONSOR_MIN_GAP_MS }), 20, 'shown once the day has passed — not skipped');
+  });
+
+  test('unparseable session dates are ignored rather than counted', () => {
+    assert.equal(sponsorMilestoneToShow(base({ otherStartedSessionUpdatedAt: [NaN, NaN, NaN, NOW - DAY] })), 0);
+  });
+});
+
+describe('SessionCoordinator session:started', () => {
+  test('fires once, on the first turn that binds a conversation ID', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    const started: string[] = [];
+    coordinator.on('session:started', (id) => started.push(id));
+    coordinator.startNewSession();
+    assert.deepEqual(started, [], 'creating a session is not starting it');
+    coordinator.send('hi', 'hi');
+    claude.streams[0].onDone('conv-1', true);
+    coordinator.send('again');
+    claude.streams[1].onDone('conv-1', true);
+    assert.deepEqual(started, ['conv-1']);
+  }));
+
+  test('a turn that got no conversation ID does not start the session', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    const started: string[] = [];
+    coordinator.on('session:started', (id) => started.push(id));
+    coordinator.startNewSession();
+    coordinator.send('hi', 'hi');
+    claude.streams[0].onDone(undefined, false);
+    assert.deepEqual(started, []);
+  }));
+});
+
+describe('resolveBrand claudeCodeTips', () => {
+  test('stock brand keeps Claude-only tips separate from the general ones', () => {
+    const b = resolveBrand(undefined);
+    assert.ok(b.claudeCodeTips.length > 0);
+    for (const t of b.claudeCodeTips) assert.ok(!b.tips.includes(t), t);
+    for (const t of b.tips) assert.ok(!/\bClaude\b(?! quota)/.test(t), `general tip names Claude: ${t}`);
+  });
+  test('a brand with its own tips gets no Claude-only extras', () => {
+    const b = resolveBrand({ tips: ['Custom tip'] });
+    assert.deepEqual(b.tips, ['Custom tip']);
+    assert.deepEqual(b.claudeCodeTips, []);
   });
 });

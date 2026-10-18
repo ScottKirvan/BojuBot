@@ -12,9 +12,14 @@ In **Standard** permissions mode, Claude has access to your full vault — it ca
 
 ## Welcome Screen
 
-Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. Click the mascot to open the [About dialog](#about-dialog).
+Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. A session you haven't typed in yet shows the welcome screen again whenever you come back to it. The header shows which agent and model the session uses (BojuBot's version is in the [About dialog](#about-dialog)). Click the mascot to open the About dialog.
 
 ![](images/new_session_window.png)
+
+A small **♥ Support BojuBot** link sits at the bottom of the welcome screen.
+
+Once in a while, for people who use BojuBot regularly, the mascot and greeting are replaced by a short note from the author about supporting the project. It appears at milestones: after your 10th, 20th, 30th and 50th sessions, then every 50th. Only sessions that actually got a reply count, so clicking **+** doesn't. Each milestone shows once, never twice in one day, and only if you've used at least three other sessions in the past month, so it never greets someone returning after a long break. It never blocks anything; just start typing. Tick **I already donated** on the note, or turn on **Settings → Hide the support message**, and neither the note nor the link will appear again. See [How you can support](https://www.scottkirvan.com/BojuBot/support) for all the ways to help.
+
 ---
 
 ## About Dialog

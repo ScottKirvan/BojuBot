@@ -20,6 +20,9 @@ export const QUERY_PREFIX = BOJU_PREFIX;
  * in sync by hand if this ever changes.
  */
 export const KOFI_URL = 'https://ko-fi.com/scottkirvan';
+export const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/ScottKirvan';
+/** The user guide's "How you can support" page. */
+export const SUPPORT_PAGE_URL = 'https://www.scottkirvan.com/BojuBot/support';
 
 /**
  * Neutralize trigger prefixes in vault-sourced content before injecting it into the prompt.

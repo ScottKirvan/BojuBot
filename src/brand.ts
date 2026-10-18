@@ -93,6 +93,9 @@ export interface ResolvedBrand {
   sprite: string;
   greetings: WelcomeGreetings;
   tips: string[];
+  /** Extra tips shown only in Claude Code sessions (they describe Claude-only
+   *  features). Empty when a brand supplies its own tips. */
+  claudeCodeTips: string[];
   links: Required<BrandLinks>;
   applyToAssistantIdentity: boolean;
 }
@@ -111,6 +114,7 @@ export const DEFAULT_BRAND = {
 
 const DEFAULT_GREETINGS: WelcomeGreetings = welcomeData.welcome.greetings;
 const DEFAULT_TIPS: string[] = welcomeData.welcome.tips;
+const DEFAULT_CLAUDE_CODE_TIPS: string[] = welcomeData.welcome.claudeCodeTips;
 
 /**
  * Resolve a (possibly partial, possibly undefined) BrandConfig into a fully
@@ -127,6 +131,7 @@ export function resolveBrand(brand?: BrandConfig): ResolvedBrand {
     sprite: brand?.sprite?.trim() || '',
     greetings: brand?.greetings ?? DEFAULT_GREETINGS,
     tips: brand?.tips ?? DEFAULT_TIPS,
+    claudeCodeTips: brand?.tips ? [] : DEFAULT_CLAUDE_CODE_TIPS,
     // Nullish (not ||): an explicit '' means "hide", absent means "default".
     links: {
       doc: links?.doc ?? DEFAULT_BRAND.links.doc,
