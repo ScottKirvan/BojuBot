@@ -34,13 +34,15 @@ interface LinkItem {
   href: string;
   accent?: boolean;
   svgInline?: string;
+  /** Run instead of following href (the in-app report form). */
+  onClick?: () => void;
 }
 
 // Cards are built from the resolved brand links. An empty link ('') means the
 // downstream build chose to hide that card — the card is skipped, never deleted
 // from the code. Nothing here removes author attribution: that lives in the
 // credit line below, outside the configurable links.
-function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
+function buildLinkItems(brand: ResolvedBrand, openReportForm: () => void): LinkItem[] {
   const { name, links } = brand;
   const stock = !isWhiteLabeled(brand);
   const items: LinkItem[] = [];
@@ -65,13 +67,13 @@ function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
     });
   }
   if (links.source) {
-    // Until the in-app report form exists (#382), this opens GitHub's bug report form.
     items.push({
       icon: 'bug',
       title: 'Report a problem',
       desc: stock ? 'Bugs, ideas or feedback. I read every report.' : 'Bugs, ideas or feedback.',
       label: 'Report',
-      href: `${links.source}/issues/new?template=bug_report.md`,
+      href: '#',
+      onClick: openReportForm,
     });
   }
   // Scott's own funding link, not a brand.links field — never surfaced on a
@@ -90,7 +92,7 @@ function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
 }
 
 /** Plugin plus the agent CLIs it found installed (with known versions). */
-type AboutPlugin = Plugin & { installedAgentVersions(): AgentVersion[] };
+type AboutPlugin = Plugin & { installedAgentVersions(): AgentVersion[]; openReportForm(): void };
 
 export class AboutModal extends Modal {
   private plugin: AboutPlugin;
@@ -137,7 +139,7 @@ export class AboutModal extends Modal {
     });
 
     const list = contentEl.createDiv({ cls: 'bojubot-about-list' });
-    for (const item of buildLinkItems(brand)) {
+    for (const item of buildLinkItems(brand, () => { this.close(); this.plugin.openReportForm(); })) {
       const row = list.createDiv({ cls: 'bojubot-about-item' });
 
       const iconEl = row.createDiv({ cls: 'bojubot-about-item-icon' });
@@ -156,8 +158,13 @@ export class AboutModal extends Modal {
         cls: 'bojubot-about-item-btn' + (item.accent ? ' mod-cta' : ''),
         href: item.href,
       });
-      btn.setAttr('target', '_blank');
-      btn.setAttr('rel', 'noopener');
+      if (item.onClick) {
+        const onClick = item.onClick;
+        btn.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
+      } else {
+        btn.setAttr('target', '_blank');
+        btn.setAttr('rel', 'noopener');
+      }
     }
 
     // Footer: small icon links. GitHub is an icon rather than a row — people who

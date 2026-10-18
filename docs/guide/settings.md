@@ -117,7 +117,7 @@ Once any display name other than "BojuBot" is set, the About modal adds a small 
 
 ## Help & feedback
 
-Links to the [documentation](/), help on [Discord](https://discord.gg/TN6XJSNK5Y), and GitHub forms to **Report a problem** or **Request a feature**. On white-labeled installs these follow the brand's own links.
+Links to the [documentation](/) and help on [Discord](https://discord.gg/TN6XJSNK5Y), plus **Report a problem** and **Request a feature**, which open the [report form](./chat-panel#reporting-a-problem). On white-labeled installs these follow the brand's own links.
 
 ## Support the project
 

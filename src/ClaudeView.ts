@@ -456,7 +456,10 @@ export class ClaudeView extends ItemView {
     body.createDiv({ cls: 'bojubot-thanks-text', text: picked.message.text });
     const button = picked.message.button;
     const href = button ? this.thanksLinkUrl(button.link) : '';
-    if (button && href) {
+    if (button?.link === 'feedback') {
+      const btn = body.createEl('button', { cls: 'bojubot-thanks-btn', text: button.label, attr: { type: 'button' } });
+      btn.addEventListener('click', () => this.plugin.openReportForm({ type: 'feedback' }));
+    } else if (button && href) {
       const a = body.createEl('a', { cls: 'bojubot-thanks-btn', text: button.label, href });
       a.setAttr('target', '_blank');
       a.setAttr('rel', 'noopener');
@@ -482,8 +485,8 @@ export class ClaudeView extends ItemView {
       case 'support': return SUPPORT_PAGE_URL;
       case 'github': return links.source;
       case 'discord': return links.community;
-      // Until the in-app report form exists (#382)
-      case 'feedback': return links.source ? `${links.source}/issues/new?template=feature_request.md` : '';
+      // Opens the in-app report form instead (handled by the caller)
+      case 'feedback': return '';
     }
   }
 
@@ -1576,6 +1579,11 @@ export class ClaudeView extends ItemView {
     }
   }
 
+  /** "Agent: Antigravity · Model: Gemini 3.8 Flash (High)", for problem reports. */
+  sessionSummary(): string {
+    return `Agent: ${this.coordinator.backend.displayName} · Model: ${this.effectiveModelName()}`;
+  }
+
   /** "Agent · model" for the welcome header, e.g. "Antigravity · Gemini 3.8 Flash (High)". */
   private agentAndModelLabel(): string {
     const agent = this.coordinator.backend.displayName;
@@ -1733,6 +1741,11 @@ export class ClaudeView extends ItemView {
     el.empty();
     el.createEl('p', { text: title, cls: 'bojubot-setup-step-title' });
     for (const line of details) el.createEl('p', { text: line, cls: 'bojubot-setup-note' });
+    const report = el.createEl('a', { cls: 'bojubot-report-this', text: 'Report this problem', href: '#' });
+    report.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.plugin.openReportForm({ type: 'bug', errorText: err.raw.trim().slice(0, 1000) });
+    });
 
     // Antigravity signs in from its interactive mode, which opens a browser
     const agyBinary = this.plugin.getBinaryPath('antigravity');
@@ -2447,6 +2460,12 @@ export class ClaudeView extends ItemView {
           this.appInternal.setting.open();
           this.appInternal.setting.openTabById('bojubot');
         },
+      },
+      {
+        category: 'Help',
+        name: 'Report a problem',
+        description: 'Report a bug, request a feature or send feedback (/bug)',
+        action: () => this.plugin.openReportForm(),
       },
       {
         category: 'Help',
