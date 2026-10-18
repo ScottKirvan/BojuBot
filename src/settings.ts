@@ -12,7 +12,7 @@ import { GITHUB_SPONSORS_URL, KOFI_URL, SUPPORT_PAGE_URL } from './constants';
 export type ClaudeModel = ModelOption;
 
 export const CLAUDE_MODELS: ClaudeModel[] = [
-  { id: 'claude-haiku-4-5', displayName: 'Claude Haiku 4.5', description: 'Fastest — great for quick tasks' },
+  { id: 'claude-haiku-5-5', displayName: 'Claude Haiku 5.5', description: 'Fastest — great for quick tasks' },
   { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', description: 'Balanced speed and capability (default)' },
   { id: 'claude-opus-5-5', displayName: 'Claude Opus 5.5', description: 'Most capable — best for complex reasoning' },
   { id: 'claude-fable-5-1', displayName: 'Claude Fable 5.1', description: 'Most capable — coding-focused, highest reasoning' },
