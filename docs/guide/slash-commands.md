@@ -29,6 +29,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Context** | Open context file | Edit your persistent vault context       |
 | **Context** | Refresh context   | Re-inject vault context into the session |
 | **Context** | Open settings     | Open BojuBot settings                    |
+| **Help**    | Help              | Open Help & resources (`/help`): docs, help, report a problem, version info |
 
 ## Skills
 

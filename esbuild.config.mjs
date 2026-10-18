@@ -1,8 +1,11 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from "module";
+import { fileURLToPath } from "url";
+import { collectBuildInfo } from "./scripts/buildInfo.mjs";
 
 const prod = process.argv[2] === "production";
+const buildInfo = collectBuildInfo({ cwd: fileURLToPath(new URL(".", import.meta.url)) });
 
 const context = await esbuild.context({
   entryPoints: ["main.ts"],
@@ -29,6 +32,7 @@ const context = await esbuild.context({
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
+  define: { __BUILD_INFO__: JSON.stringify(buildInfo) },
   outfile: "main.js",
 });
 

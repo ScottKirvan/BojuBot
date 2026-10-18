@@ -15,3 +15,6 @@ declare module '*.md' {
   export default content;
 }
 
+
+/** Build facts baked in by esbuild (esbuild.config.mjs → scripts/buildInfo.mjs). */
+declare const __BUILD_INFO__: import('./utils/buildInfo').BuildInfo;

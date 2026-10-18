@@ -23,6 +23,8 @@ export default [
     files: ['**/*.ts'],
     languageOptions: {
       parser: tsparser,
+      // Build facts baked in by esbuild's `define` (esbuild.config.mjs)
+      globals: { __BUILD_INFO__: 'readonly' },
       parserOptions: {
         project: './tsconfig.json',
         tsconfigRootDir: import.meta.dirname,

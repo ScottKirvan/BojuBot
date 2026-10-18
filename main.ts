@@ -7,9 +7,10 @@ import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
+import type { AgentVersion } from './src/utils/buildInfo';
 import { loadAllSessions, resolveSessionsDir } from './src/utils/sessionStorage';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
-import { CliCapabilities, UNKNOWN_CAPABILITIES, formatCliVersion, has } from './src/utils/cliCapabilities';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
@@ -548,12 +549,12 @@ export default class BojuBotPlugin extends Plugin {
     return binary;
   }
 
-  /** "Claude Code 2.1.286", or "<agent>: unknown" before the probe finishes. For the About modal. */
-  agentVersionText(): string {
-    const id = this.getActiveBackendId();
-    const name = getBackend(id).displayName;
-    const caps = this.getCapabilities(id);
-    return caps.version ? formatCliVersion(caps, name) : `${name}: unknown`;
+  /** Agent CLIs that are installed and have reported a version, for the Help &
+   *  resources dialog. Agents that aren't installed are left out (#377). */
+  installedAgentVersions(): AgentVersion[] {
+    return BACKEND_IDS
+      .filter(id => this.runtime[id].binaryPath && this.runtime[id].caps.version)
+      .map(id => ({ name: getBackend(id).displayName, version: this.runtime[id].caps.version ?? "" }));
   }
 
   /** Settings changed the backend for new sessions. */

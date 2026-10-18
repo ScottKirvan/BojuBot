@@ -1,0 +1,42 @@
+{
+  "sections": [
+    {
+      "title": "Created by",
+      "entries": [
+        { "name": "Scott Kirvan", "url": "https://www.scottkirvan.com" }
+      ]
+    },
+    {
+      "title": "Runs on",
+      "entries": [
+        { "name": "Obsidian", "url": "https://obsidian.md" },
+        { "name": "Claude Code", "detail": "by Anthropic", "url": "https://www.anthropic.com/claude-code" },
+        { "name": "Antigravity CLI", "detail": "by Google", "url": "https://antigravity.google" }
+      ]
+    },
+    {
+      "title": "Icons",
+      "entries": [
+        { "name": "Lucide", "detail": "ISC License — every icon in BojuBot's interface, via Obsidian", "url": "https://lucide.dev/license" },
+        { "name": "Simple Icons", "detail": "CC0 — the Ko-fi mark", "url": "https://simpleicons.org" }
+      ]
+    },
+    {
+      "title": "Built with",
+      "entries": [
+        { "name": "TypeScript", "detail": "Apache License 2.0", "url": "https://www.typescriptlang.org" },
+        { "name": "esbuild", "detail": "MIT License", "url": "https://esbuild.github.io" },
+        { "name": "VitePress", "detail": "MIT License — the user guide", "url": "https://vitepress.dev" },
+        { "name": "BojuVue", "detail": "MIT License — the user guide's theme", "url": "https://github.com/ScottKirvan/BojuVue" }
+      ]
+    },
+    {
+      "title": "Thank you",
+      "entries": [
+        { "name": "Everyone who reports bugs, suggests ideas and tests new builds" },
+        { "name": "Our sponsors", "detail": "you keep BojuBot going", "url": "https://github.com/sponsors/ScottKirvan" }
+      ]
+    }
+  ],
+  "notice": "BojuBot bundles no third-party code. Obsidian, Claude, Claude Code, Antigravity, Gemini, Discord and GitHub are trademarks of their respective owners. BojuBot is not affiliated with or endorsed by them."
+}

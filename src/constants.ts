@@ -23,6 +23,8 @@ export const KOFI_URL = 'https://ko-fi.com/scottkirvan';
 export const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/ScottKirvan';
 /** The user guide's "How you can support" page. */
 export const SUPPORT_PAGE_URL = 'https://www.scottkirvan.com/BojuBot/support';
+export const CHANGELOG_URL = 'https://www.scottkirvan.com/BojuBot/changelog';
+export const PRIVACY_URL = 'https://www.scottkirvan.com/BojuBot/privacy';
 
 /**
  * Neutralize trigger prefixes in vault-sourced content before injecting it into the prompt.

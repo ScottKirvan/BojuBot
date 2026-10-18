@@ -479,7 +479,7 @@ export class ClaudeView extends ItemView {
 
     const helpBtn = toolbarRight.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(helpBtn, 'circle-help');
-    helpBtn.title = `About ${this.plugin.brand.name}`;
+    helpBtn.title = `Help & resources (${this.plugin.brand.name} version, docs, support)`;
     helpBtn.addEventListener('click', () => {
       new AboutModal(this.app, this.plugin).open();
     });
@@ -2363,6 +2363,12 @@ export class ClaudeView extends ItemView {
           this.appInternal.setting.open();
           this.appInternal.setting.openTabById('bojubot');
         },
+      },
+      {
+        category: 'Help',
+        name: 'Help',
+        description: 'Docs, help on Discord, report a problem, version info',
+        action: () => new AboutModal(this.app, this.plugin).open(),
       },
       {
         category: 'Security',
