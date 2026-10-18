@@ -26,6 +26,8 @@ export default {
           { text: 'GitHub', link: 'https://github.com/ScottKirvan/BojuBot' },
           { text: 'Discord', link: 'https://discord.gg/TN6XJSNK5Y' },
           { text: 'Releases', link: 'https://github.com/ScottKirvan/BojuBot/releases' },
+          { text: 'Changelog', link: '/changelog' },
+          { text: 'How You Can Support', link: '/support' },
         ]
       }
     ],
@@ -64,6 +66,8 @@ export default {
           { text: 'Troubleshooting', link: '/guide/troubleshooting' },
           { text: 'Known Limitations', link: '/guide/troubleshooting#known-limitations' },
           { text: 'Beta Builds', link: '/guide/beta-builds' },
+          { text: 'Changelog', link: '/changelog' },
+          { text: 'How You Can Support', link: '/support' },
           { text: 'Privacy Policy', link: '/privacy' },
         ]
       }
