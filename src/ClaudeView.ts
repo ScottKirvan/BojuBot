@@ -1165,7 +1165,8 @@ export class ClaudeView extends ItemView {
         this.appendMessage('system', `Resumed: ${session.title}`);
       }
     } else if (isNew) {
-      this.appendMessage('system', `New session: ${session.title}`);
+      // Nothing has been said yet: show the same welcome screen a fresh session gets (#374)
+      this.renderWelcomeScreen();
     } else if (!this.plugin.getBackend(sessionBackend(session)).readableHistory) {
       // No BojuBot transcript: the session predates it, or the file was removed. The conversation still resumes.
       this.appendMessage('system', `Resumed: ${session.title} — earlier messages weren't recorded for this session.`);
