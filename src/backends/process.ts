@@ -26,6 +26,9 @@ export function launchCli(binaryPath: string, args: string[], cwd: string, baseE
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
+      // Started from Obsidian's window, a console program otherwise gets a
+      // visible terminal window of its own (#383).
+      windowsHide: true,
     });
   } else {
     proc = spawn(binaryPath, args, {
