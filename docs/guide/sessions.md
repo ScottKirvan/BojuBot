@@ -42,6 +42,8 @@ A pinned model isn't locked in: switching models from the [model picker](./chat-
 Open the session manager by clicking the **session name** in the panel toolbar, or via **BojuBot: Show session history** in the Command Palette.
 
 ![](images/session_manager.png)
+
+The small icon before each session shows which agent it runs on: the Claude mark for Claude Code, the Gemini sparkle for Antigravity (hover it for the name). A session always stays on its agent, so opening it switches to that agent. The welcome screen's recent-sessions list shows the same icons. See [Choosing an Agent](./agents).
 ## Actions
 
 | Action               | How                                                           |

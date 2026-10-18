@@ -3502,3 +3502,18 @@ describe('tailLines', () => {
     assert.equal(tailLines('a\nb', 0), '');
   });
 });
+
+describe('agent icons', () => {
+  test('every backend has an icon; inline SVGs follow the text colour and carry no script', () => {
+    for (const id of BACKEND_IDS) {
+      const icon = getBackend(id).icon;
+      if ('svg' in icon) {
+        assert.match(icon.svg, /^<svg [^>]*fill="currentColor"/, id);
+        assert.ok(!/<script|on\w+=/i.test(icon.svg), `${id}: no script or event handlers`);
+        assert.match(icon.svg, new RegExp(`<title>${getBackend(id).displayName}</title>`), id);
+      } else {
+        assert.ok(icon.lucide, id);
+      }
+    }
+  });
+});

@@ -63,6 +63,10 @@ export interface TurnOptions {
   capabilities?: CliCapabilities;
 }
 
+/** How a backend is pictured in session lists: inline SVG markup (drawn in
+ *  currentColor) or a Lucide icon id. */
+export type AgentIcon = { svg: string } | { lucide: string };
+
 /** One entry in a model picker. */
 export interface ModelOption {
   id: string;
@@ -92,6 +96,8 @@ export interface AgentBackend {
   id: BackendId;
   /** Product name for the UI, e.g. "Claude Code". */
   displayName: string;
+  /** Shown next to each session in the session manager and recent-sessions list. */
+  icon: AgentIcon;
   findBinary(settingsOverride?: string): string | null;
   /** Never rejects: a failed probe yields unknown capabilities. */
   probe(binaryPath: string, env: Record<string, string>, cwd: string): Promise<CliCapabilities>;

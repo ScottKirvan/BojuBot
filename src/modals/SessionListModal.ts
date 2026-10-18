@@ -18,7 +18,8 @@ class ConfirmDeleteModal extends Modal {
   }
   onClose() { this.contentEl.empty(); }
 }
-import { StoredSession, saveSession, hasReadableHistory, deleteSession } from '../utils/sessionStorage';
+import { StoredSession, saveSession, hasReadableHistory, deleteSession, sessionBackend } from '../utils/sessionStorage';
+import { renderAgentIcon } from '../agentIcon';
 import { formatTokenCount } from '../utils/logger';
 
 export class SessionListModal extends Modal {
@@ -210,6 +211,8 @@ export class SessionListModal extends Modal {
         this.rerenderList();
       });
     }
+    // Opening a session switches to the agent it runs on — show which one
+    renderAgentIcon(item, sessionBackend(session), 'bojubot-session-agent');
     const titleEl = item.createSpan({ text: session.title, cls: 'bojubot-session-title' });
     item.createSpan({
       text: new Date(session.updatedAt).toLocaleString(),

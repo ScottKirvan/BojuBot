@@ -44,6 +44,7 @@ import {
   estimateSessionTokens,
 } from './utils/sessionStorage';
 import { SessionListModal } from './modals/SessionListModal';
+import { renderAgentIcon } from './agentIcon';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
 import { AboutModal, KOFI_SVG } from './modals/AboutModal';
@@ -1557,6 +1558,7 @@ export class ClaudeView extends ItemView {
       const list = recent.createDiv({ cls: 'bojubot-welcome-recent-list' });
       sessions.slice(0, 3).forEach(session => {
         const item = list.createDiv({ cls: 'bojubot-welcome-recent-item' });
+        renderAgentIcon(item, sessionBackend(session), 'bojubot-welcome-recent-agent');
         item.createSpan({ cls: 'bojubot-welcome-recent-title', text: session.userLabel || session.title });
         item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeDate(session.updatedAt) });
         item.addEventListener('click', () => void this.loadSession(session));

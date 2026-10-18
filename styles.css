@@ -2286,3 +2286,27 @@
   margin-top: 4px;
   font-size: 0.85em;
 }
+
+/* Which agent a session runs on, in the session manager and recent-sessions list */
+.bojubot-agent-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.bojubot-agent-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.bojubot-session-agent {
+  margin-right: 6px;
+}
+
+.bojubot-welcome-recent-agent {
+  margin-right: 6px;
+}
