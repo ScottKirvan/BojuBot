@@ -64,6 +64,7 @@ export default {
           { text: 'Troubleshooting', link: '/guide/troubleshooting' },
           { text: 'Known Limitations', link: '/guide/troubleshooting#known-limitations' },
           { text: 'Beta Builds', link: '/guide/beta-builds' },
+          { text: 'Privacy Policy', link: '/privacy' },
         ]
       }
     ],
