@@ -63,7 +63,7 @@ features:
   </a>
   </div>
   <br>
-Thank you! Your help makes a real and direct difference.
+Thank you! Your help makes a real and direct difference. <a href="/BojuBot/support">More ways to help</a>.
 </div>
 
 <!-- End Sponsors -->
