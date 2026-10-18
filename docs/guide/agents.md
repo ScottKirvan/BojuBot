@@ -1,4 +1,8 @@
-# Choosing an Agent
+# Choosing an Agent <Badge type="warning" text="Beta" />
+
+::: warning Not released yet
+Antigravity support is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version doesn't have it yet.
+:::
 
 BojuBot can run on one of two agent CLIs:
 
