@@ -43,7 +43,7 @@ Obsidian namespaces every plugin command as `<plugin-id>:<command-id>`. BojuBot'
 | **BojuBot: Export session to vault**  | `export-to-vault`      | Save the current conversation as a vault note. Prompts for a path (defaults to configured Export folder). |
 | **BojuBot: Copy last response**       | `copy-last-response`   | Copy Claude's last response to the clipboard.                                  |
 | **BojuBot: Open settings**            | `open-settings`        | Jump directly to the BojuBot settings panel.                                   |
-| **BojuBot: About**                    | `show-about`           | Show version info and links — see [About Dialog](./chat-panel#about-dialog).  |
+| **BojuBot: About**                    | `show-about`           | Open Help & resources: version info, docs, help, credits — see [About Dialog](./chat-panel#about-dialog). |
 | **BojuBot: Reload skills**            | `reload-skills`        | Re-scan the skills folder and update Ctrl+P registrations. Run this after adding or removing skill files. |
 
 ## Skills API

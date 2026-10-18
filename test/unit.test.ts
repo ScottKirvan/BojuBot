@@ -26,6 +26,9 @@ import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
+import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
+import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
+import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
@@ -3257,5 +3260,103 @@ describe('resolveBrand claudeCodeTips', () => {
     const b = resolveBrand({ tips: ['Custom tip'] });
     assert.deepEqual(b.tips, ['Custom tip']);
     assert.deepEqual(b.claudeCodeTips, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Build info and the Help & resources version line (#377)
+// ---------------------------------------------------------------------------
+
+describe('resolveBuildInfo', () => {
+  const FULL_SHA = '0123456789abcdef0123456789abcdef01234567';
+  const NOW = new Date('2026-09-21T08:32:45Z');
+
+  test('uses git facts when present, shortening the commit to 7 characters', () => {
+    assert.deepEqual(resolveBuildInfo({ git: { commit: FULL_SHA, branch: 'feat/about-box', dirty: false }, env: {}, now: NOW }),
+      { commit: '0123456', branch: 'feat/about-box', builtAt: '2026-09-21 08:32 UTC', dirty: false });
+  });
+
+  test('falls back to GITHUB_SHA and GITHUB_REF_NAME when git has nothing (CI release builds)', () => {
+    const info = resolveBuildInfo({ git: { commit: null, branch: null, dirty: null }, env: { GITHUB_SHA: 'FEDCBA9876543210', GITHUB_REF_NAME: '3.9.0' }, now: NOW });
+    assert.equal(info.commit, 'fedcba9');
+    assert.equal(info.branch, '3.9.0');
+  });
+
+  test("prefers a pull request's source branch over its N/merge ref", () => {
+    const info = resolveBuildInfo({ git: { commit: null, branch: null, dirty: null }, env: { GITHUB_HEAD_REF: 'feat/x', GITHUB_REF_NAME: '42/merge' }, now: NOW });
+    assert.equal(info.branch, 'feat/x');
+  });
+
+  test('a detached HEAD counts as no branch', () => {
+    for (const branch of ['', 'HEAD']) {
+      assert.equal(resolveBuildInfo({ git: { commit: FULL_SHA, branch, dirty: false }, env: { GITHUB_REF_NAME: 'main' }, now: NOW }).branch, 'main');
+    }
+  });
+
+  test('strips refs/heads/ and falls back to unknown', () => {
+    assert.equal(resolveBuildInfo({ git: { commit: null, branch: 'refs/heads/dev', dirty: null }, env: {}, now: NOW }).branch, 'dev');
+    assert.deepEqual(resolveBuildInfo({ git: { commit: 'xyz', branch: null, dirty: null }, env: {}, now: NOW }),
+      { commit: 'unknown', branch: 'unknown', builtAt: '2026-09-21 08:32 UTC', dirty: false });
+  });
+
+  test('reports uncommitted changes only when git said so', () => {
+    assert.equal(resolveBuildInfo({ git: { commit: FULL_SHA, branch: 'b', dirty: true }, env: {}, now: NOW }).dirty, true);
+    assert.equal(resolveBuildInfo({ git: { commit: FULL_SHA, branch: 'b', dirty: null }, env: {}, now: NOW }).dirty, false);
+  });
+});
+
+describe('formatVersionInfo', () => {
+  const info = { commit: '0123456', branch: 'main', builtAt: '2026-10-17 06:12 UTC', dirty: true };
+
+  test('version, build, installed agents and OS on one line — no commit hash or dirty flag', () => {
+    assert.equal(
+      formatVersionInfo('BojuBot', '3.8.0', info, [{ name: 'Claude Code', version: '2.1.72' }, { name: 'Antigravity', version: '1.4.2' }], 'Windows 10.0.28120'),
+      'BojuBot 3.8.0 (branch main, built 2026-10-17 06:12 UTC) · Claude Code 2.1.72 · Antigravity 1.4.2 · Windows 10.0.28120',
+    );
+  });
+
+  test('agents that are not installed are simply absent', () => {
+    assert.equal(formatVersionInfo('BojuBot', '3.8.0', info, [], 'Linux 6.8.0'), 'BojuBot 3.8.0 (branch main, built 2026-10-17 06:12 UTC) · Linux 6.8.0');
+  });
+
+  test('buildLineParts shows branch and build time only', () => {
+    assert.deepEqual(buildLineParts(info), ['main', '2026-10-17 06:12 UTC']);
+  });
+});
+
+describe('osLabel', () => {
+  test('friendly platform names', () => {
+    assert.equal(osLabel('win32', '10.0.28120'), 'Windows 10.0.28120');
+    assert.equal(osLabel('darwin', '24.1.0'), 'macOS 24.1.0');
+    assert.equal(osLabel('linux', '6.8.0'), 'Linux 6.8.0');
+    assert.equal(osLabel('freebsd', ''), 'freebsd');
+  });
+});
+
+describe('credits', () => {
+  test('timeline: roll from below the viewport until the last line is mid-way, then fade', () => {
+    // 900 px of credits in a 300 px window: from +300 to 150 - 900 = -750 → 1050 px at 30 px/s = 35 s, + 2 s fade
+    assert.deepEqual(creditsTimeline(900, 300), { fromPx: 300, toPx: -750, totalMs: 35000 + CREDITS_FADE_MS, rollFraction: 35000 / 37000 });
+  });
+  test('timeline: short lists still roll for at least 5 s; bad sizes are clamped', () => {
+    assert.equal(creditsTimeline(0, 0).totalMs, 5000 + CREDITS_FADE_MS);
+    const t = creditsTimeline(-50, 100);
+    assert.equal(t.fromPx, 100);
+    assert.equal(t.toPx, 50);
+    assert.ok(t.rollFraction > 0 && t.rollFraction < 1);
+  });
+
+  test('credits.json: every section has a title and named entries; links are https', () => {
+    const data = JSON.parse(readFileSync(join(process.cwd(), 'src', 'credits.json'), 'utf8')) as { sections: Array<{ title: string; entries: Array<{ name: string; url?: string }> }>; notice: string };
+    assert.ok(data.sections.length > 0);
+    for (const s of data.sections) {
+      assert.ok(s.title, 'section title');
+      assert.ok(s.entries.length > 0, s.title);
+      for (const e of s.entries) {
+        assert.ok(e.name, `${s.title}: entry name`);
+        if (e.url) assert.match(e.url, /^https:\/\//, e.name);
+      }
+    }
+    assert.match(data.notice, /trademarks/);
   });
 });

@@ -322,6 +322,71 @@
   font-size: 0.82em;
 }
 
+/* Version + build + agents: one click-to-copy block (#377) */
+.bojubot-about-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  height: auto;
+  padding: 4px 10px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  cursor: copy;
+}
+
+.bojubot-about-copy:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-about-build {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 6px;
+  color: var(--text-faint);
+  font-size: 0.72em;
+}
+
+/* "·" between parts, but never orphaned at a wrap */
+.bojubot-about-build-part + .bojubot-about-build-part::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+.bojubot-about-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.bojubot-about-footer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-s, 4px);
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.bojubot-about-footer-icon:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-about-footer-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .bojubot-about-list {
   margin-top: 16px;
   background: var(--background-secondary);
@@ -2032,4 +2097,66 @@
 .bojubot-settings-thankyou {
   color: var(--text-accent);
   font-weight: 600;
+}
+
+/* ── Credits modal (#380): movie-style roll ── */
+.bojubot-credits-modal {
+  width: min(420px, 92vw);
+}
+
+.bojubot-credits-heading {
+  text-align: center;
+  margin-top: 0;
+}
+
+.bojubot-credits-viewport {
+  position: relative;
+  height: 340px;
+  overflow: hidden;
+  text-align: center;
+  mask-image: linear-gradient(to bottom, transparent 0, black 12%, black 88%, transparent 100%);
+}
+
+/* Rolling (driven from CreditsModal): start below the viewport so nothing flashes before the first frame */
+.bojubot-credits-viewport.is-rolling .bojubot-credits-track {
+  transform: translateY(340px);
+}
+
+/* Stopped (scrolled, clicked, or reduced motion): a plain scrollable list */
+.bojubot-credits-viewport.is-static {
+  overflow-y: auto;
+  mask-image: none;
+}
+
+.bojubot-credits-section {
+  margin-bottom: 22px;
+}
+
+.bojubot-credits-title {
+  font-size: 0.75em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.bojubot-credits-entry {
+  margin-bottom: 8px;
+}
+
+.bojubot-credits-name {
+  font-size: 1.05em;
+  color: var(--text-normal);
+}
+
+.bojubot-credits-detail {
+  font-size: 0.8em;
+  color: var(--text-faint);
+}
+
+.bojubot-credits-notice {
+  font-size: 0.72em;
+  color: var(--text-faint);
+  margin: 26px 12px 8px;
+  line-height: 1.5;
 }

@@ -1,7 +1,10 @@
-import { App, Modal, Plugin, sanitizeHTMLToDom, setIcon } from 'obsidian';
+import * as os from 'os';
+import { App, Modal, Notice, Plugin, sanitizeHTMLToDom, setIcon } from 'obsidian';
 import logoDataUrl from '../../assets/media/logo.png';
 import { activeBrand, isWhiteLabeled, DEFAULT_BRAND, ResolvedBrand } from '../brand';
-import { KOFI_URL } from '../constants';
+import { CHANGELOG_URL, KOFI_URL, PRIVACY_URL } from '../constants';
+import { AgentVersion, buildLineParts, formatVersionInfo, osLabel } from '../utils/buildInfo';
+import { CreditsModal } from './CreditsModal';
 
 // Inline SVG — no file import, no runtime string replacement, attributes set directly.
 // stroke-width="4" matches Lucide's visual weight at this viewBox size (48×48 vs Lucide's 24×24).
@@ -39,12 +42,13 @@ interface LinkItem {
 // credit line below, outside the configurable links.
 function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
   const { name, links } = brand;
+  const stock = !isWhiteLabeled(brand);
   const items: LinkItem[] = [];
   if (links.doc) {
     items.push({
       icon: 'book-open',
       title: 'Documentation',
-      desc: 'Official guide, skill reference, and setup instructions.',
+      desc: 'Guides, skill reference, setup and troubleshooting.',
       label: 'Visit',
       href: links.doc,
       accent: true,
@@ -54,38 +58,39 @@ function buildLinkItems(brand: ResolvedBrand): LinkItem[] {
     items.push({
       icon: '',
       svgInline: DISCORD_SVG,
-      title: 'Discord',
-      desc: `Chat with other ${name} users and get support.`,
+      title: 'Get help on Discord',
+      desc: stock ? 'Ask questions and get help from me and other users.' : `Ask questions and get help from other ${name} users.`,
       label: 'Join',
       href: links.community,
     });
   }
   if (links.source) {
+    // Until the in-app report form exists (#382), this opens GitHub's bug report form.
     items.push({
-      icon: 'github',
-      title: 'GitHub',
-      desc: 'Source code, issues, and release notes.',
-      label: 'View',
-      href: links.source,
+      icon: 'bug',
+      title: 'Report a problem',
+      desc: stock ? 'Bugs, ideas or feedback. I read every report.' : 'Bugs, ideas or feedback.',
+      label: 'Report',
+      href: `${links.source}/issues/new?template=bug_report.md`,
     });
   }
   // Scott's own funding link, not a brand.links field — never surfaced on a
   // white-labeled build, same reasoning as the welcome-screen sponsor message.
-  if (!isWhiteLabeled(brand)) {
+  if (stock) {
     items.push({
       icon: '',
       svgInline: KOFI_SVG,
       title: 'Buy me a coffee',
       desc: 'Show your love by supporting BojuBot and the author.',
-      label: 'Buy',
+      label: 'Give',
       href: KOFI_URL,
     });
   }
   return items;
 }
 
-/** Plugin plus a one-line description of the agent CLI in use. */
-type AboutPlugin = Plugin & { agentVersionText(): string };
+/** Plugin plus the agent CLIs it found installed (with known versions). */
+type AboutPlugin = Plugin & { installedAgentVersions(): AgentVersion[] };
 
 export class AboutModal extends Modal {
   private plugin: AboutPlugin;
@@ -111,13 +116,24 @@ export class AboutModal extends Modal {
     logoImg.src = logoSrc;
     logoImg.alt = brand.name;
     header.createDiv({ text: brand.name, cls: 'bojubot-about-name' });
-    header.createDiv({
-      text: `Version ${this.plugin.manifest.version}`,
-      cls: 'bojubot-about-version',
-    });
-    header.createDiv({
-      text: this.plugin.agentVersionText(),
-      cls: 'bojubot-about-version',
+
+    // Version, build and installed agents — one button that copies it all for
+    // bug reports, as in QuKi-Notes' About dialog (#377).
+    const info = __BUILD_INFO__;
+    const agents = this.plugin.installedAgentVersions();
+    const copyBtn = header.createEl('button', { cls: 'bojubot-about-copy', attr: { type: 'button', title: 'Copy version information' } });
+    copyBtn.createDiv({ cls: 'bojubot-about-version', text: `Version ${this.plugin.manifest.version}` });
+    const buildEl = copyBtn.createDiv({ cls: 'bojubot-about-build' });
+    for (const part of buildLineParts(info)) buildEl.createSpan({ cls: 'bojubot-about-build-part', text: part });
+    if (agents.length) {
+      const agentsEl = copyBtn.createDiv({ cls: 'bojubot-about-build' });
+      for (const a of agents) agentsEl.createSpan({ cls: 'bojubot-about-build-part', text: `${a.name} ${a.version}` });
+    }
+    copyBtn.addEventListener('click', () => {
+      const text = formatVersionInfo(brand.name, this.plugin.manifest.version, info, agents, osLabel(process.platform, os.release()));
+      navigator.clipboard.writeText(text)
+        .then(() => new Notice('Copied to clipboard.', 2000))
+        .catch(() => new Notice(`Couldn't copy. ${text}`, 8000));
     });
 
     const list = contentEl.createDiv({ cls: 'bojubot-about-list' });
@@ -143,6 +159,22 @@ export class AboutModal extends Modal {
       btn.setAttr('target', '_blank');
       btn.setAttr('rel', 'noopener');
     }
+
+    // Footer: small icon links. GitHub is an icon rather than a row — people who
+    // know it recognize it, and it's harmless to everyone else.
+    const footer = contentEl.createDiv({ cls: 'bojubot-about-footer' });
+    const footerLink = (icon: string, label: string, href: string) => {
+      const a = footer.createEl('a', { cls: 'bojubot-about-footer-icon', href, attr: { 'aria-label': label, title: label } });
+      a.setAttr('target', '_blank');
+      a.setAttr('rel', 'noopener');
+      setIcon(a, icon);
+    };
+    if (!isWhiteLabeled(brand)) footerLink('sparkles', "What's new", CHANGELOG_URL);
+    const creditsBtn = footer.createEl('button', { cls: 'bojubot-about-footer-icon', attr: { type: 'button', 'aria-label': 'Credits', title: 'Credits' } });
+    setIcon(creditsBtn, 'scroll-text');
+    creditsBtn.addEventListener('click', () => new CreditsModal(this.app).open());
+    if (!isWhiteLabeled(brand)) footerLink('shield-check', 'Privacy', PRIVACY_URL);
+    if (brand.links.source) footerLink('github', 'GitHub', brand.links.source);
 
     // Preserve upstream attribution on any white-labeled build. Never shown for
     // a stock BojuBot install (it would be redundant); always shown once the
