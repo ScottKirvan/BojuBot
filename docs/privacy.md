@@ -1,0 +1,86 @@
+# Privacy Policy
+
+**App**: BojuBot  
+**Developer**: Scott Kirvan  
+**Effective date**: 2026-10-17
+
+---
+
+## The short version
+
+BojuBot has no servers, no accounts, no analytics and no telemetry. It collects nothing about you.
+
+BojuBot is a chat panel for an AI agent that runs on your own computer. What you send to that agent goes to the company behind it, under that company's privacy policy, not this one.
+
+---
+
+## The AI agent and where your words go
+
+BojuBot doesn't talk to any AI service itself. It runs an agent CLI on your computer and passes your messages to it. You choose which one in **Settings → BojuBot → Agent**:
+
+- **Claude Code**, made by Anthropic. See [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy).
+- **Antigravity CLI** (`agy`), made by Google. See [Google's privacy policy](https://policies.google.com/privacy).
+
+The agent sends your requests to its provider. That includes:
+
+- the messages you type
+- anything you attach: notes, files, images, PDFs and web addresses
+- the context BojuBot adds when a session starts, such as your vault's folder and file names, your context file, and the note you have open (you can turn this off with minimal mode, or per session)
+- any notes or files the agent reads or changes while it works, as your permission mode allows
+
+How the provider stores and uses that data is set by **their** policy and your account with them. Only use an agent you trust with your notes.
+
+Each agent also keeps its own conversation history on your computer: Claude Code in `~/.claude/projects/`, and Antigravity in its own folder under `~/.gemini/`. Those files belong to the CLI, not to BojuBot.
+
+## What BojuBot stores on your computer
+
+Everything BojuBot saves stays on your computer, in your vault or in Obsidian's config folder (usually `.obsidian`):
+
+- **Session files.** A small JSON file per session with its name, settings and the agent's conversation ID, in `.obsidian/bojubot/sessions/` by default. You can choose another folder in settings.
+- **Transcripts for Antigravity sessions.** Antigravity's own history can't be read back, so BojuBot keeps a copy of each conversation next to the session file (`<id>.transcript.jsonl`).
+- **Settings.** Your BojuBot settings, in `.obsidian/plugins/bojubot/data.json`.
+- **Pasted and dropped images and PDFs.** Saved to `.obsidian/plugins/bojubot/tmp/` so the agent can read them. Files you pick from disk are read where they are, not copied.
+- **The debug log.** Off by default. If you turn it on, BojuBot writes a log file, which can include the start of your messages (and, at verbose detail, the agent's raw output), to `.obsidian/plugins/bojubot/bojubot-debug.log` or the path you choose.
+- **The command reference.** A list of your Obsidian commands, written to `.obsidian/plugins/bojubot/obsidian-commands.md` so the agent can look up command IDs.
+- **The context file.** A note in your vault (`_claude-context.md` by default) that describes your vault to the agent. With autonomous memory on (the default), the agent updates this note itself as it learns. Turn autonomous memory off if your vault is shared or public.
+- **Exports.** Session transcripts you choose to export are saved as notes where you tell BojuBot to put them.
+
+If you sync or back up your vault, these files go wherever your vault goes.
+
+## Network requests BojuBot makes
+
+BojuBot itself makes no network requests. A few things you do can reach the internet:
+
+- **The agent.** The agent CLI talks to its provider, as described above. Web addresses you attach are fetched by the agent, not by BojuBot.
+- **Links.** Clicking a link in BojuBot opens that website in your browser.
+- **Web images.** If a reply contains an image linked by web address, Obsidian downloads it when it's shown, as it would in any note.
+
+A form for reporting problems from inside BojuBot is planned. It will send only what you review and choose to send, and it will say where the report goes. This policy will be updated before that form ships.
+
+## Analytics, crash reporting, and telemetry
+
+None. BojuBot doesn't count users, track usage or send crash reports.
+
+## Third parties
+
+BojuBot doesn't share data with anyone. The only third party involved is the agent provider you choose, and your data reaches them through their own CLI, under their own terms.
+
+## Children
+
+BojuBot collects no information from anyone, regardless of age.
+
+## Changes to this policy
+
+If anything here changes, the updated policy will be posted at this URL with a new effective date, and the change will be listed in the [policy history](#policy-history) at the end of this page.
+
+## Contact
+
+Questions? Open an issue on [GitHub](https://github.com/ScottKirvan/BojuBot/issues) or ask on [Discord](https://discord.gg/TN6XJSNK5Y).
+
+## Policy history
+
+Every change to this policy, newest first. The version is the first BojuBot release that included the change.
+
+| Date | Version | Change |
+|---|---|---|
+| 2026-10-17 | 3.8.0 | First published. |

@@ -67,3 +67,8 @@ Thank you! Your help makes a real and direct difference.
 </div>
 
 <!-- End Sponsors -->
+
+<div style="text-align:center; margin-top: 2rem; font-size: 0.875rem; color: var(--vp-c-text-2);">
+  <a href="/BojuBot/privacy">Privacy Policy</a>
+</div>
+
