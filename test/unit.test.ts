@@ -29,6 +29,7 @@ import { loadCustomModels } from '../src/utils/customModels';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
+import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
@@ -3358,5 +3359,73 @@ describe('credits', () => {
       }
     }
     assert.match(data.notice, /trademarks/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Thank-you card (#385)
+// ---------------------------------------------------------------------------
+
+describe('thanksCardAllowed', () => {
+  const NOW = Date.parse('2026-10-18T12:00:00Z');
+  const base = { whiteLabeled: false, optedOut: false, shownThisSession: false, lastShownAt: 0, now: NOW };
+  test('allowed when never shown', () => assert.equal(thanksCardAllowed(base), true));
+  test('never when opted out or white-labeled', () => {
+    assert.equal(thanksCardAllowed({ ...base, optedOut: true }), false);
+    assert.equal(thanksCardAllowed({ ...base, whiteLabeled: true }), false);
+  });
+  test('once per session', () => assert.equal(thanksCardAllowed({ ...base, shownThisSession: true }), false));
+  test('once a day', () => {
+    assert.equal(thanksCardAllowed({ ...base, lastShownAt: NOW - THANKS_MIN_GAP_MS + 1 }), false);
+    assert.equal(thanksCardAllowed({ ...base, lastShownAt: NOW - THANKS_MIN_GAP_MS }), true);
+  });
+});
+
+describe('pickThanksMessage', () => {
+  const msgs = {
+    personal: [{ text: 'p0' }, { text: 'p1' }],
+    sponsor: [{ text: 's0', button: { label: 'Give', link: 'kofi' as const } }, { text: 's1' }],
+    help: [{ text: 'h0' }],
+  };
+  const seq = (...values: number[]) => { let i = 0; return () => values[i++ % values.length]; };
+
+  test('a support ask below the 1-in-4 threshold, for regular users', () => {
+    assert.deepEqual(pickThanksMessage(msgs, true, seq(0.1, 0.6)), { kind: 'sponsor', message: msgs.sponsor[1] });
+  });
+  test('at or above the threshold: personal or help, never sponsor', () => {
+    assert.equal(pickThanksMessage(msgs, true, seq(THANKS_SPONSOR_SHARE, 0))?.kind, 'personal');
+    assert.equal(pickThanksMessage(msgs, true, seq(0.9, 0.99))?.kind, 'help');
+  });
+  test('users who are not regular never get the support ask', () => {
+    for (const r of [0, 0.1, 0.24]) assert.notEqual(pickThanksMessage(msgs, false, seq(r, r))?.kind, 'sponsor');
+  });
+  test('an empty sponsor list falls back; nothing at all → null', () => {
+    assert.equal(pickThanksMessage({ ...msgs, sponsor: [] }, true, seq(0, 0))?.kind, 'personal');
+    assert.equal(pickThanksMessage({ personal: [], sponsor: [], help: [] }, true, seq(0.5)), null);
+  });
+  test('over many draws, about 1 in 4 are support asks for regular users', () => {
+    let state = 12345;
+    const lcg = () => { state = (state * 1103515245 + 12345) % 2147483648; return state / 2147483648; };
+    let sponsor = 0;
+    for (let i = 0; i < 4000; i++) if (pickThanksMessage(msgs, true, lcg)?.kind === 'sponsor') sponsor++;
+    assert.ok(sponsor > 800 && sponsor < 1200, String(sponsor));
+  });
+});
+
+describe('thanks.json', () => {
+  test('every list has messages; every button has a label and a known link', () => {
+    const data = JSON.parse(readFileSync(join(process.cwd(), 'src', 'thanks.json'), 'utf8')) as Record<string, Array<{ text: string; button?: { label: string; link: string } }>>;
+    const known = ['kofi', 'sponsors', 'support', 'github', 'discord', 'feedback'];
+    for (const key of ['personal', 'sponsor', 'help']) {
+      assert.ok(data[key].length > 0, key);
+      for (const m of data[key]) {
+        assert.ok(m.text.trim(), key);
+        if (m.button) {
+          assert.ok(m.button.label, m.text);
+          assert.ok(known.includes(m.button.link), `${m.text}: ${m.button.link}`);
+        }
+      }
+    }
+    assert.ok(data.sponsor.every(m => m.button), 'every support ask has a button');
   });
 });

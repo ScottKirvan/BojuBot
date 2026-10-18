@@ -13,6 +13,7 @@ Actions:
 - run-command(commandId): execute command palette command — confirm first; always read obsidian-commands.md first
 - request-permission(tool, reason): when a blocked tool is clearly the right approach; emit at response end, user decides next turn; use when manual repetition across many files isn't practical
 - set-label(user, assistant): update names when user states/corrects their name, asks to stop using one, or persona changes; defaults "User" and "BojuBot"
+- thanked(): only if your orientation has a "Thanks" section, emit when the user thanks you (in addition to replying normally); BojuBot may show a short note from its author
 - rename-file(path, newName): rename a file in place via Obsidian's API so wikilinks/embeds update automatically. Requires Standard or Full permission mode — silently no-ops (with a notice to the user) otherwise.
 - move-file(path, newPath): move a file to a different folder, same link-updating guarantee as rename-file. Requires Standard or Full permission mode.
 - delete-file(path): move a file to trash per the vault's configured trash preference (not a permanent delete). Requires Standard or Full permission mode.

@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
+import { ItemView, sanitizeHTMLToDom, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
 import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import sponsorImageUrl from '../assets/media/sk_watercolor_300_circle.png';
@@ -17,7 +17,7 @@ import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL } from './constants';
+import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { ClaudeModel } from './settings';
@@ -28,7 +28,9 @@ import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError } from './utils/apiError';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
-import { sponsorMilestoneToShow } from './utils/sponsorGate';
+import { isRegularUser, sponsorMilestoneToShow } from './utils/sponsorGate';
+import { pickThanksMessage, thanksCardAllowed, ThanksLink, ThanksMessages } from './utils/thanks';
+import thanksData from './thanks.json';
 import {
   StoredSession,
   InjectedContext,
@@ -44,7 +46,7 @@ import {
 import { SessionListModal } from './modals/SessionListModal';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
-import { AboutModal } from './modals/AboutModal';
+import { AboutModal, KOFI_SVG } from './modals/AboutModal';
 import { TokenGauge } from './TokenGauge';
 import { AttachmentHandler, PendingContext } from './AttachmentHandler';
 
@@ -120,6 +122,8 @@ interface ActiveTurnElements {
   turnCacheTokens: number;
   turnOutputTokens: number;
   apiError: ApiError | null;
+  /** The agent flagged a thank-you this turn (#385). */
+  thanked: boolean;
   unlock: () => void;
   isInjectTurn: boolean;
 }
@@ -342,7 +346,7 @@ export class ClaudeView extends ItemView {
       if (!this._activeTurnEls) return;
       const {
         assistantEl, statusEl, toolEventsEl, responseGroupEl,
-        toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError,
+        toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError, thanked,
       } = this._activeTurnEls;
       this.cancelTextFrame(this._activeTurnEls);
       this._activeTurnEls = null;
@@ -387,6 +391,7 @@ export class ClaudeView extends ItemView {
       if (result.pendingQueries.length > 0) {
         assistantEl.dataset.queries = JSON.stringify(result.pendingQueries);
       }
+      if (thanked) this.maybeRenderThanksCard(responseGroupEl);
 
       this.scrollToBottom();
       this.updateSessionStatus();
@@ -410,6 +415,76 @@ export class ClaudeView extends ItemView {
 
       unlock();
     });
+  }
+
+  /** Whether the agent should flag thank-yous: only when a card could show. */
+  private thanksHookEnabled(): boolean {
+    return !isWhiteLabeled(this.plugin.brand) && !this.plugin.settings.hideSponsorshipMessages;
+  }
+
+  private thanksCardSessionId: string | undefined;
+
+  /**
+   * A short note from Scott under the reply when the user thanked the agent (#385):
+   * at most once per session and once a day, a support ask about 1 in 4 times
+   * for regular users. The words come from src/thanks.json, never from the agent.
+   */
+  private maybeRenderThanksCard(parent: HTMLElement): void {
+    const now = Date.now();
+    const allowed = thanksCardAllowed({
+      whiteLabeled: isWhiteLabeled(this.plugin.brand),
+      optedOut: this.plugin.settings.hideSponsorshipMessages,
+      shownThisSession: !!this.coordinator.sessionFileId && this.thanksCardSessionId === this.coordinator.sessionFileId,
+      lastShownAt: this.plugin.settings.lastThanksCardAt,
+      now,
+    });
+    if (!allowed) return;
+    const others = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
+      .filter(s => s.id !== this.coordinator.sessionFileId && s.claudeSessionId)
+      .map(s => new Date(s.updatedAt).getTime());
+    const picked = pickThanksMessage(thanksData as ThanksMessages, isRegularUser(others, now), Math.random);
+    if (!picked) return;
+
+    this.thanksCardSessionId = this.coordinator.sessionFileId;
+    this.plugin.settings.lastThanksCardAt = now;
+    void this.plugin.saveSettings();
+
+    const card = parent.createDiv({ cls: 'bojubot-thanks-card' });
+    const avatar = card.createEl('img', { cls: 'bojubot-thanks-avatar', attr: { alt: 'Scott Kirvan', src: sponsorImageUrl } });
+    avatar.draggable = false;
+    const body = card.createDiv({ cls: 'bojubot-thanks-body' });
+    body.createDiv({ cls: 'bojubot-thanks-text', text: picked.message.text });
+    const button = picked.message.button;
+    const href = button ? this.thanksLinkUrl(button.link) : '';
+    if (button && href) {
+      const a = body.createEl('a', { cls: 'bojubot-thanks-btn', text: button.label, href });
+      a.setAttr('target', '_blank');
+      a.setAttr('rel', 'noopener');
+    }
+    // Footer: signature on the left, a small Ko-fi coffee cup in the bottom-right corner
+    const footer = body.createDiv({ cls: 'bojubot-thanks-footer' });
+    const signature = footer.createEl('img', { cls: 'bojubot-sponsor-signature bojubot-thanks-signature', attr: { alt: '— Scott', src: signatureUrl } });
+    signature.draggable = false;
+    const kofi = footer.createEl('a', { cls: 'bojubot-thanks-kofi', href: KOFI_URL, attr: { 'aria-label': 'Buy me a coffee', title: 'Buy me a coffee' } });
+    kofi.setAttr('target', '_blank');
+    kofi.setAttr('rel', 'noopener');
+    kofi.appendChild(sanitizeHTMLToDom(KOFI_SVG));
+    const dismiss = card.createEl('button', { cls: 'bojubot-thanks-dismiss', attr: { type: 'button', 'aria-label': 'Dismiss' } });
+    setIcon(dismiss, 'x');
+    dismiss.addEventListener('click', () => card.remove());
+  }
+
+  private thanksLinkUrl(link: ThanksLink): string {
+    const { links } = this.plugin.brand;
+    switch (link) {
+      case 'kofi': return KOFI_URL;
+      case 'sponsors': return GITHUB_SPONSORS_URL;
+      case 'support': return SUPPORT_PAGE_URL;
+      case 'github': return links.source;
+      case 'discord': return links.community;
+      // Until the in-app report form exists (#382)
+      case 'feedback': return links.source ? `${links.source}/issues/new?template=feature_request.md` : '';
+    }
   }
 
   /** Drop a pending streaming-text write so it can't land after the turn's final render. */
@@ -1035,6 +1110,9 @@ export class ClaudeView extends ItemView {
           await this.plugin.saveSettings();
         }
       },
+      onThanked: () => {
+        if (this._activeTurnEls) this._activeTurnEls.thanked = true;
+      },
       onSetLabel: (userLabel: string, assistantLabel: string) => {
         this.currentUserLabel = userLabel;
         this.currentAssistantLabel = assistantLabel;
@@ -1098,6 +1176,11 @@ export class ClaudeView extends ItemView {
       effectiveMode,
       this.plugin.settings.contextFileSizeCapTokens,
       this.plugin.settings.minimalMode || this.coordinator.rawSession,
+      false,
+      '',
+      '',
+      '',
+      this.thanksHookEnabled(),
     );
     const context = await ctx.buildSessionContext();
     this.coordinator.setPendingSystemMessage(`[System: Session context refreshed at user request.]\n\n${context}`);
@@ -1322,6 +1405,7 @@ export class ClaudeView extends ItemView {
         this._customInitialInstructions,
         effectiveCwd,
         vaultRoot,
+        this.thanksHookEnabled(),
       );
       this._customSuppressVaultContext = false;
       this._customInitialInstructions = '';
@@ -1350,7 +1434,7 @@ export class ClaudeView extends ItemView {
     this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
       toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '', pendingDisplay: '', textFrame: null,
-      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null,
+      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null, thanked: false,
       unlock, isInjectTurn: false,
     };
     this.coordinator.send(finalPrompt, prompt);
@@ -1886,7 +1970,7 @@ export class ClaudeView extends ItemView {
     this._activeTurnEls = {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
       toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '', pendingDisplay: '', textFrame: null,
-      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null,
+      turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null, thanked: false,
       unlock, isInjectTurn: true,
     };
     this.coordinator.send(injectPrompt);
