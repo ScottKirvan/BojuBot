@@ -20,6 +20,8 @@ A small **♥ Support BojuBot** link sits at the bottom of the welcome screen.
 
 Once in a while, for people who use BojuBot regularly, the mascot and greeting are replaced by a short note from the author about supporting the project. It appears at milestones: after your 10th, 20th, 30th and 50th sessions, then every 50th. Only sessions that actually got a reply count, so clicking **+** doesn't. Each milestone shows once, never twice in one day, and only if you've used at least three other sessions in the past month, so it never greets someone returning after a long break. It never blocks anything; just start typing. Tick **I already donated** on the note, or turn on **Settings → Hide the support message**, and neither the note nor the link will appear again. See [How you can support](https://www.scottkirvan.com/BojuBot/support) for all the ways to help.
 
+When you thank the agent for its help, a small note from the author may appear under the reply: usually a personal thank-you, sometimes a pointer to other ways to help or, now and then for regular users, a gentle support link. It shows at most once per session and once a day, and never when you've turned off the support message. The agent only notices the thank-you; the note's words are the author's own.
+
 ---
 
 ## About Dialog

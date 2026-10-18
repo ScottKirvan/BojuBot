@@ -1,0 +1,24 @@
+{
+  "personal": [
+    { "text": "Glad that helped! I built BojuBot so your notes and your AI could actually work together. Thanks for using it." },
+    { "text": "You're welcome, from me too! I'm Scott, and I make BojuBot. It's great to see it pulling its weight." },
+    { "text": "Thanks for the thanks! Every one of these reminds me why I keep building BojuBot." },
+    { "text": "Happy to help. I hope BojuBot keeps making your vault feel a little more alive." },
+    { "text": "That made my day. Thanks for trusting BojuBot with your notes." },
+    { "text": "Glad it worked out! If something ever doesn't, I'd love to hear about it." },
+    { "text": "You're welcome! BojuBot is a one-person project, and moments like this are the best part of it." },
+    { "text": "Nice work, the two of you. Thanks for using BojuBot." }
+  ],
+  "sponsor": [
+    { "text": "Glad it helped! If BojuBot saves you time, a coffee helps me keep it going.", "button": { "label": "Buy me a coffee", "link": "kofi" } },
+    { "text": "Thanks! BojuBot is free and made by one person. If it's earned a place in your workflow, consider supporting it.", "button": { "label": "Support BojuBot", "link": "support" } },
+    { "text": "Happy to help! Using BojuBot at work? Asking your company to sponsor it keeps updates coming.", "button": { "label": "Sponsor on GitHub", "link": "sponsors" } },
+    { "text": "You're welcome! Every coffee goes toward server costs and dev tools, and more free software.", "button": { "label": "Buy me a coffee", "link": "kofi" } }
+  ],
+  "help": [
+    { "text": "Glad it helped! If you like BojuBot, a star on GitHub helps other people find it.", "button": { "label": "Star on GitHub", "link": "github" } },
+    { "text": "Thanks! Know someone with an Obsidian vault? Telling them about BojuBot is the best help there is." },
+    { "text": "Happy to help! Got an idea that would make BojuBot better? I read everything.", "button": { "label": "Send feedback", "link": "feedback" } },
+    { "text": "You're welcome! Questions, ideas, or just want to share what you built? Come say hi on Discord.", "button": { "label": "Join Discord", "link": "discord" } }
+  ]
+}

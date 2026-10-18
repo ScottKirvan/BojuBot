@@ -28,6 +28,8 @@ export interface UIBridgeOptions {
   onAddToAllowlist?: (commandId: string) => Promise<void>;
   onAddToDenylist?: (commandId: string) => Promise<void>;
   onSetLabel?: (userLabel: string, assistantLabel: string) => void;
+  /** The user thanked the agent (#385). */
+  onThanked?: () => void;
 }
 
 class ConfirmCommandModal extends Modal {
@@ -313,6 +315,11 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       const userLabel = ((action.user as string) ?? '').trim() || 'User';
       const assistantLabel = ((action.assistant as string) ?? '').trim() || brandName();
       options.onSetLabel?.(userLabel, assistantLabel);
+      break;
+    }
+
+    case 'thanked': {
+      options.onThanked?.();
       break;
     }
 

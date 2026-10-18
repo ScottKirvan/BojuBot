@@ -27,6 +27,9 @@ export class ContextManager {
     private customInstructions: string = '',
     private cwd: string = '',
     private vaultRoot: string = '',
+    /** Ask the agent to flag thank-yous (#385). Off when the card can't show:
+     *  opted out of support messages, or a white-labeled build. */
+    private thanksHook: boolean = false,
   ) { }
 
   async buildSessionContext(): Promise<string> {
@@ -80,6 +83,14 @@ export class ContextManager {
         `@@BOJU {"action": "run-command", "commandId": "<id>"}\n\n` +
         `These commands run immediately. For any other command the user asks for, attempt it — the user will be prompted to approve or deny:\n\n` +
         `| Command | ID |\n|---|---|\n${rows}`;
+    }
+
+    if (this.thanksHook) {
+      orientation +=
+        `\n\n## Thanks\n` +
+        `When the user genuinely thanks you because your help worked, reply naturally and also emit on its own line ` +
+        `(never for "thanks, but…" corrections, complaints or "no thanks"):\n` +
+        `@@BOJU {"action":"thanked"}`;
     }
 
     parts.push(orientation);

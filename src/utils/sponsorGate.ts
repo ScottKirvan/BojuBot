@@ -50,6 +50,13 @@ export function seedSponsorProgress(startedSessions: number): { startedSessionCo
   return { startedSessionCount: count, lastSponsorMilestone: reachedSponsorMilestone(count, 0) };
 }
 
+/** "Uses BojuBot regularly": enough other started sessions within the activity
+ *  window. Shared by the sponsor milestones and the thank-you card's support ask. */
+export function isRegularUser(otherStartedSessionUpdatedAt: number[], now: number): boolean {
+  const recent = otherStartedSessionUpdatedAt.filter(t => now - t <= SPONSOR_ACTIVITY_WINDOW_MS).length;
+  return recent >= SPONSOR_MIN_RECENT_SESSIONS;
+}
+
 export interface SponsorGateInput {
   whiteLabeled: boolean;
   optedOut: boolean;
@@ -70,8 +77,5 @@ export function sponsorMilestoneToShow(input: SponsorGateInput): number {
   const milestone = reachedSponsorMilestone(input.startedSessionCount, input.lastMilestone);
   if (!milestone) return 0;
   if (input.lastShownAt > 0 && input.now - input.lastShownAt < SPONSOR_MIN_GAP_MS) return 0;
-  const recent = input.otherStartedSessionUpdatedAt
-    .filter(t => input.now - t <= SPONSOR_ACTIVITY_WINDOW_MS)
-    .length;
-  return recent >= SPONSOR_MIN_RECENT_SESSIONS ? milestone : 0;
+  return isRegularUser(input.otherStartedSessionUpdatedAt, input.now) ? milestone : 0;
 }

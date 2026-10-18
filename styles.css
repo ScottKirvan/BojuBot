@@ -2160,3 +2160,113 @@
   margin: 26px 12px 8px;
   line-height: 1.5;
 }
+
+/* ── Thank-you card (#385): a note from Scott under the reply ── */
+.bojubot-thanks-card {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 8px 0 4px;
+  padding: 10px 32px 10px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 8px);
+  background: var(--background-secondary);
+}
+
+.bojubot-thanks-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.bojubot-thanks-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bojubot-thanks-text {
+  font-size: 0.88em;
+  color: var(--text-normal);
+  line-height: 1.45;
+}
+
+.bojubot-thanks-signature {
+  height: 26px;
+  margin-top: 0;
+}
+
+/* Signature left, Ko-fi cup in the bottom-right corner */
+.bojubot-thanks-body {
+  flex: 1;
+}
+
+.bojubot-thanks-footer {
+  display: flex;
+  align-self: stretch;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bojubot-thanks-kofi {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  margin-right: -22px;
+  color: var(--text-faint);
+}
+
+.bojubot-thanks-kofi:hover {
+  color: var(--text-accent);
+}
+
+.bojubot-thanks-kofi svg {
+  width: 18px;
+  height: 18px;
+}
+
+.bojubot-thanks-btn {
+  font-size: 0.8em;
+  padding: 2px 10px;
+  border-radius: var(--radius-s, 4px);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  text-decoration: none;
+}
+
+.bojubot-thanks-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.bojubot-thanks-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.bojubot-thanks-dismiss:hover {
+  color: var(--text-normal);
+}
+
+.bojubot-thanks-dismiss svg {
+  width: 14px;
+  height: 14px;
+}

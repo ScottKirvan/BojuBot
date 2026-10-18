@@ -108,6 +108,8 @@ export interface BojuBotSettings {
   hideSponsorshipMessages: boolean;
   /** When the sponsorship welcome variant was last shown (ms since epoch), 0 if never. Enforces the 1-day minimum gap. */
   lastSponsorShownAt: number;
+  /** When the thank-you card (#385) was last shown (ms since epoch), 0 if never. At most one a day. */
+  lastThanksCardAt: number;
   /**
    * Optional white-label branding (display name, icon, art, greetings, links).
    * Absent → the stock BojuBot identity, byte-for-byte. Always read through
@@ -155,6 +157,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   lastSponsorMilestone: 0,
   hideSponsorshipMessages: false,
   lastSponsorShownAt: 0,
+  lastThanksCardAt: 0,
 };
 
 export class BojuBotSettingsTab extends PluginSettingTab {
