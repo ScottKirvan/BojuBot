@@ -29,6 +29,7 @@ import { loadCustomModels } from '../src/utils/customModels';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
+import { reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
@@ -3427,5 +3428,77 @@ describe('thanks.json', () => {
       }
     }
     assert.ok(data.sponsor.every(m => m.button), 'every support ask has a button');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Report a problem form (#382)
+// ---------------------------------------------------------------------------
+
+describe('reportTitle', () => {
+  test('template prefix plus the first line of the description', () => {
+    assert.equal(reportTitle('bug', 'Gauge never updates\nMore detail here'), '[BUG] Gauge never updates');
+    assert.equal(reportTitle('feature', 'Dark mode signature'), '[FEATURE] Dark mode signature');
+    assert.equal(reportTitle('feedback', '  love it  '), '[GENERAL] love it');
+  });
+  test('long first lines are cut with an ellipsis; empty descriptions get a default', () => {
+    const t = reportTitle('bug', 'x'.repeat(200));
+    assert.equal(t.length, '[BUG] '.length + 80);
+    assert.ok(t.endsWith('…'));
+    assert.equal(reportTitle('bug', '   '), '[BUG] Problem report');
+    assert.equal(reportTitle('feature', ''), '[FEATURE] Feature request');
+  });
+});
+
+describe('reportBody', () => {
+  test('bug: Description, Environment, optional log, and a footer', () => {
+    const body = reportBody({ type: 'bug', description: 'It broke', details: 'BojuBot 3.8.0', log: 'line 1\nline 2' });
+    assert.equal(body, "## Description\n\nIt broke\n\n## Environment\n\nBojuBot 3.8.0\n\n## Recent log\n\n```\nline 1\nline 2\n```\n\n---\n\n_Sent from BojuBot's Report a problem form._");
+  });
+  test('feature: Problem / Motivation and Additional Context; no log section when empty', () => {
+    const body = reportBody({ type: 'feature', description: 'Please add X', details: 'v1', log: '  ' });
+    assert.ok(body.startsWith('## Problem / Motivation\n\nPlease add X\n\n## Additional Context\n\nv1'));
+    assert.ok(!body.includes('Recent log'));
+  });
+  test('empty description is marked; empty details are left out', () => {
+    const body = reportBody({ type: 'bug', description: '', details: '' });
+    assert.ok(body.includes('_(no description)_'));
+    assert.ok(!body.includes('## Environment'));
+  });
+});
+
+describe('reportIssueUrl', () => {
+  const repo = 'https://github.com/ScottKirvan/BojuBot';
+  test('pre-fills title and body on the repo\'s new-issue page', () => {
+    const url = reportIssueUrl(repo + '/', { type: 'bug', description: 'It broke', details: 'v1' });
+    assert.ok(url.startsWith(`${repo}/issues/new?template=bug_report.md&title=`), 'blank issues are disabled org-wide, so a template is required');
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('title'), '[BUG] It broke');
+    assert.ok(params.get('body')!.includes('## Description\n\nIt broke'));
+  });
+  test('each type uses its own issue template', () => {
+    assert.equal(new URL(reportIssueUrl(repo, { type: 'feature', description: 'x', details: '' })).searchParams.get('template'), 'feature_request.md');
+    assert.equal(new URL(reportIssueUrl(repo, { type: 'feedback', description: 'x', details: '' })).searchParams.get('template'), 'general_report.md');
+  });
+  test('too long: the log goes first, with a note', () => {
+    const url = reportIssueUrl(repo, { type: 'bug', description: 'd', details: 'v', log: 'x'.repeat(5000) }, 2000);
+    assert.ok(url.length <= 2000);
+    const body = new URL(url).searchParams.get('body')!;
+    assert.ok(!body.includes('## Recent log'));
+    assert.match(body, /log was too long/);
+  });
+  test('still too long: the body is cut to fit and says to use Copy report', () => {
+    const url = reportIssueUrl(repo, { type: 'bug', description: 'y'.repeat(9000), details: 'v' }, 2000);
+    assert.ok(url.length <= 2000, String(url.length));
+    assert.match(new URL(url).searchParams.get('body')!, /Copy report/);
+  });
+});
+
+describe('tailLines', () => {
+  test('last n non-empty lines', () => {
+    assert.equal(tailLines('a\n\nb\r\nc\nd\n', 2), 'c\nd');
+    assert.equal(tailLines('a\nb', 10), 'a\nb');
+    assert.equal(tailLines('', 5), '');
+    assert.equal(tailLines('a\nb', 0), '');
   });
 });

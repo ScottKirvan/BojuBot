@@ -40,6 +40,11 @@ function write(level: string, args: unknown[]) {
   try { appendFileSync(logPath, line); } catch { /* ignore write errors */ }
 }
 
+/** Absolute path of the debug log file, or '' when file logging is off. */
+export function currentLogPath(): string {
+  return fileEnabled ? logPath : '';
+}
+
 export const log = (...args: unknown[]) => write('INFO', args);
 export const warn = (...args: unknown[]) => write('WARN', args);
 /** Verbose-only — only written when verbosity is 'verbose'. */

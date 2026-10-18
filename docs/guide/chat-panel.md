@@ -29,12 +29,23 @@ When you thank the agent for its help, a small note from the author may appear u
 The **Help & resources** dialog is the place to go when you're stuck. Open it with the help icon in the toolbar, `/help` in the chat, the **BojuBot: About** command, or by clicking the mascot on the welcome screen.
 
 - **Version information**: BojuBot's version, the branch and time the build was made, and the version of each agent CLI you have installed. **Click it to copy everything to the clipboard**, ready to paste into a bug report or a Discord message.
-- **Documentation**, **Get help on Discord**, **Report a problem** (opens GitHub's bug report form), and **Buy me a coffee**.
+- **Documentation**, **Get help on Discord**, **Report a problem** (see [Reporting a problem](#reporting-a-problem)), and **Buy me a coffee**.
 - Small icons at the bottom: **What's new** (the [changelog](https://www.scottkirvan.com/BojuBot/changelog)), **Credits**, **Privacy** (the [privacy policy](https://www.scottkirvan.com/BojuBot/privacy)) and **GitHub**.
 
 **Credits** rolls slowly like the end of a film: the projects and people BojuBot builds on. When the last line reaches the middle it fades out and starts again. Scroll or click it to stop the roll and read at your own pace. If your system has reduced motion turned on, it's a plain list.
  
  ![](images/about_dialog.png)
+
+## Reporting a problem
+
+Found a bug, want a feature, or have feedback? Open **Report a problem** from the Help & resources dialog, `/bug` in the chat, the **BojuBot: Report a problem** command, **Settings → Help & feedback**, or the **Report this problem** link on an error message.
+
+The form is filled in for you: BojuBot's version and build, your installed agents, the session's agent and model, your OS, and the error if you opened it from one. Everything is editable, so remove anything you'd rather not share. You can also include the last lines of the debug log (turn on **Settings → Logging** first); they're shown for editing too, because logs can contain note names and parts of messages.
+
+- **Open on GitHub** opens the report as a new GitHub issue, ready for you to submit. Reports are public, so anyone can read them.
+- **Copy report** copies it to the clipboard, to paste on Discord or in an email if you don't use GitHub.
+
+BojuBot never sends a report itself.
 
 ## Attaching Context
 

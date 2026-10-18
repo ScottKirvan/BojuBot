@@ -2270,3 +2270,19 @@
   width: 14px;
   height: 14px;
 }
+
+/* ── Report a problem form (#382) ── */
+.bojubot-report-mono {
+  font-family: var(--font-monospace);
+  font-size: 0.8em;
+}
+
+.bojubot-report-note {
+  margin: 4px 0 10px;
+}
+
+.bojubot-report-this {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.85em;
+}

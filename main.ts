@@ -7,12 +7,16 @@ import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
-import type { AgentVersion } from './src/utils/buildInfo';
+import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
+import type { ReportType } from './src/utils/report';
+import { ReportModal } from './src/modals/ReportModal';
+import { isWhiteLabeled } from './src/brand';
+import * as os from 'os';
 import { loadAllSessions, resolveSessionsDir } from './src/utils/sessionStorage';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
-import { initLogger, log, warn } from './src/utils/logger';
+import { currentLogPath, initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
 import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
 import { ContextGenerationModal } from './src/ContextGenerationModal';
@@ -295,6 +299,12 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'report-problem',
+      name: 'Report a problem',
+      callback: () => this.openReportForm(),
+    });
+
+    this.addCommand({
       id: 'show-plan-usage',
       name: 'Show plan usage',
       callback: () => {
@@ -547,6 +557,28 @@ export default class BojuBotPlugin extends Plugin {
     this.runtime[id].binaryPath = binary;
     void this.refreshCliCapabilities(id);
     return binary;
+  }
+
+  /**
+   * Open the Report a problem form (#382) with everything pre-filled: the
+   * version line, the open session's agent and model, and an error when the
+   * form was opened from an error card. All of it stays editable.
+   */
+  openReportForm(extra: { type?: ReportType; errorText?: string } = {}): void {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    const session = leaves.length ? (leaves[0].view as ClaudeView).sessionSummary() : '';
+    const details = [
+      formatVersionInfo(this.brand.name, this.manifest.version, __BUILD_INFO__, this.installedAgentVersions(), osLabel(process.platform, os.release())),
+      session,
+      extra.errorText ? `Error: ${extra.errorText}` : '',
+    ].filter(Boolean).join('\n');
+    new ReportModal(this.app, {
+      sourceRepoUrl: this.brand.links.source,
+      details,
+      type: extra.type,
+      logPath: currentLogPath(),
+      showPrivacyLink: !isWhiteLabeled(this.brand),
+    }).open();
   }
 
   /** Agent CLIs that are installed and have reported a version, for the Help &

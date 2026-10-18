@@ -913,10 +913,15 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     };
     addLink('Documentation', `Guides for every ${name} feature, plus troubleshooting.`, 'Open', links.doc);
     addLink('Get help on Discord', 'Ask questions and get help from me and other users.', 'Join', links.community);
-    if (links.source) {
-      addLink('Report a problem', "Something not working? Tell me. I read every report.", 'Report', `${links.source}/issues/new?template=bug_report.md`);
-      addLink('Request a feature', 'Ideas for making it better are always welcome.', 'Suggest', `${links.source}/issues/new?template=feature_request.md`);
-    }
+    // Both open the in-app report form (#382), pre-filled with version details
+    new Setting(containerEl)
+      .setName('Report a problem')
+      .setDesc('Something not working? Tell me. I read every report.')
+      .addButton((btn) => btn.setButtonText('Report').onClick(() => this.plugin.openReportForm({ type: 'bug' })));
+    new Setting(containerEl)
+      .setName('Request a feature')
+      .setDesc('Ideas for making it better are always welcome.')
+      .addButton((btn) => btn.setButtonText('Suggest').onClick(() => this.plugin.openReportForm({ type: 'feature' })));
   }
 
   /** Ways to support the project, at the very bottom (#376). Never shown on
