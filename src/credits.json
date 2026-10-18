@@ -18,7 +18,8 @@
       "title": "Icons",
       "entries": [
         { "name": "Lucide", "detail": "ISC License — every icon in BojuBot's interface, via Obsidian", "url": "https://lucide.dev/license" },
-        { "name": "Simple Icons", "detail": "CC0 — the Ko-fi mark", "url": "https://simpleicons.org" }
+        { "name": "Simple Icons", "detail": "CC0 — the Ko-fi and Claude marks", "url": "https://simpleicons.org" },
+        { "name": "Codicons", "detail": "Microsoft, CC BY 4.0 — the Gemini mark for Antigravity sessions", "url": "https://github.com/microsoft/vscode-codicons" }
       ]
     },
     {
