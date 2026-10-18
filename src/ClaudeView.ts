@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Moda
 import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import sponsorImageUrl from '../assets/media/sk_watercolor_300_circle.png';
+import signatureUrl from '../assets/media/signature.png';
 
 import { AppInternal } from './obsidianInternal';
 import { SlashMenu, SlashCommand } from './SlashMenu';
@@ -27,6 +28,7 @@ import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError } from './utils/apiError';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
+import { sponsorMilestoneToShow } from './utils/sponsorGate';
 import {
   StoredSession,
   InjectedContext,
@@ -80,11 +82,6 @@ const TOOL_ICONS: Record<string, string> = {
   todoread: 'check-square',
 };
 
-// Show the sponsorship welcome variant every Nth new-session creation.
-const SPONSOR_MESSAGE_INTERVAL = 10;
-// Only show it if there's been session activity within this window — otherwise a
-// single new session after a long absence could still land on a matching modulo.
-const SPONSOR_RECENCY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const SPONSOR_MESSAGE = `**Thank you for using BojuBot!**
 
 My name is Scott, and I'm BojuBot's author. It looks like you use the plugin regularly! I hope it's making your life easier and saving you some time.
@@ -211,6 +208,12 @@ export class ClaudeView extends ItemView {
 
   private _setupCoordinatorEvents(): void {
     // ── Session lifecycle ────────────────────────────────────────────────────
+
+    // Sponsorship milestones count sessions that actually got a reply (#384)
+    this.coordinator.on('session:started', () => {
+      this.plugin.settings.startedSessionCount += 1;
+      void this.plugin.saveSettings();
+    });
 
     this.coordinator.on('session:new', () => {
       if (!this.messagesEl) return;
@@ -789,10 +792,6 @@ export class ClaudeView extends ItemView {
     this._customAttachments = custom?.customAttachments ?? [];
     this._customInitialInstructions = custom?.initialInstructions ?? '';
     this._customSuppressVaultContext = custom?.suppressVaultContext ?? false;
-    // Counted before the 'session:new' event fires (below) so renderWelcomeScreen
-    // sees the up-to-date count when it decides whether to show the sponsor variant.
-    this.plugin.settings.sessionCreationCount += 1;
-    void this.plugin.saveSettings();
     this.coordinator.startNewSession(custom ? {
       name: custom.name,
       cwd: custom.cwd,
@@ -1369,7 +1368,11 @@ export class ClaudeView extends ItemView {
   }
 
   private renderWelcomeScreen() {
-    const { name: brandName, greetings, tips } = this.plugin.brand;
+    const { name: brandName, greetings } = this.plugin.brand;
+    // Tips about Claude-only features (context gauge, prompt caching) only in Claude Code sessions
+    const tips = this.coordinator.backendId === 'claude-code'
+      ? [...this.plugin.brand.tips, ...this.plugin.brand.claudeCodeTips]
+      : this.plugin.brand.tips;
 
     // Time-of-day bucket
     const hour = new Date().getHours();
@@ -1390,34 +1393,47 @@ export class ClaudeView extends ItemView {
     // --- DOM ---
     const welcome = this.messagesEl.createDiv({ cls: 'bojubot-welcome' });
 
-    // Header: logo + name + version — pinned to top of panel
+    // Header: logo + name + agent and model — pinned to top of panel. Version
+    // numbers live in the About dialog, where they can be copied (#375, #377).
     const header = welcome.createDiv({ cls: 'bojubot-welcome-header' });
     const headerLogo = header.createEl('img', { cls: 'bojubot-welcome-header-logo', attr: { alt: '', src: this.brandImageSrc(this.plugin.brand.logo, logoUrl) } });
     headerLogo.draggable = false;
     header.createSpan({ cls: 'bojubot-welcome-header-name', text: brandName });
-    header.createSpan({ cls: 'bojubot-welcome-version', text: `v${this.plugin.manifest.version}` });
-    header.createSpan({ cls: 'bojubot-welcome-model', text: this.effectiveModelName() });
+    header.createSpan({ cls: 'bojubot-welcome-model', text: this.agentAndModelLabel() });
 
     // Recent sessions — loaded here (not just at the footer below) because the
-    // sponsor-variant recency check needs it too.
+    // sponsor-variant activity check needs it too.
     const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir)
       .filter(s => s.id !== this.coordinator.sessionFileId);
 
     // Centered body: sprite + greeting + tip, or (periodically) a sponsorship message
     const body = welcome.createDiv({ cls: 'bojubot-welcome-body' });
-    const hasRecentActivity = sessions.some(s => Date.now() - new Date(s.updatedAt).getTime() <= SPONSOR_RECENCY_WINDOW_MS);
-    const showSponsorMessage = !isWhiteLabeled(this.plugin.brand)
-      && !this.plugin.settings.hideSponsorshipMessages
-      && this.plugin.settings.sessionCreationCount > 0
-      && this.plugin.settings.sessionCreationCount % SPONSOR_MESSAGE_INTERVAL === 0
-      && hasRecentActivity;
+    const now = Date.now();
+    const sponsorMilestone = sponsorMilestoneToShow({
+      whiteLabeled: isWhiteLabeled(this.plugin.brand),
+      optedOut: this.plugin.settings.hideSponsorshipMessages,
+      startedSessionCount: this.plugin.settings.startedSessionCount,
+      lastMilestone: this.plugin.settings.lastSponsorMilestone,
+      otherStartedSessionUpdatedAt: sessions
+        .filter(s => s.claudeSessionId)
+        .map(s => new Date(s.updatedAt).getTime()),
+      lastShownAt: this.plugin.settings.lastSponsorShownAt,
+      now,
+    });
+    const showSponsorMessage = sponsorMilestone > 0;
 
     if (showSponsorMessage) {
+      // Each milestone shows once, so reopening this empty session can't repeat it (#374)
+      this.plugin.settings.lastSponsorMilestone = sponsorMilestone;
+      this.plugin.settings.lastSponsorShownAt = now;
+      void this.plugin.saveSettings();
       body.addClass('bojubot-welcome-sponsor');
       const sponsorImg = body.createEl('img', { cls: 'bojubot-welcome-sponsor-image', attr: { alt: brandName, src: sponsorImageUrl } });
       sponsorImg.draggable = false;
       const message = body.createDiv({ cls: 'bojubot-welcome-sponsor-message' });
       void MarkdownRenderer.render(this.app, SPONSOR_MESSAGE, message, '', this);
+      const signature = body.createEl('img', { cls: 'bojubot-sponsor-signature', attr: { alt: 'Scott Kirvan', src: signatureUrl } });
+      signature.draggable = false;
 
       const kofiBtn = body.createEl('a', { cls: 'bojubot-welcome-kofi-btn', href: KOFI_URL });
       kofiBtn.setAttr('target', '_blank');
@@ -1463,6 +1479,25 @@ export class ClaudeView extends ItemView {
         more.addEventListener('click', () => void this.showSessionHistory());
       }
     }
+
+    // A quiet, always-there way to support the project (#375). Hidden while the
+    // full sponsorship message is showing, for donors and opted-out users, and on
+    // white-labeled installs.
+    if (!showSponsorMessage && !isWhiteLabeled(this.plugin.brand) && !this.plugin.settings.hideSponsorshipMessages) {
+      const support = welcome.createEl('a', { cls: 'bojubot-welcome-support', href: KOFI_URL });
+      support.setAttr('target', '_blank');
+      support.setAttr('rel', 'noopener');
+      setIcon(support.createSpan({ cls: 'bojubot-welcome-support-icon' }), 'heart');
+      support.createSpan({ text: `Support ${brandName}` });
+    }
+  }
+
+  /** "Agent · model" for the welcome header, e.g. "Antigravity · Gemini 3.8 Flash (High)". */
+  private agentAndModelLabel(): string {
+    const agent = this.coordinator.backend.displayName;
+    return this.coordinator.getEffectiveModel()
+      ? `${agent} · ${this.effectiveModelName()}`
+      : `${agent} · default model`;
   }
 
   private renderSetupPanel() {
@@ -2259,13 +2294,13 @@ export class ClaudeView extends ItemView {
       {
         category: 'Session',
         name: 'Switch model',
-        description: 'Choose which Claude model to use',
+        description: 'Choose which model the agent uses',
         action: () => this.openModelPicker(),
       },
       ...(this.supportedEffortLevels().length > 0 ? [{
         category: 'Session',
         name: 'Switch effort',
-        description: 'Choose how much thinking Claude does per turn',
+        description: 'Choose how much thinking the model does per turn',
         action: () => this.openEffortPicker(),
       }] : []),
       {
@@ -2332,7 +2367,7 @@ export class ClaudeView extends ItemView {
       {
         category: 'Security',
         name: 'Audit memory file',
-        description: 'Ask Claude to review the context file for suspicious content',
+        description: 'Ask the agent to review the context file for suspicious content',
         action: () => this.auditMemoryFile(),
       },
       ...this.loadSkillCommands(),

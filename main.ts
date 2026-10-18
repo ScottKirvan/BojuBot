@@ -7,6 +7,8 @@ import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
+import { loadAllSessions, resolveSessionsDir } from './src/utils/sessionStorage';
+import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, formatCliVersion, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { initLogger, log, warn } from './src/utils/logger';
@@ -455,7 +457,18 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<BojuBotSettings>);
+    const saved = await this.loadData() as Partial<BojuBotSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+    // Installs from before started-session counting (#384): seed the count from
+    // saved sessions that got a reply. Fresh installs (no data.json) start at 0.
+    if (saved && saved.startedSessionCount === undefined) {
+      const vaultRoot = this.getVaultRoot();
+      const configDir = this.app.vault.configDir;
+      const dir = resolveSessionsDir(vaultRoot, this.settings.sessionStoragePath, configDir);
+      const started = loadAllSessions(vaultRoot, dir, configDir).filter(s => s.claudeSessionId).length;
+      Object.assign(this.settings, seedSponsorProgress(started));
+      await this.saveData(this.settings);
+    }
     // `brand` is a nested object: the shallow Object.assign above copies the
     // whole reference from data.json (or leaves it undefined). resolveBrand()
     // is what fills every field field-by-field, so a partial brand never drops

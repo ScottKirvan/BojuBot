@@ -7,6 +7,7 @@ import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
 import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
 import { formatCliVersion } from './utils/cliCapabilities';
+import { GITHUB_SPONSORS_URL, KOFI_URL, SUPPORT_PAGE_URL } from './constants';
 
 export type ClaudeModel = ModelOption;
 
@@ -98,10 +99,15 @@ export interface BojuBotSettings {
   defaultEffort: string;
   /** Show reply text as it's generated (--include-partial-messages, when the CLI supports it). */
   streamPartialMessages: boolean;
-  /** Count of new-session creations (not sessions saved). Drives the periodic sponsorship welcome variant. */
-  sessionCreationCount: number;
+  /** Sessions that got at least one reply from the agent. Drives the sponsorship milestones
+   *  (src/utils/sponsorGate.ts). Seeded from saved sessions on first load (main.ts). */
+  startedSessionCount: number;
+  /** The sponsorship milestone last shown (10, 20, 30, 50, then every 50th), 0 if never. */
+  lastSponsorMilestone: number;
   /** User opt-out of the periodic sponsorship welcome variant. Always hidden/off on white-labeled installs regardless of this value. */
   hideSponsorshipMessages: boolean;
+  /** When the sponsorship welcome variant was last shown (ms since epoch), 0 if never. Enforces the 1-day minimum gap. */
+  lastSponsorShownAt: number;
   /**
    * Optional white-label branding (display name, icon, art, greetings, links).
    * Absent → the stock BojuBot identity, byte-for-byte. Always read through
@@ -145,8 +151,10 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   defaultModel: DEFAULT_MODEL_ID,
   defaultEffort: '',
   streamPartialMessages: true,
-  sessionCreationCount: 0,
+  startedSessionCount: 0,
+  lastSponsorMilestone: 0,
   hideSponsorshipMessages: false,
+  lastSponsorShownAt: 0,
 };
 
 export class BojuBotSettingsTab extends PluginSettingTab {
@@ -719,23 +727,12 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           })
       );
 
-    // Periodic welcome-screen sponsorship message — never shown, and the
-    // toggle never surfaced, on white-labeled installs (a downstream
-    // distributor manages their own funding messaging, not Scott's).
-    if (!isWhiteLabeled(this.plugin.brand)) {
-      new Setting(containerEl)
-        .setName('Hide sponsorship messages')
-        .setDesc('BojuBot occasionally swaps the welcome screen for a short message about supporting the project. Turn this on to never see it.')
-        .addToggle((toggle) =>
-          toggle
-            .setValue(this.plugin.settings.hideSponsorshipMessages)
-            .onChange(async (value) => {
-              this.plugin.settings.hideSponsorshipMessages = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    }
+    this.displayBranding(containerEl);
+    this.displayHelpAndFeedback(containerEl);
+    this.displaySupport(containerEl);
+  }
 
+  private displayBranding(containerEl: HTMLElement): void {
     // ── Brand ──────────────────────────────────────────────────────────────
     // Everything here is optional. Blank fields fall back to the stock BojuBot
     // identity (see resolveBrand). Nothing is ever removed — an empty link just
@@ -745,8 +742,6 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     if (this.plugin.settings.brand?.locked) {
       new Setting(containerEl)
         .setDesc('Branding is locked and cannot be changed from this panel. Edit data.json directly (brand.locked) and reload the plugin to unlock it.');
-      // Brand is the last section in display() — safe to bail out here. If a
-      // new section is ever added after Brand, this must become an if/else.
       return;
     }
 
@@ -899,5 +894,66 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             this.display();
           })
       );
+  }
+
+  /** Where to get help or send feedback (#376). Uses the brand's links, so a
+   *  white-labeled build points at its own docs and community. */
+  private displayHelpAndFeedback(containerEl: HTMLElement): void {
+    const { links, name } = this.plugin.brand;
+    new Setting(containerEl).setName('Help & feedback').setHeading();
+    const addLink = (title: string, desc: string, label: string, url: string) => {
+      if (!url) return;
+      new Setting(containerEl)
+        .setName(title)
+        .setDesc(desc)
+        .addButton((btn) => btn.setButtonText(label).onClick(() => window.open(url, '_blank')));
+    };
+    addLink('Documentation', `Guides for every ${name} feature, plus troubleshooting.`, 'Open', links.doc);
+    addLink('Get help on Discord', 'Ask questions and get help from me and other users.', 'Join', links.community);
+    if (links.source) {
+      addLink('Report a problem', "Something not working? Tell me. I read every report.", 'Report', `${links.source}/issues/new?template=bug_report.md`);
+      addLink('Request a feature', 'Ideas for making it better are always welcome.', 'Suggest', `${links.source}/issues/new?template=feature_request.md`);
+    }
+  }
+
+  /** Ways to support the project, at the very bottom (#376). Never shown on
+   *  white-labeled builds: a downstream distributor handles its own funding. */
+  private displaySupport(containerEl: HTMLElement): void {
+    if (isWhiteLabeled(this.plugin.brand)) return;
+    new Setting(containerEl).setName('Support the project').setHeading();
+    new Setting(containerEl)
+      .setDesc("BojuBot is built and maintained by one person. If it saves you time, here's how you can help.");
+    new Setting(containerEl)
+      .setName('Buy me a coffee')
+      .setDesc('A one-off or monthly tip.')
+      .addButton((btn) => btn.setButtonText('Ko-fi').setCta().onClick(() => window.open(KOFI_URL, '_blank')));
+    new Setting(containerEl)
+      .setName('Sponsor on GitHub')
+      .setDesc('Using BojuBot at work? Ask your company to sponsor it.')
+      .addButton((btn) => btn.setButtonText('Sponsor').onClick(() => window.open(GITHUB_SPONSORS_URL, '_blank')));
+    new Setting(containerEl)
+      .setName('Star on GitHub')
+      .setDesc('Free, and it helps other people find BojuBot.')
+      .addButton((btn) => btn.setButtonText('Star').onClick(() => window.open(DEFAULT_BRAND.links.source, '_blank')));
+    new Setting(containerEl)
+      .setName('More ways to help')
+      .setDesc('Reporting bugs, suggesting features, telling a friend.')
+      .addButton((btn) => btn.setButtonText('Read').onClick(() => window.open(SUPPORT_PAGE_URL, '_blank')));
+
+    const toggleSetting = new Setting(containerEl)
+      .setName('Hide the support message')
+      .setDesc("Don't show the occasional support message on the welcome screen.");
+    const thanks = toggleSetting.descEl.createSpan({ cls: 'bojubot-settings-thankyou', text: ' Thank you!' });
+    thanks.toggle(this.plugin.settings.hideSponsorshipMessages);
+    toggleSetting.addToggle((toggle) =>
+      toggle
+        .setValue(this.plugin.settings.hideSponsorshipMessages)
+        .onChange(async (value) => {
+          this.plugin.settings.hideSponsorshipMessages = value;
+          await this.plugin.saveSettings();
+          // Same thank-you as the welcome screen's "I already donated" checkbox
+          thanks.toggle(value);
+        })
+    );
   }
 }
