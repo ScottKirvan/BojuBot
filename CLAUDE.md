@@ -133,7 +133,17 @@ npm run dev                    # watch mode
 After submitting a PR, always switch back to `main`: `git checkout main && git pull`.
 When Scott says a branch is merged or deleted, immediately run `git checkout main && git pull`, then create a new branch before continuing any work.
 
+## Beta builds
+Testers install betas with BRAT (user guide: `docs/guide/beta-builds.md`). `.github/workflows/beta-release.yml` builds the plugin and publishes a GitHub **pre-release** with `main.js`, `manifest.json` and `styles.css`.
+- **Automatic:** `release.yml` calls it on every push to `main` that changes the plugin. It skips release commits and pushes that only touch `docs/`, `notes/`, `.github/` or top-level `.md` files.
+- **Manual:** Actions → Beta Release → Run workflow, on any branch (e.g. a `dev` integration branch). Leave the version blank for the next automatic number, or enter one such as `3.9.0-dev.1`.
+- **Version:** the open release-please PR's version plus `-beta.N` (e.g. `3.8.0-beta.3`); with no release PR open, the next patch. Only the uploaded `manifest.json` carries it. Never commit a beta version to `manifest.json` on `main`: the Obsidian marketplace reads that file.
+- **Pruning:** only the newest 5 `-beta.N` pre-releases are kept; older ones and their tags are deleted. Hand-named betas (not `-beta.N`) are never pruned.
+- **Docs for unreleased features:** docs deploy from `main`, so they run ahead of the marketplace. Mark pages or sections for features that are only in betas with `<Badge type="warning" text="Beta" />` after the heading, and a `::: warning Not released yet` container that links to the beta builds page (see `docs/guide/agents.md`).
+
 ## Release process (post-merge checklist)
+**Before merging the release-please PR:** remove the beta badges and "Not released yet" notices for features shipping in that release (`grep -rn 'text="Beta"\|Not released yet' docs/`), in a `docs:` commit.
+
 release-please only reads commit **subject lines** — commit bodies are ignored. After each release PR merges:
 
 1. Scan commit bodies for sub-features/fixes not visible in the subject:

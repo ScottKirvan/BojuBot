@@ -1,0 +1,153 @@
+name: Beta Release
+
+# Publishes a beta build as a GitHub pre-release that testers install with
+# BRAT. The Obsidian marketplace only follows manifest.json on main, which this
+# workflow never changes, so betas never reach marketplace users.
+#
+# Runs automatically from release.yml for code pushes to main, or by hand on
+# any branch (Actions → Beta Release → Run workflow).
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Beta version, e.g. 3.8.0-beta.4
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Beta version, e.g. 3.8.0-beta.4 (blank = next beta of the version in the open release PR)
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: beta-release
+  cancel-in-progress: false
+
+env:
+  KEEP_BETAS: 5
+
+jobs:
+  beta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      # Next beta of whatever version the open release-please PR will release,
+      # so a beta always sorts above the current stable release and below the
+      # release it previews. With no release PR open, the patch after manifest.json.
+      - name: Choose beta version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            RP_BRANCH=$(gh pr list --repo "$REPO" --state open --json headRefName \
+              --jq '[.[].headRefName | select(startswith("release-please--"))][0] // ""')
+            if [ -n "$RP_BRANCH" ]; then
+              BASE=$(gh api "repos/$REPO/contents/.github/release-please/.release-please-manifest.json?ref=$RP_BRANCH" \
+                --jq '.content' | base64 -d | jq -r '.["."]')
+            else
+              IFS=. read -r MAJOR MINOR PATCH <<< "$(jq -r '.version' manifest.json)"
+              BASE="$MAJOR.$MINOR.$((PATCH + 1))"
+            fi
+            LAST=$(gh release list --repo "$REPO" --limit 100 --json tagName \
+              --jq "[.[].tagName | select(startswith(\"$BASE-beta.\")) | ltrimstr(\"$BASE-beta.\") | tonumber? ] | max // 0")
+            VERSION="$BASE-beta.$((LAST + 1))"
+          fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+            echo "::error::'$VERSION' isn't a pre-release version (expected e.g. 3.8.0-beta.1)"
+            exit 1
+          fi
+          if gh release view "$VERSION" --repo "$REPO" > /dev/null 2>&1; then
+            echo "::error::A release named $VERSION already exists"
+            exit 1
+          fi
+          echo "Beta version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Only the copy attached to the pre-release; nothing is committed.
+      - name: Stamp the beta version into manifest.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          jq --arg v "$VERSION" '.version = $v' manifest.json > manifest.tmp
+          mv manifest.tmp manifest.json
+          jq -r '"manifest.json version: \(.version)"' manifest.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            styles.css
+            manifest.json
+
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PREV=$(gh release list --repo "$REPO" --limit 20 --json tagName,isDraft,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isDraft == false and .isPrerelease == false)] | sort_by(.publishedAt) | reverse | .[0].tagName // ""')
+          {
+            echo "Beta build of BojuBot from \`$GITHUB_REF_NAME\` at ${GITHUB_SHA:0:7}. It isn't on the Obsidian community plugin list."
+            echo
+            echo "**Install with BRAT:** in Obsidian, install the BRAT community plugin, run **BRAT: Add a beta plugin for testing** and enter \`$REPO\`. BRAT then keeps you on the newest beta or release."
+            echo "To stay on this exact build, use **BRAT: Add a beta plugin with frozen version based on a release tag** with \`$VERSION\` instead."
+            echo
+            echo "When the stable release ships, update through BRAT. Obsidian's own updater won't move you from a beta to the release with the same version number."
+            if [ -n "$PREV" ] && git rev-parse -q --verify "refs/tags/$PREV" > /dev/null; then
+              echo
+              echo "### Changes since $PREV"
+              echo
+              git log --no-merges --format='- %s' "$PREV..HEAD"
+            fi
+          } > beta-notes.md
+
+          gh release create "$VERSION" --repo "$REPO" \
+            --prerelease --latest=false \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION (beta)" \
+            --notes-file beta-notes.md \
+            main.js manifest.json styles.css
+
+      - name: Prune old betas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release list --repo "$REPO" --limit 100 --json tagName,isDraft,isPrerelease,publishedAt \
+            --jq "[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | test(\"-beta\\\\.[0-9]+$\")))] | sort_by(.publishedAt) | reverse | .[${KEEP_BETAS}:] | .[].tagName" \
+            | while IFS= read -r TAG; do
+                echo "Deleting old beta $TAG"
+                gh release delete "$TAG" --repo "$REPO" --cleanup-tag --yes
+              done

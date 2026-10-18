@@ -132,6 +132,45 @@ jobs:
     with:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
 
+  # Betas are for plugin changes; a push that only touches docs, notes,
+  # workflows or top-level Markdown doesn't need one.
+  plugin-changed:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Check whether the push changed the plugin
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          FILES=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" --jq '.files[].filename' 2>/dev/null || true)
+          if [ -z "$FILES" ]; then
+            echo "Couldn't list the changed files; building a beta to be safe"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s\n' "$FILES" | grep -qvE '^(docs/|notes/|\.github/)|^[^/]+\.md$'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only docs, notes, workflows or top-level Markdown changed; no beta"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  beta:
+    needs: [release-please, plugin-changed]
+    if: >-
+      needs.release-please.outputs.release_created != 'true' &&
+      needs.plugin-changed.outputs.changed == 'true'
+    permissions:
+      contents: write
+      pull-requests: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/beta-release.yml
+
   discord-notify:
     needs: [release-please, apply-staged-notes, improve-release-notes, build-and-upload]
     if: >-
