@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "BojuBot"
   text: "보주봇"
-  tagline: More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform using Claude Code.
+  tagline: More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform.
   image:
     src: /logo.png
     alt: BojuBot
