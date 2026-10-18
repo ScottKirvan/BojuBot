@@ -1,7 +1,7 @@
 {
   "name": "bojubot",
   "version": "3.7.0",
-  "description": "Claude Code agentic file management for Obsidian vaults",
+  "description": "More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
