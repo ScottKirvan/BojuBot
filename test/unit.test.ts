@@ -26,7 +26,7 @@ import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
-import { buildCommandsReference, EXCLUDED_FROM_REFERENCE } from '../src/utils/commandsReference';
+import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands, RENAMED_COMMANDS } from '../src/utils/commandsReference';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
@@ -3576,5 +3576,36 @@ describe('buildCommandsReference', () => {
   test('header names the file and its purpose', () => {
     assert.ok(out.startsWith('# Obsidian Command Reference\n_Generated: 2026-10-19T00:00:00Z_\n'));
     assert.match(out, /run-command/);
+  });
+});
+
+describe('renamed commands', () => {
+  test('show-about is left out of the reference; open-help is listed', () => {
+    const out = buildCommandsReference([
+      { id: 'bojubot:show-about', name: 'BojuBot: About (deprecated, use open help & resources)' },
+      { id: 'bojubot:open-help', name: 'BojuBot: Open help & resources' },
+    ], 't');
+    assert.ok(out.includes('`bojubot:open-help`'));
+    assert.ok(!out.includes('bojubot:show-about'));
+  });
+
+  test('allow and deny decisions carry over to the new ID; old entries stay', () => {
+    assert.deepEqual(migrateRenamedCommands(['bojubot:show-about', 'editor:toggle-bold'], []),
+      { allowlist: ['bojubot:show-about', 'editor:toggle-bold', 'bojubot:open-help'], denylist: [], changed: true });
+    assert.deepEqual(migrateRenamedCommands([], ['bojubot:show-about']),
+      { allowlist: [], denylist: ['bojubot:show-about', 'bojubot:open-help'], changed: true });
+  });
+
+  test('nothing to do, or already migrated → unchanged', () => {
+    assert.equal(migrateRenamedCommands(['editor:toggle-bold'], []).changed, false);
+    assert.equal(migrateRenamedCommands(['bojubot:show-about', 'bojubot:open-help'], []).changed, false);
+  });
+
+  test('every renamed command points from one BojuBot ID to another, and the old one is excluded', () => {
+    for (const [oldId, newId] of Object.entries(RENAMED_COMMANDS)) {
+      assert.match(oldId, /^bojubot:/);
+      assert.match(newId, /^bojubot:/);
+      assert.ok(EXCLUDED_FROM_REFERENCE.has(oldId), oldId);
+    }
   });
 });

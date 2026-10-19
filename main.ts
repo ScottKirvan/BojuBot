@@ -16,7 +16,7 @@ import { loadAllSessions, resolveSessionsDir } from './src/utils/sessionStorage'
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
-import { buildCommandsReference } from './src/utils/commandsReference';
+import { buildCommandsReference, migrateRenamedCommands } from './src/utils/commandsReference';
 import { currentLogPath, initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
 import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
@@ -242,11 +242,17 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'open-help',
+      name: 'Open help & resources',
+      callback: () => this.showAbout(),
+    });
+
+    // Deprecated alias of open-help, kept so existing hotkeys and allowlist
+    // entries keep working. Left out of the agent's command reference.
+    this.addCommand({
       id: 'show-about',
-      name: 'About',
-      callback: () => {
-        this.showAbout();
-      }
+      name: 'About (deprecated, use open help & resources)',
+      callback: () => this.showAbout(),
     });
 
     this.addCommand({
@@ -487,6 +493,13 @@ export default class BojuBotPlugin extends Plugin {
     // sibling defaults.
     this.refreshBrand();
     if (!isBackendId(this.settings.backend)) this.settings.backend = DEFAULT_BACKEND_ID;
+    // show-about was renamed open-help: carry allow/deny decisions over to the new ID
+    const renamed = migrateRenamedCommands(this.settings.commandAllowlist, this.settings.commandDenylist);
+    if (renamed.changed) {
+      this.settings.commandAllowlist = renamed.allowlist;
+      this.settings.commandDenylist = renamed.denylist;
+      await this.saveData(this.settings);
+    }
     // Migrate old hardcoded log paths → empty so the dynamic default takes over
     if (this.settings.logFilePath === '_bojubot-debug.log') {
       this.settings.logFilePath = '';

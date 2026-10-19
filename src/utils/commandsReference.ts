@@ -17,7 +17,32 @@ export const EXCLUDED_FROM_REFERENCE: ReadonlySet<string> = new Set([
   'bojubot:focus-input',
   'bojubot:send-selection',
   'bojubot:refresh-context',
+  // Deprecated alias of bojubot:open-help — the agent should learn the new ID
+  'bojubot:show-about',
 ]);
+
+/** Commands that were renamed: old ID → new ID. The old ones stay registered as deprecated aliases. */
+export const RENAMED_COMMANDS: Readonly<Record<string, string>> = {
+  'bojubot:show-about': 'bojubot:open-help',
+};
+
+/**
+ * Carry allowlist/denylist entries over to renamed commands' new IDs, so a
+ * decision made about the old ID keeps applying. Old entries are kept (the
+ * old IDs still work as aliases). Pure — exported for tests.
+ */
+export function migrateRenamedCommands(allowlist: string[], denylist: string[]): { allowlist: string[]; denylist: string[]; changed: boolean } {
+  const carry = (list: string[]) => {
+    const out = [...list];
+    for (const [oldId, newId] of Object.entries(RENAMED_COMMANDS)) {
+      if (out.includes(oldId) && !out.includes(newId)) out.push(newId);
+    }
+    return out;
+  };
+  const allow = carry(allowlist);
+  const deny = carry(denylist);
+  return { allowlist: allow, denylist: deny, changed: allow.length !== allowlist.length || deny.length !== denylist.length };
+}
 
 export interface CommandInfo {
   id: string;
