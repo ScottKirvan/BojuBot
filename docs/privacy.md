@@ -55,7 +55,14 @@ BojuBot itself makes no network requests. A few things you do can reach the inte
 - **Links.** Clicking a link in BojuBot opens that website in your browser.
 - **Web images.** If a reply contains an image linked by web address, Obsidian downloads it when it's shown, as it would in any note.
 
-A form for reporting problems from inside BojuBot is planned. It will send only what you review and choose to send, and it will say where the report goes. This policy will be updated before that form ships.
+**Reporting a problem.** BojuBot's **Report a problem** form never sends anything itself. It fills in details to help with the report (BojuBot's version and build, your installed agents, the session's agent and model, your operating system, and an error message if there was one), and optionally the last lines of the debug log. You can edit or remove all of it. Then:
+
+- **Open on GitHub** opens a new GitHub issue in your browser with the report filled in. Nothing is sent until you submit it there, and once submitted it's a **public** issue that anyone can read, under GitHub's own privacy policy.
+- **Copy report** copies the report to your clipboard, for you to send however you like.
+
+Clicking the version information in the **Help & resources** dialog copies it to your clipboard; that stays on your computer.
+
+A planned **Send** button will send reports straight from BojuBot. This policy will be updated before it ships.
 
 ## Analytics, crash reporting, and telemetry
 
