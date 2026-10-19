@@ -26,7 +26,7 @@ When you thank the agent for its help, a small note from the author may appear u
 
 ## About Dialog
 
-The **Help & resources** dialog is the place to go when you're stuck. Open it with the help icon in the toolbar, `/help` in the chat, the **BojuBot: About** command, or by clicking the mascot on the welcome screen.
+The **Help & resources** dialog is the place to go when you're stuck. Open it with the help icon in the toolbar, `/help` in the chat, the **BojuBot: Open help & resources** command, or by clicking the mascot on the welcome screen.
 
 - **Version information**: BojuBot's version, the branch and time the build was made, and the version of each agent CLI you have installed. **Click it to copy everything to the clipboard**, ready to paste into a bug report or a Discord message.
 - **Documentation**, **Get help on Discord**, **Report a problem** (see [Reporting a problem](#reporting-a-problem)), and **Buy me a coffee**.
