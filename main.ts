@@ -16,6 +16,7 @@ import { loadAllSessions, resolveSessionsDir } from './src/utils/sessionStorage'
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
+import { buildCommandsReference } from './src/utils/commandsReference';
 import { currentLogPath, initLogger, log, warn } from './src/utils/logger';
 import { AboutModal } from './src/modals/AboutModal';
 import { MemoryAuditModal } from './src/modals/MemoryAuditModal';
@@ -68,11 +69,6 @@ export default class BojuBotPlugin extends Plugin {
       verbosity: this.settings.logVerbosity,
     });
     log(`${this.brand.name} loading — vault root:`, vaultRoot);
-
-    this.app.workspace.onLayoutReady(() => {
-      this.generateCommandsFile();
-      this.reloadSkillCommands();
-    });
 
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
@@ -335,6 +331,11 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addSettingTab(new BojuBotSettingsTab(this.app, this));
+
+    // Last, after every addCommand() above: on a reload, Obsidian runs this
+    // immediately because the layout is already ready (#395). Skill commands
+    // are registered here, then the command reference is written.
+    this.app.workspace.onLayoutReady(() => this.reloadSkillCommands());
   }
 
   onunload() {
@@ -663,7 +664,13 @@ export default class BojuBotPlugin extends Plugin {
     return resolveSkillsFolder(this.getVaultRoot(), this.settings.commandsFolder ?? '');
   }
 
+  /** Re-register skill commands, then rewrite the command reference so it lists them (#395). */
   reloadSkillCommands() {
+    this.registerSkillCommands();
+    this.generateCommandsFile();
+  }
+
+  private registerSkillCommands() {
     // Remove all previously registered template commands
     const appInternal = this.app as unknown as AppInternal;
     for (const id of this.skillCommandIds) {
@@ -706,41 +713,16 @@ export default class BojuBotPlugin extends Plugin {
     }
   }
 
+  /**
+   * Write the command reference the agent reads before using run-command.
+   * Must run after every command is registered (#395): at the end of onload()
+   * and after each skill reload, never earlier.
+   */
   generateCommandsFile() {
     try {
-      const vaultRoot = this.getVaultRoot();
-      const configDir = this.app.vault.configDir;
-      const outPath = join(vaultRoot, configDir, 'plugins', 'bojubot', 'obsidian-commands.md');
-
-      const appInternal = this.app as unknown as AppInternal;
-      const commands = Object.values(appInternal.commands.commands)
-        .sort((a, b) => a.id.localeCompare(b.id));
-
-      // Group by plugin prefix (part before first ':')
-      const groups = new Map<string, { id: string; name: string }[]>();
-      for (const cmd of commands) {
-        const prefix = cmd.id.includes(':') ? cmd.id.split(':')[0] : 'core';
-        let group = groups.get(prefix);
-        if (!group) { group = []; groups.set(prefix, group); }
-        group.push(cmd);
-      }
-
-      const lines: string[] = [
-        '# Obsidian Command Reference',
-        `_Generated: ${new Date().toISOString()}_`,
-        '_Grep by plugin name or display name to find the right command ID for run-command._',
-        '',
-      ];
-
-      for (const [prefix, cmds] of [...groups.entries()].sort()) {
-        lines.push(`## ${prefix}`);
-        for (const cmd of cmds) {
-          lines.push(`- \`${cmd.id}\` — ${cmd.name}`);
-        }
-        lines.push('');
-      }
-
-      writeFileSync(outPath, lines.join('\n'), 'utf8');
+      const outPath = join(this.getVaultRoot(), this.app.vault.configDir, 'plugins', 'bojubot', 'obsidian-commands.md');
+      const commands = Object.values((this.app as unknown as AppInternal).commands.commands);
+      writeFileSync(outPath, buildCommandsReference(commands, new Date().toISOString()), 'utf8');
       log(`Commands file written: ${outPath} (${commands.length} commands)`);
     } catch (e) {
       warn('Failed to write commands file:', e);
