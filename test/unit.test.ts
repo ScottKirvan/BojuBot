@@ -26,6 +26,7 @@ import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
+import { buildCommandsReference, EXCLUDED_FROM_REFERENCE } from '../src/utils/commandsReference';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
@@ -3543,5 +3544,37 @@ describe('unrecognizedModelNotice', () => {
   });
   test('generic wording when the version or model is unknown', () => {
     assert.match(unrecognizedModelNotice('', null), /^Your Claude Code doesn't know this model yet\./);
+  });
+});
+
+describe('buildCommandsReference', () => {
+  const cmds = [
+    { id: 'editor:toggle-bold', name: 'Toggle bold' },
+    { id: 'bojubot:show-plan-usage', name: 'BojuBot: Show plan usage' },
+    { id: 'bojubot:new-session', name: 'BojuBot: New session' },
+    { id: 'bojubot:skill-daily-review', name: 'BojuBot: Skill: Daily review' },
+    { id: 'app:go-back', name: 'Navigate back' },
+    { id: 'reload', name: 'Reload app without saving' },
+  ];
+  const out = buildCommandsReference(cmds, '2026-10-19T00:00:00Z');
+
+  test("lists BojuBot's own commands and skill commands", () => {
+    assert.match(out, /## bojubot\n- `bojubot:show-plan-usage` — BojuBot: Show plan usage\n- `bojubot:skill-daily-review` — BojuBot: Skill: Daily review\n/);
+  });
+
+  test('leaves out commands that would disrupt the agent mid-turn', () => {
+    assert.ok(!out.includes('bojubot:new-session'));
+    for (const id of EXCLUDED_FROM_REFERENCE) assert.ok(id.startsWith('bojubot:'), id);
+  });
+
+  test('groups by plugin prefix, sorted; unprefixed commands go under core', () => {
+    const headings = out.split('\n').filter(l => l.startsWith('## '));
+    assert.deepEqual(headings, ['## app', '## bojubot', '## core', '## editor']);
+    assert.match(out, /## core\n- `reload` — Reload app without saving/);
+  });
+
+  test('header names the file and its purpose', () => {
+    assert.ok(out.startsWith('# Obsidian Command Reference\n_Generated: 2026-10-19T00:00:00Z_\n'));
+    assert.match(out, /run-command/);
   });
 });
