@@ -99,3 +99,33 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
     details: [err.message],
   };
 }
+
+/**
+ * Claude Code prints `[claude-code:unrecognized_model] {"model":"…",…}` to
+ * stderr when it's older than the selected model. The request still goes
+ * through, so this is a warning, not an error. Returns the model ID and the
+ * stderr text with that line removed (anything else is still worth showing),
+ * or null when the text isn't this warning.
+ */
+export function parseUnrecognizedModel(stderr: string): { model: string; rest: string } | null {
+  const lines = stderr.split(/\r?\n/);
+  const index = lines.findIndex(l => l.includes('[claude-code:unrecognized_model]'));
+  if (index < 0) return null;
+  let model = '';
+  const json = /\{.*\}/.exec(lines[index]);
+  if (json) {
+    try {
+      const parsed = JSON.parse(json[0]) as Record<string, unknown>;
+      if (typeof parsed.model === 'string') model = parsed.model;
+    } catch { /* keep the generic wording */ }
+  }
+  lines.splice(index, 1);
+  return { model, rest: lines.join('\n').trim() };
+}
+
+/** Plain-language note for the unrecognized-model warning. */
+export function unrecognizedModelNotice(model: string, cliVersion: string | null): string {
+  const cli = cliVersion ? `Your Claude Code (${cliVersion})` : 'Your Claude Code';
+  const what = model ? `doesn't know ${model} yet` : "doesn't know this model yet";
+  return `${cli} ${what}. Replies still work, but token counts may be slightly off. Update Claude Code to clear this warning.`;
+}

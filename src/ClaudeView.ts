@@ -17,7 +17,7 @@ import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL } from './constants';
+import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { ClaudeModel } from './settings';
@@ -25,7 +25,7 @@ import { BACKEND_IDS } from './backends';
 import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
-import { formatApiError, ApiError } from './utils/apiError';
+import { formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
 import { isRegularUser, sponsorMilestoneToShow } from './utils/sponsorGate';
@@ -325,6 +325,19 @@ export class ClaudeView extends ItemView {
 
     this.coordinator.on('turn:stderr', (err) => {
       if (this._activeTurnEls) this._activeTurnEls.statusEl.remove();
+      // Claude Code older than the selected model: a friendly note, once per model, instead of the raw line
+      const unknownModel = parseUnrecognizedModel(err);
+      if (unknownModel) {
+        if (!this.unrecognizedModelsNoted.has(unknownModel.model)) {
+          this.unrecognizedModelsNoted.add(unknownModel.model);
+          const note = this.appendMessage('system', unrecognizedModelNotice(unknownModel.model, this.plugin.getCapabilities(this.coordinator.backendId).version) + ' ');
+          const link = note.createEl('a', { text: 'How to update', href: TROUBLESHOOTING_URL });
+          link.setAttr('target', '_blank');
+          link.setAttr('rel', 'noopener');
+        }
+        if (!unknownModel.rest) return;
+        err = unknownModel.rest;
+      }
       this.appendMessage('system', `stderr: ${err.trim()}`);
     });
 
@@ -424,6 +437,8 @@ export class ClaudeView extends ItemView {
   }
 
   private thanksCardSessionId: string | undefined;
+  /** Models already explained by the unrecognized-model note, so it shows once each. */
+  private unrecognizedModelsNoted = new Set<string>();
 
   /**
    * A short note from Scott under the reply when the user thanked the agent (#385):

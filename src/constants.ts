@@ -25,6 +25,7 @@ export const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/ScottKirvan';
 export const SUPPORT_PAGE_URL = 'https://www.scottkirvan.com/BojuBot/support';
 export const CHANGELOG_URL = 'https://www.scottkirvan.com/BojuBot/changelog';
 export const PRIVACY_URL = 'https://www.scottkirvan.com/BojuBot/privacy';
+export const TROUBLESHOOTING_URL = 'https://www.scottkirvan.com/BojuBot/guide/troubleshooting';
 
 /**
  * Neutralize trigger prefixes in vault-sourced content before injecting it into the prompt.

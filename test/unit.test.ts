@@ -36,7 +36,7 @@ import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
-import { parseApiError, formatApiError, ApiError } from '../src/utils/apiError';
+import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
 import { resolveShellEnv } from '../src/utils/shellEnv';
@@ -3515,5 +3515,33 @@ describe('agent icons', () => {
         assert.ok(icon.lucide, id);
       }
     }
+  });
+});
+
+describe('parseUnrecognizedModel', () => {
+  const line = '[claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}';
+
+  test('pulls out the model; nothing else left', () => {
+    assert.deepEqual(parseUnrecognizedModel(line + '\n'), { model: 'claude-haiku-5-5', rest: '' });
+  });
+  test('other stderr lines in the same chunk are kept', () => {
+    assert.deepEqual(parseUnrecognizedModel(`something else\n${line}\nand more`), { model: 'claude-haiku-5-5', rest: 'something else\nand more' });
+  });
+  test('malformed JSON still counts, with no model name', () => {
+    assert.deepEqual(parseUnrecognizedModel('[claude-code:unrecognized_model] {oops'), { model: '', rest: '' });
+  });
+  test('other stderr is not this warning', () => {
+    assert.equal(parseUnrecognizedModel('Error: something broke'), null);
+    assert.equal(parseUnrecognizedModel(''), null);
+  });
+});
+
+describe('unrecognizedModelNotice', () => {
+  test('names the CLI version and the model', () => {
+    assert.equal(unrecognizedModelNotice('claude-haiku-5-5', '2.1.72'),
+      "Your Claude Code (2.1.72) doesn't know claude-haiku-5-5 yet. Replies still work, but token counts may be slightly off. Update Claude Code to clear this warning.");
+  });
+  test('generic wording when the version or model is unknown', () => {
+    assert.match(unrecognizedModelNotice('', null), /^Your Claude Code doesn't know this model yet\./);
   });
 });

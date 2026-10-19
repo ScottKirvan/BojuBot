@@ -38,9 +38,9 @@ If the status indicator has been showing for a long time with no output, Claude 
 
 ---
 
-**A `stderr: [claude-code:unrecognized_model]` line appears under a reply**
+**"Your Claude Code doesn't know this model yet" note**
 
-For example: `stderr: [claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}`
+BojuBot shows this note, once per model, when Claude Code warns that it doesn't recognize the model you picked. In older BojuBot versions it appeared as a raw line: `stderr: [claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}`.
 
 This is a warning from Claude Code, not an error. Your installed Claude Code is older than the model you picked, so the model isn't in its built-in list. The reply still works, but Claude Code may guess at that model's limits, so token counts can be a little off. Update Claude Code to make the warning go away:
 
