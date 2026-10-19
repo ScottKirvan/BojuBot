@@ -38,6 +38,34 @@ If the status indicator has been showing for a long time with no output, Claude 
 
 ---
 
+**A `stderr: [claude-code:unrecognized_model]` line appears under a reply**
+
+For example: `stderr: [claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}`
+
+This is a warning from Claude Code, not an error. Your installed Claude Code is older than the model you picked, so the model isn't in its built-in list. The reply still works, but Claude Code may guess at that model's limits, so token counts can be a little off. Update Claude Code to make the warning go away:
+
+::: code-group
+
+```powershell [Windows (winget)]
+winget upgrade Anthropic.ClaudeCode
+```
+
+```bash [Mac / Linux / Windows (native install)]
+claude update
+```
+
+:::
+
+Run `claude --version` afterwards to check, then restart Obsidian so BojuBot picks up the new version. The detected version is shown in the [Help & resources dialog](./chat-panel#about-dialog) and under **Claude binary path** in settings.
+
+---
+
+**"Claude Code needs an update" error card**
+
+The model you picked needs a newer Claude Code than the one installed, and this time the request is refused rather than just warned about. Update Claude Code with the commands above and send your message again. To keep working in the meantime, [switch to an older model](./chat-panel#model-indicator).
+
+---
+
 **Something unexpected happened and I want to investigate**
 
 Check `.obsidian/plugins/bojubot/bojubot-debug.log` (or the path configured in settings). Each session is separated by a `--- BojuBot log started ---` line. For more detail, switch **Log verbosity** to **Verbose** in settings — it takes effect immediately.
