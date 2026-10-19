@@ -7,6 +7,35 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.8.0](https://github.com/ScottKirvan/BojuBot/compare/3.7.0...3.8.0) (2026-10-19)
+
+
+### Features
+
+* add an in-app Report a problem form ([ac05c04](https://github.com/ScottKirvan/BojuBot/commit/ac05c04207fc29d9d378a305d0886778484e6610))
+* add Antigravity CLI backend module ([3157e23](https://github.com/ScottKirvan/BojuBot/commit/3157e234ca9dee22358c6f2545661d34d08bfc95))
+* choose the agent backend for new sessions ([e9ab12c](https://github.com/ScottKirvan/BojuBot/commit/e9ab12c72617f3c9082ea3ecd9ebc03e0e8404ca))
+* guide Antigravity users through sign-in and model errors ([bd0e5af](https://github.com/ScottKirvan/BojuBot/commit/bd0e5af3c33e601b2894cabd4562e6f97159491b))
+* rework the support message and add support links to the welcome screen and settings ([2d26caf](https://github.com/ScottKirvan/BojuBot/commit/2d26caf7477ee11d450e6000b12933a6a2de9741))
+* show a thank-you note from Scott when the user thanks the agent ([89cefa4](https://github.com/ScottKirvan/BojuBot/commit/89cefa45a53692c1e3f402feba4bd1c790ed254c))
+* show history for Antigravity sessions ([f409969](https://github.com/ScottKirvan/BojuBot/commit/f4099695e47cadbdef9e8659915bf606592fb9d8))
+* show which agent each session runs on in the session lists ([0ebbdc6](https://github.com/ScottKirvan/BojuBot/commit/0ebbdc6156559a3d35a835df9a1b4ea5bd1f751c))
+* turn the About dialog into Help & resources, with copyable version info and credits ([ba99767](https://github.com/ScottKirvan/BojuBot/commit/ba99767b69d449a37122ef87ec55c0dcc2c51fee))
+
+
+### Bug Fixes
+
+* explain Claude Code's unrecognized-model warning instead of showing raw stderr ([0fd829a](https://github.com/ScottKirvan/BojuBot/commit/0fd829a039f9b98e2f235dd1f3250cb38d334c3c))
+* include BojuBot's own commands in the agent's command reference ([b05c294](https://github.com/ScottKirvan/BojuBot/commit/b05c29463eb37719b816b9f48c10b16eb39946b7))
+* keep Antigravity from reading BojuBot's source to learn the UI Bridge ([ac4f874](https://github.com/ScottKirvan/BojuBot/commit/ac4f87428d62e809dc59143c0730e1c4d0ce2034))
+* keep note links clickable in agent replies ([550be65](https://github.com/ScottKirvan/BojuBot/commit/550be6577e381a335d84081488daa002d28be6f4))
+* offer Claude Haiku 5.5 in place of Haiku 4.5 ([daad620](https://github.com/ScottKirvan/BojuBot/commit/daad62045f30c4d0bde527cf608bdf9bd20a7bc8))
+* publish BRAT beta builds as GitHub pre-releases from main ([20a3ddc](https://github.com/ScottKirvan/BojuBot/commit/20a3ddc467533983258252d5029f560ddbb13a60))
+* rename the About command to Open help & resources ([a19278c](https://github.com/ScottKirvan/BojuBot/commit/a19278c497aec64af9cbe0a78f535b087b208ee8))
+* show the welcome screen when reopening an unused session ([fb5aaa5](https://github.com/ScottKirvan/BojuBot/commit/fb5aaa5fe093b0ea852d42b5ae494cf0377a2c4a))
+* stop a terminal window from popping up during agent calls on Windows ([796a4eb](https://github.com/ScottKirvan/BojuBot/commit/796a4eb69d454bd3dc2cf4af914dc983fee63b1b))
+* tidy Antigravity denial notices, usage and permission wording ([1ca46ff](https://github.com/ScottKirvan/BojuBot/commit/1ca46ffca5a16c4962d506bfc7d972bd96c9ae23))
+
 ## [3.7.0](https://github.com/ScottKirvan/BojuBot/compare/3.6.0...3.7.0) (2026-10-03)
 
 
