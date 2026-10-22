@@ -59,6 +59,7 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` �
 | `src/utils/effort.ts`           | Effort precedence (`resolveEffort`), level descriptions, indicator text                        |
 | `src/utils/streamPreview.ts`    | Live-preview display filter (`previewForDisplay`, `composeStreamingText`)                      |
 | `src/utils/apiError.ts`         | `parseApiError()` / `formatApiError()` for CLI `API Error:` messages (#350)                    |
+| `src/utils/inputHistory.ts`     | `historyKeyAction()` — ↑/↓ in the chat input: recall history or move the cursor (#401)         |
 | `src/utils/planUsage.ts`        | `extractResultText()` — `result` text from stream-json output (used by `/usage`)               |
 | `src/utils/fileTree.ts`         | Vault folder tree builder                                                                      |
 | `src/utils/customModels.ts`     | `loadCustomModels()` — extra Claude Code models from `custom-models.json`                      |
@@ -105,7 +106,7 @@ Run all three before opening any PR — all must pass clean:
 ```bash
 npm run build   # TypeScript check + bundle
 npm run lint    # ESLint — zero warnings or errors
-npm test        # 380 unit tests via tsx --test
+npm test        # 394 unit tests via tsx --test
 ```
 Lint and TypeScript violations are `fix:` commits, not `chore:`.
 

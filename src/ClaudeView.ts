@@ -28,6 +28,7 @@ import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
+import { historyKeyAction } from './utils/inputHistory';
 import { isRegularUser, sponsorMilestoneToShow } from './utils/sponsorGate';
 import { pickThanksMessage, thanksCardAllowed, ThanksLink, ThanksMessages } from './utils/thanks';
 import thanksData from './thanks.json';
@@ -689,26 +690,30 @@ export class ClaudeView extends ItemView {
         return;
       }
 
-      if (e.key === 'ArrowUp' && !e.shiftKey) {
-        const { selectionStart, value } = this.inputEl;
-        const onFirstLine = !value.substring(0, selectionStart).includes('\n');
-        if (onFirstLine && this.inputHistory.length > 0) {
-          e.preventDefault();
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey) {
+        // Recall history only at the very start (↑) / very end (↓); otherwise let the
+        // browser move the cursor so wrapped and multi-line text navigate row by row (#401).
+        const { selectionStart, selectionEnd, value } = this.inputEl;
+        const action = historyKeyAction(e.key, {
+          length: value.length,
+          selectionStart,
+          selectionEnd,
+          browsing: this.historyIndex !== -1,
+          hasHistory: this.inputHistory.length > 0,
+          unedited: this.historyIndex !== -1 && value === this.inputHistory[this.inputHistory.length - 1 - this.historyIndex],
+        });
+        if (action === 'move') return;
+        e.preventDefault();
+
+        if (e.key === 'ArrowUp') {
           if (this.historyIndex === -1) this.inputDraft = value;
           const next = Math.min(this.historyIndex + 1, this.inputHistory.length - 1);
           this.historyIndex = next;
           this.inputEl.value = this.inputHistory[this.inputHistory.length - 1 - next];
           this.inputEl.setSelectionRange(0, 0);
+          return;
         }
-        return;
-      }
 
-      if (e.key === 'ArrowDown' && !e.shiftKey) {
-        if (this.historyIndex === -1) return;
-        const { value } = this.inputEl;
-        const onLastLine = !value.substring(this.inputEl.selectionEnd).includes('\n');
-        if (!onLastLine) return;
-        e.preventDefault();
         if (this.historyIndex === 0) {
           this.historyIndex = -1;
           this.inputEl.value = this.inputDraft;
