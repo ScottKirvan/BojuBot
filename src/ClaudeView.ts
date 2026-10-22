@@ -47,6 +47,7 @@ import {
   estimateSessionTokens,
 } from './utils/sessionStorage';
 import { SessionListModal } from './modals/SessionListModal';
+import { StopReplyModal } from './modals/StopReplyModal';
 import { renderAgentIcon } from './agentIcon';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
@@ -55,6 +56,9 @@ import { TokenGauge } from './TokenGauge';
 import { AttachmentHandler, PendingContext } from './AttachmentHandler';
 
 export const VIEW_TYPE_CLAUDE = 'bojubot-chat';
+
+/** How long "Stop it and switch" waits for the reply's process to end before giving up. */
+const STOP_REPLY_TIMEOUT_MS = 10_000;
 
 // Maps from lowercase tool name to display values.
 // Claude Code sends PascalCase names (Read, Write, Bash…) so we normalise to lowercase for lookup.
@@ -136,6 +140,9 @@ export class ClaudeView extends ItemView {
   plugin: BojuBotPlugin;
   private coordinator: SessionCoordinator;
   private _activeTurnEls: ActiveTurnElements | null = null;
+  /** True while a reply is being stopped so the panel can switch session: the
+   *  stopped turn must not start a follow-up turn (vault inject, permission retry). */
+  private _stoppingForSwitch = false;
   private inputEl: HTMLTextAreaElement;
   private messagesEl: HTMLElement;
   private sendBtn: HTMLButtonElement;
@@ -418,6 +425,12 @@ export class ClaudeView extends ItemView {
 
       this.scrollToBottom();
       this.updateSessionStatus();
+
+      // Stopped so the panel can switch session: no follow-up turn in this one.
+      if (this._stoppingForSwitch) {
+        unlock();
+        return;
+      }
 
       if (!isInjectTurn) {
         const showQueries = result.pendingQueries.filter(q => q.mode === 'show');
@@ -771,7 +784,7 @@ export class ClaudeView extends ItemView {
           await this.loadSession(target);
         } catch (e) {
           log('Failed to load session, starting new:', e);
-          this.startNewSession();
+          this.applyNewSession();
         }
       }
     }
@@ -903,8 +916,49 @@ export class ClaudeView extends ItemView {
     return true;
   }
 
+  /**
+   * Run `change` — anything that changes the panel's session — but if a reply is
+   * still running, ask first (#398). "Stop it and switch" stops the process,
+   * waits for its turn to end and save to the session it belongs to, then runs
+   * `change`; "Keep waiting" does nothing. When nothing is running, `change`
+   * runs straight away.
+   */
+  private guardSessionChange(change: () => void | Promise<void>): void {
+    if (!this.coordinator.isBusy) {
+      void change();
+      return;
+    }
+    new StopReplyModal(this.app, (stop) => {
+      if (stop) void this.stopReplyThen(change);
+    }).open();
+  }
+
+  private async stopReplyThen(change: () => void | Promise<void>): Promise<void> {
+    this._stoppingForSwitch = true;
+    let timer: number | undefined;
+    let stopped: boolean;
+    try {
+      stopped = await Promise.race([
+        this.coordinator.stop().then(() => true),
+        new Promise<boolean>((resolve) => { timer = window.setTimeout(() => resolve(false), STOP_REPLY_TIMEOUT_MS); }),
+      ]);
+    } finally {
+      window.clearTimeout(timer);
+      this._stoppingForSwitch = false;
+    }
+    if (!stopped) {
+      new Notice(`${this.plugin.brand.name}: the reply couldn't be stopped, so the session wasn't switched.`);
+      return;
+    }
+    await change();
+  }
+
   auditMemoryFile(): void {
-    this.startNewSession();
+    this.guardSessionChange(() => this.startAuditSession());
+  }
+
+  private startAuditSession(): void {
+    this.applyNewSession();
     const path = this.plugin.settings.contextFilePath;
     this.inputEl.value =
       `Please audit the memory file at \`${path}\` for security. ` +
@@ -949,7 +1003,17 @@ export class ClaudeView extends ItemView {
     if (description && label) this.permissionIconEl.title = `Permissions: ${label} — ${description}. Click to change.`;
   }
 
+  /** Start a new session in the panel (asks first if a reply is still running). */
   startNewSession(custom?: CustomSessionOptions) {
+    this.guardSessionChange(() => this.applyNewSession(custom));
+  }
+
+  /** Open a stored session in the panel (asks first if a reply is still running). */
+  openSession(session: StoredSession) {
+    this.guardSessionChange(() => this.loadSession(session));
+  }
+
+  private applyNewSession(custom?: CustomSessionOptions) {
     this._customAttachments = custom?.customAttachments ?? [];
     this._customInitialInstructions = custom?.initialInstructions ?? '';
     this._customSuppressVaultContext = custom?.suppressVaultContext ?? false;
@@ -981,7 +1045,7 @@ export class ClaudeView extends ItemView {
     const contextTokens = await this.estimateFreshContextTokens();
 
     new SessionListModal(this.app, vaultRoot, sessions, (session) => {
-      void this.loadSession(session);
+      this.openSession(session);
     }, () => {
       this.startNewSession();
     }, () => {
@@ -1119,6 +1183,10 @@ export class ClaudeView extends ItemView {
   }
 
   clearCurrentSession() {
+    this.guardSessionChange(() => this.applyClearSession());
+  }
+
+  private applyClearSession() {
     this.dropPendingSessionState();
     this.messagesEl.empty();
     this.appendMessage('system', 'Session cleared');
@@ -1668,7 +1736,7 @@ export class ClaudeView extends ItemView {
         renderAgentIcon(item, sessionBackend(session), 'bojubot-welcome-recent-agent');
         item.createSpan({ cls: 'bojubot-welcome-recent-title', text: session.userLabel || session.title });
         item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeDate(session.updatedAt) });
-        item.addEventListener('click', () => void this.loadSession(session));
+        item.addEventListener('click', () => this.openSession(session));
       });
       if (sessions.length > 3) {
         const more = recent.createSpan({ cls: 'bojubot-welcome-recent-more', text: 'More…' });
