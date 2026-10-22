@@ -24,6 +24,7 @@ import { log } from './utils/logger';
 import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
 import { resolveEffort } from './utils/effort';
+import { needsFreshSessionForChatOnly } from './utils/modeGates';
 import { composeStreamingText } from './utils/streamPreview';
 import { preserveUserFields } from './utils/sessionList';
 
@@ -145,6 +146,8 @@ interface SessionState {
   hasCustomTitle: boolean;
   /** Set while the session file exists but no turn has bound a conversation ID. */
   placeholderId: string | undefined;
+  /** The CLI agent the conversation started as (Antigravity, #403); undefined = none. */
+  agent: string | undefined;
 }
 
 function emptySessionState(backend: BackendId): SessionState {
@@ -152,7 +155,7 @@ function emptySessionState(backend: BackendId): SessionState {
     sessionId: undefined, fileId: undefined, title: undefined, createdAt: undefined,
     backend, backendPinned: false, cwd: undefined, suppressVaultContext: false,
     permissionMode: undefined, model: undefined, effort: undefined, rawSession: false,
-    hasCustomTitle: false, placeholderId: undefined,
+    hasCustomTitle: false, placeholderId: undefined, agent: undefined,
   };
 }
 
@@ -212,6 +215,22 @@ export class SessionCoordinator {
   get sessionModel(): string | undefined { return this._s.model; }
   get sessionEffort(): string | undefined { return this._s.effort; }
   get rawSession(): boolean { return this._s.rawSession; }
+  /** The CLI agent the conversation started as; undefined = none (or not started yet). */
+  get conversationAgent(): string | undefined { return this._s.agent; }
+
+  /**
+   * True when the session's conversation can't continue in `mode` (default:
+   * the session's own mode) and switching to it needs a new session: moving
+   * into Chat only from any other mode on any backend (the earlier turns hold
+   * vault information, #406), and on Antigravity also moving out of Chat only
+   * (agy fixes a conversation's tools when it starts, #403). Never true before
+   * the first turn: a session with no conversation just switches.
+   */
+  modeNeedsNewSession(mode: PermissionMode = this.getEffectivePermissionMode()): boolean {
+    if (!this._s.sessionId) return false;
+    if (needsFreshSessionForChatOnly(mode, true, this.getEffectivePermissionMode())) return true;
+    return this.backend.needsNewConversation?.(this._s.agent, mode) ?? false;
+  }
 
   /** The `--effort` level for the next turn (session pin, then global default),
    *  or undefined when it's Default or the installed CLI doesn't list it. */
@@ -315,6 +334,7 @@ export class SessionCoordinator {
       backend: custom?.backend ?? this.host.getDefaultBackend?.() ?? 'claude-code',
       backendPinned: !!custom?.backend,
       hasCustomTitle: !!custom?.name?.trim(),
+      agent: undefined,
     };
     if (permissionMode === 'full') this.host.noteFullAccess?.(sessionId);
 
@@ -394,6 +414,7 @@ export class SessionCoordinator {
       backend: sessionBackend(session),
       backendPinned: !!session.backend,
       hasCustomTitle: false,
+      agent: session.agent || undefined,
     };
 
     await this.host.saveLastActiveSessionId(session.id);
@@ -490,6 +511,7 @@ export class SessionCoordinator {
         model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
         capabilities: this.capabilities,
+        agent: this._s.agent,
       });
     } catch (e) {
       onError(`Failed to start ${backend.displayName}: ${e}`);
@@ -541,19 +563,26 @@ export class SessionCoordinator {
     turnSession.permissionMode ??= this.host.getPermissionMode();
 
     const streaming = this.host.isStreamingEnabled?.() ?? false;
+    const mode = this.getEffectivePermissionMode();
+    // A new conversation picks its agent now; a resumed one keeps the agent it
+    // started with (the CLI fixes it at the start, #403).
+    const agent = turnSession.sessionId
+      ? turnSession.agent
+      : backend.conversationAgent?.(mode, this.capabilities);
     let proc: ChildProcess;
     try {
       proc = backend.spawnTurn({
         binaryPath: binary,
         prompt,
-        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), turnSession.cwd, this.host.getVaultRoot()),
+        cwd: resolveSpawnCwd(mode, turnSession.cwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: turnSession.sessionId,
-        permissionMode: this.getEffectivePermissionMode(),
+        permissionMode: mode,
         model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
         includePartialMessages: streaming,
         capabilities: this.capabilities,
+        agent,
       });
       this._activeProc = proc;
     } catch (e) {
@@ -638,6 +667,7 @@ export class SessionCoordinator {
       onDone: (sessionId, clean) => {
         if (!this._procEnded(proc)) return;
         if (sessionId) {
+          if (!turnSession.sessionId) turnSession.agent = agent;
           this._persistSessionAfterTurn(turnSession, sessionId, firstUserInput);
           if (!backend.readableHistory) this._appendTranscript(turnSession, prompt, transcriptReply);
         }
@@ -657,12 +687,18 @@ export class SessionCoordinator {
 
   /**
    * The mode a session opens in, never more than it was saved with: a session
-   * with no saved mode (from before modes were saved per session) gets Standard,
-   * and a Full access session that may not keep it (host.keepsFullAccess) drops
-   * to Standard. Either change is saved to the session file.
+   * with no saved mode (from before modes were saved per session) gets Standard
+   * — or Chat only when its conversation can't continue in Standard (an
+   * Antigravity conversation started as the Chat only agent, #403) — and a Full
+   * access session that may not keep it (host.keepsFullAccess) drops to
+   * Standard. Either change is saved to the session file.
    */
   private _settleSessionPermissionMode(session: StoredSession): StoredSession {
-    let mode: PermissionMode = session.permissionMode ?? 'standard';
+    const legacyMode: PermissionMode = session.claudeSessionId &&
+      this.host.getBackend(sessionBackend(session)).needsNewConversation?.(session.agent || undefined, 'standard')
+      ? 'restricted'
+      : 'standard';
+    let mode: PermissionMode = session.permissionMode ?? legacyMode;
     if (mode === 'full' && !(this.host.keepsFullAccess?.(session.id) ?? true)) mode = 'standard';
     if (mode === session.permissionMode) return session;
     const settled = { ...session, permissionMode: mode };
@@ -711,6 +747,7 @@ export class SessionCoordinator {
       ...(s.model && { model: s.model }),
       ...(s.effort && { effort: s.effort }),
       ...(s.rawSession && { rawSession: true }),
+      ...(s.agent && { agent: s.agent }),
     };
   }
 

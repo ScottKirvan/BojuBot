@@ -18,6 +18,9 @@ export interface CliCapabilities {
   permissionModes: readonly string[];
   /** Values listed in the `--effort` help text, in help-text order. Empty when unsupported. */
   effortLevels: readonly string[];
+  /** Antigravity only: BojuBot's agent definitions are installed and up to date
+   *  (set by the probe after writing them). Absent = not installed. */
+  agentDefinitions?: boolean;
 }
 
 /** Used until (or instead of, on failure) a successful probe of the CLI. */

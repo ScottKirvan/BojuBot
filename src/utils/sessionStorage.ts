@@ -32,6 +32,9 @@ export interface StoredSession {
   /** Skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge)
    *  for a bare Claude Code experience — the per-session equivalent of global Minimal mode. */
   rawSession?: boolean;
+  /** The CLI agent the conversation started as (Antigravity's bojubot or
+   *  bojubot-chat, #403). Absent = none. */
+  agent?: string;
 }
 
 export function sessionBackend(session: Pick<StoredSession, 'backend'>): BackendId {

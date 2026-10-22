@@ -441,7 +441,7 @@ export const claudeCodeBackend: AgentBackend = {
   compactPrompt: '/compact',
   readableHistory: true,
   listModels: null,
-  unavailableModes: {},
-  modeDescriptions: {},
+  unavailableModes: () => ({}),
+  modeDescriptions: () => ({}),
   orientation: CLAUDE_CODE_ORIENTATION,
 };

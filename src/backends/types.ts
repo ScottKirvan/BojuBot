@@ -61,6 +61,10 @@ export interface TurnOptions {
   includePartialMessages?: boolean;
   /** What the installed CLI supports. Omitted → unknown → the long-standing default args. */
   capabilities?: CliCapabilities;
+  /** The CLI's own agent the conversation runs as (Antigravity, #403): on the
+   *  first turn the one to start it with, on later turns the one it started
+   *  with. Omitted = none. */
+  agent?: string;
 }
 
 /** How a backend is pictured in session lists: inline SVG markup (drawn in
@@ -113,10 +117,17 @@ export interface AgentBackend {
   /** Asks the CLI which models it offers. Null when BojuBot keeps the list
    *  itself (Claude Code). Rejects on failure. */
   listModels: ((binaryPath: string, env: Record<string, string>, cwd: string) => Promise<ModelOption[]>) | null;
-  /** Permission modes this backend can't enforce, each with the reason the UI shows. */
-  unavailableModes: Partial<Record<PermissionMode, string>>;
+  /** Permission modes this backend can't enforce with the installed CLI
+   *  (`caps`), each with the reason the UI shows. */
+  unavailableModes(caps: CliCapabilities): Partial<Record<PermissionMode, string>>;
   /** Short picker descriptions where the backend behaves differently from the
    *  stock wording (e.g. which shell commands Standard allows). */
-  modeDescriptions: Partial<Record<PermissionMode, string>>;
+  modeDescriptions(caps: CliCapabilities): Partial<Record<PermissionMode, string>>;
+  /** The CLI agent a new conversation in `mode` starts as, or undefined for
+   *  none. Optional — omitted means the backend has no agents. */
+  conversationAgent?(mode: PermissionMode, caps: CliCapabilities): string | undefined;
+  /** True when a conversation started as `agent` can't continue in `mode`, so
+   *  switching to it needs a new session. Optional — omitted means never. */
+  needsNewConversation?(agent: string | undefined, mode: PermissionMode): boolean;
   orientation: BackendOrientation;
 }

@@ -57,8 +57,10 @@ export function bridgeActionAllowed(action: string, mode: PermissionMode | undef
 /**
  * Switching into Chat only would keep the earlier turns (vault tree, context
  * file, whatever the agent read) in the conversation, so a session with
- * messages starts over. `sessionMode` is the open session's own saved mode: a
- * session already in Chat only has never had vault access and just continues.
+ * messages starts over, on every backend. `sessionMode` is the open session's
+ * own saved mode: a session already in Chat only has never had vault access
+ * and just continues. One of the rules behind
+ * `SessionCoordinator.modeNeedsNewSession()`.
  */
 export function needsFreshSessionForChatOnly(
   newMode: PermissionMode,
@@ -67,13 +69,6 @@ export function needsFreshSessionForChatOnly(
 ): boolean {
   return newMode === 'restricted' && hasConversation && sessionMode !== 'restricted';
 }
-
-export const CHAT_ONLY_NEW_SESSION_NOTICE =
-  'Chat only needs a new session. Your previous session is in the Sessions panel.';
-
-/** Chat only picked while a reply is still running. */
-export const CHAT_ONLY_PENDING_NOTICE =
-  'Chat only needs a new session. It starts with your next message; this session stays in the Sessions panel.';
 
 /**
  * Attachments a mode can't send. Attaching anything from disk is a read —
