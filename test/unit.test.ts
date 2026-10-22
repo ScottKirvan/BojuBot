@@ -45,6 +45,7 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
+import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 
 // ---------------------------------------------------------------------------
@@ -3797,6 +3798,86 @@ describe('renamed commands', () => {
       assert.match(newId, /^bojubot:/);
       assert.ok(EXCLUDED_FROM_REFERENCE.has(oldId), oldId);
     }
+  });
+});
+
+// ── historyKeyAction (#401) ──────────────────────────────────────────────────
+
+describe('historyKeyAction', () => {
+  const base: HistoryKeyState = { length: 0, selectionStart: 0, selectionEnd: 0, browsing: false, hasHistory: true };
+  const at = (length: number, cursor: number, extra: Partial<HistoryKeyState> = {}): HistoryKeyState =>
+    ({ ...base, length, selectionStart: cursor, selectionEnd: cursor, ...extra });
+
+  test('↑ in an empty input recalls history', () => {
+    assert.equal(historyKeyAction('ArrowUp', base), 'step');
+  });
+
+  test('browsing an unedited entry: both keys step wherever the cursor is (direction changes need one press)', () => {
+    const browsing = { browsing: true, unedited: true };
+    assert.equal(historyKeyAction('ArrowUp', at(20, 20, browsing)), 'step', 'after ↓ the cursor is at the end');
+    assert.equal(historyKeyAction('ArrowDown', at(20, 0, browsing)), 'step', 'after ↑ the cursor is at the start');
+    assert.equal(historyKeyAction('ArrowUp', { ...at(20, 3, browsing), selectionEnd: 9 }), 'step', 'even with a selection');
+  });
+
+  test('browsing an edited entry: back to the cursor rule', () => {
+    const edited = { browsing: true, unedited: false };
+    assert.equal(historyKeyAction('ArrowUp', at(20, 20, edited)), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(20, 0, edited)), 'move');
+    assert.equal(historyKeyAction('ArrowUp', at(20, 0, edited)), 'step');
+  });
+
+  test('↑ with no history moves the cursor, even when empty', () => {
+    assert.equal(historyKeyAction('ArrowUp', { ...base, hasHistory: false }), 'move');
+    assert.equal(historyKeyAction('ArrowUp', at(10, 0, { hasHistory: false })), 'move');
+  });
+
+  test('↑ with the cursor at the very start of a draft recalls history', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(12, 0)), 'step');
+  });
+
+  test('↑ mid-text moves the cursor', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(12, 5)), 'move');
+    assert.equal(historyKeyAction('ArrowUp', at(12, 12)), 'move');
+  });
+
+  test('↑ anywhere past the start of wrapped single-line text moves the cursor', () => {
+    // A 300-character paragraph with no line breaks, cursor on the last wrapped row.
+    assert.equal(historyKeyAction('ArrowUp', at(300, 280)), 'move');
+    // Cursor on the first row but not at the start — the browser takes it to the start.
+    assert.equal(historyKeyAction('ArrowUp', at(300, 3)), 'move');
+  });
+
+  test('↑ with a selection moves the cursor, even one that starts at 0', () => {
+    assert.equal(historyKeyAction('ArrowUp', { ...base, length: 12, selectionStart: 0, selectionEnd: 4 }), 'move');
+    assert.equal(historyKeyAction('ArrowUp', { ...base, length: 12, selectionStart: 0, selectionEnd: 12 }), 'move');
+  });
+
+  test('↑ while browsing keeps stepping when the cursor is at the start', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(20, 0, { browsing: true })), 'step');
+  });
+
+  test('↑ while browsing a multi-row entry moves the cursor when not at the start', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(200, 150, { browsing: true })), 'move');
+  });
+
+  test('↓ when not browsing always moves the cursor', () => {
+    assert.equal(historyKeyAction('ArrowDown', base), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(12, 12)), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(12, 0)), 'move');
+  });
+
+  test('↓ while browsing steps forward with the cursor at the very end', () => {
+    assert.equal(historyKeyAction('ArrowDown', at(20, 20, { browsing: true })), 'step');
+    assert.equal(historyKeyAction('ArrowDown', at(0, 0, { browsing: true })), 'step');
+  });
+
+  test('↓ while browsing moves the cursor when not at the end', () => {
+    assert.equal(historyKeyAction('ArrowDown', at(20, 0, { browsing: true })), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(300, 40, { browsing: true })), 'move');
+  });
+
+  test('↓ while browsing with a selection reaching the end moves the cursor', () => {
+    assert.equal(historyKeyAction('ArrowDown', { ...base, length: 20, selectionStart: 5, selectionEnd: 20, browsing: true }), 'move');
   });
 });
 
