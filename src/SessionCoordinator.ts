@@ -108,33 +108,59 @@ export interface SessionCoordinatorEvents {
   'permission:denied': [denials: PermissionDenial[], hasPendingRequest: boolean];
 }
 
+// ── Session state ────────────────────────────────────────────────────────────
+
+/**
+ * Everything the coordinator knows about the session in the panel. Loading or
+ * starting a session replaces the whole object, never edits it, so a running
+ * turn keeps a reference to the session it started on and saves its result
+ * there even if the panel has moved on (#398).
+ */
+interface SessionState {
+  /** The agent's conversation ID; undefined until the first turn binds one. */
+  sessionId: string | undefined;
+  /** The BojuBot session file ID. */
+  fileId: string | undefined;
+  title: string | undefined;
+  createdAt: string | undefined;
+  backend: BackendId;
+  /** Chosen explicitly (Custom Session), so a change to the default backend doesn't move it. */
+  backendPinned: boolean;
+  cwd: string | undefined;
+  suppressVaultContext: boolean;
+  permissionMode: PermissionMode | undefined;
+  model: string | undefined;
+  effort: string | undefined;
+  rawSession: boolean;
+  hasCustomTitle: boolean;
+  /** Set while the session file exists but no turn has bound a conversation ID. */
+  placeholderId: string | undefined;
+}
+
+function emptySessionState(backend: BackendId): SessionState {
+  return {
+    sessionId: undefined, fileId: undefined, title: undefined, createdAt: undefined,
+    backend, backendPinned: false, cwd: undefined, suppressVaultContext: false,
+    permissionMode: undefined, model: undefined, effort: undefined, rawSession: false,
+    hasCustomTitle: false, placeholderId: undefined,
+  };
+}
+
 // ── SessionCoordinator ───────────────────────────────────────────────────────
 
 export class SessionCoordinator {
   private readonly _emitter = new EventEmitter();
 
-  // Session state
-  private _sessionId: string | undefined;
-  private _sessionFileId: string | undefined;
-  private _sessionTitle: string | undefined;
-  private _sessionCreatedAt: string | undefined;
-  private _backend: BackendId;
-  /** Chosen explicitly (Custom Session), so a change to the default backend doesn't move it. */
-  private _backendPinned = false;
-  private _sessionCwd: string | undefined;
-  private _suppressVaultContext = false;
-  private _sessionPermissionMode: PermissionMode | undefined;
-  private _sessionModel: string | undefined;
-  private _sessionEffort: string | undefined;
-  private _rawSession = false;
-  private _hasCustomTitle = false;
-  private _placeholderSessionId: string | undefined;
+  /** The session in the panel. Replaced (not mutated) when the panel switches session. */
+  private _s: SessionState;
   private _permissionOverride: PermissionMode | null = null;
   private _pendingSystemMessage: string | null = null;
   private _activeProc: ChildProcess | null = null;
+  /** stop() callers waiting for the running process to end. */
+  private _turnEndWaiters: Array<() => void> = [];
 
   constructor(private readonly host: SessionCoordinatorHost) {
-    this._backend = host.getDefaultBackend?.() ?? 'claude-code';
+    this._s = emptySessionState(host.getDefaultBackend?.() ?? 'claude-code');
   }
 
   // ── Typed event API ────────────────────────────────────────────────────────
@@ -164,40 +190,40 @@ export class SessionCoordinator {
 
   // ── State accessors ────────────────────────────────────────────────────────
 
-  get sessionId(): string | undefined { return this._sessionId; }
-  get sessionFileId(): string | undefined { return this._sessionFileId; }
-  get sessionTitle(): string | undefined { return this._sessionTitle; }
-  get sessionCreatedAt(): string | undefined { return this._sessionCreatedAt; }
-  get sessionCwd(): string | undefined { return this._sessionCwd; }
+  get sessionId(): string | undefined { return this._s.sessionId; }
+  get sessionFileId(): string | undefined { return this._s.fileId; }
+  get sessionTitle(): string | undefined { return this._s.title; }
+  get sessionCreatedAt(): string | undefined { return this._s.createdAt; }
+  get sessionCwd(): string | undefined { return this._s.cwd; }
   /** The agent CLI this session is bound to. */
-  get backendId(): BackendId { return this._backend; }
-  get backend(): AgentBackend { return this.host.getBackend(this._backend); }
-  get suppressVaultContext(): boolean { return this._suppressVaultContext; }
-  get sessionModel(): string | undefined { return this._sessionModel; }
-  get sessionEffort(): string | undefined { return this._sessionEffort; }
-  get rawSession(): boolean { return this._rawSession; }
+  get backendId(): BackendId { return this._s.backend; }
+  get backend(): AgentBackend { return this.host.getBackend(this._s.backend); }
+  get suppressVaultContext(): boolean { return this._s.suppressVaultContext; }
+  get sessionModel(): string | undefined { return this._s.model; }
+  get sessionEffort(): string | undefined { return this._s.effort; }
+  get rawSession(): boolean { return this._s.rawSession; }
 
   /** The `--effort` level for the next turn (session pin, then global default),
    *  or undefined when it's Default or the installed CLI doesn't list it. */
   getEffectiveEffort(): string | undefined {
-    return resolveEffort(this._sessionEffort, this.host.getEffort?.() ?? '', this.capabilities.effortLevels);
+    return resolveEffort(this._s.effort, this.host.getEffort?.() ?? '', this.capabilities.effortLevels);
   }
 
   /** Read fresh on every spawn so a probe that finishes mid-session applies from the next turn. */
   get capabilities(): CliCapabilities {
-    return this.host.getCliCapabilities?.(this._backend) ?? UNKNOWN_CAPABILITIES;
+    return this.host.getCliCapabilities?.(this._s.backend) ?? UNKNOWN_CAPABILITIES;
   }
 
   /** Session-level overrides (Custom Session) win over the global default, but a
    *  runtime denial-card upgrade (setPermissionOverride) always wins over both —
    *  it represents an explicit in-the-moment decision for the rest of the session. */
   getEffectivePermissionMode(): PermissionMode {
-    return this._permissionOverride ?? this._sessionPermissionMode ?? this.host.getPermissionMode();
+    return this._permissionOverride ?? this._s.permissionMode ?? this.host.getPermissionMode();
   }
 
   /** The model for the next turn: the session pin, then the backend's global default. */
   getEffectiveModel(): string | undefined {
-    return this._sessionModel || this.host.getModel(this._backend) || undefined;
+    return this._s.model || this.host.getModel(this._s.backend) || undefined;
   }
 
   setPermissionOverride(mode: PermissionMode | null): void {
@@ -242,22 +268,24 @@ export class SessionCoordinator {
     const effort = custom?.effort?.trim() || undefined;
     const rawSession = custom?.rawSession ?? false;
 
-    this._placeholderSessionId = sessionId;
-    this._sessionId = undefined;
-    this._sessionFileId = sessionId;
-    this._sessionTitle = title;
-    this._sessionCreatedAt = now;
-    this._sessionCwd = cwd;
-    this._suppressVaultContext = suppressVaultContext;
-    this._sessionPermissionMode = permissionMode;
-    this._sessionModel = model;
-    this._sessionEffort = effort;
-    this._rawSession = rawSession;
-    this._backend = custom?.backend ?? this.host.getDefaultBackend?.() ?? 'claude-code';
-    this._backendPinned = !!custom?.backend;
-    this._hasCustomTitle = !!custom?.name?.trim();
+    this._s = {
+      placeholderId: sessionId,
+      sessionId: undefined,
+      fileId: sessionId,
+      title,
+      createdAt: now,
+      cwd,
+      suppressVaultContext,
+      permissionMode,
+      model,
+      effort,
+      rawSession,
+      backend: custom?.backend ?? this.host.getDefaultBackend?.() ?? 'claude-code',
+      backendPinned: !!custom?.backend,
+      hasCustomTitle: !!custom?.name?.trim(),
+    };
 
-    const session = this._storedSession(sessionId, '', now);
+    const session = this._storedSession(this._s, sessionId, '', now);
     saveSessionAtTop(vaultRoot, session, this.host.getSessionsDir(), this.host.getConfigDir());
     void this.host.saveLastActiveSessionId(sessionId);
 
@@ -272,10 +300,10 @@ export class SessionCoordinator {
    * the session was reloaded.
    */
   renameActiveSession(sessionFileId: string, newTitle: string): void {
-    if (sessionFileId !== this._sessionFileId) return;
-    this._sessionTitle = newTitle;
-    this._hasCustomTitle = true;
-    this.emit('session:updated', { title: newTitle, sessionId: this._sessionId });
+    if (sessionFileId !== this._s.fileId) return;
+    this._s.title = newTitle;
+    this._s.hasCustomTitle = true;
+    this.emit('session:updated', { title: newTitle, sessionId: this._s.sessionId });
   }
 
   /**
@@ -284,7 +312,7 @@ export class SessionCoordinator {
    * the pin would silently override the switch. Persisted with the next turn's save.
    */
   switchSessionModel(modelId: string): void {
-    if (this._sessionModel) this._sessionModel = modelId;
+    if (this._s.model) this._s.model = modelId;
   }
 
   /**
@@ -293,7 +321,7 @@ export class SessionCoordinator {
    * pin, so the session follows the (now Default) global setting.
    */
   switchSessionEffort(level: string): void {
-    if (this._sessionEffort) this._sessionEffort = level || undefined;
+    if (this._s.effort) this._s.effort = level || undefined;
   }
 
   /**
@@ -302,37 +330,40 @@ export class SessionCoordinator {
    * CLI that holds its conversation. Returns true when the session moved.
    */
   followDefaultBackend(id: BackendId): boolean {
-    if (this._sessionId || this._backendPinned || !this._placeholderSessionId || this._backend === id) return false;
-    this._backend = id;
+    const s = this._s;
+    // A running first turn is already talking to the current backend.
+    if (this._activeProc) return false;
+    if (s.sessionId || s.backendPinned || !s.placeholderId || s.backend === id) return false;
+    s.backend = id;
     // A model pin belongs to the old backend's model list.
-    this._sessionModel = undefined;
+    s.model = undefined;
     const now = new Date().toISOString();
-    saveSession(this.host.getVaultRoot(), this._storedSession(this._placeholderSessionId, '', now), this.host.getSessionsDir());
+    saveSession(this.host.getVaultRoot(), this._storedSession(s, s.placeholderId, '', now), this.host.getSessionsDir());
     return true;
   }
 
   async loadSession(session: StoredSession): Promise<void> {
-    this._placeholderSessionId = undefined;
-    this._sessionId = session.claudeSessionId || undefined;
-    this._sessionFileId = session.id;
-    this._sessionTitle = session.title;
-    this._sessionCreatedAt = session.createdAt;
-    this._sessionCwd = session.cwd || undefined;
-    this._suppressVaultContext = session.suppressVaultContext ?? false;
-    this._sessionPermissionMode = session.permissionMode;
-    this._sessionModel = session.model;
-    this._sessionEffort = session.effort || undefined;
-    this._rawSession = session.rawSession ?? false;
-    this._backend = sessionBackend(session);
-    this._backendPinned = !!session.backend;
-    this._hasCustomTitle = false;
+    const isNew = !session.claudeSessionId;
+    this._s = {
+      placeholderId: isNew ? session.id : undefined,
+      sessionId: session.claudeSessionId || undefined,
+      fileId: session.id,
+      title: session.title,
+      createdAt: session.createdAt,
+      cwd: session.cwd || undefined,
+      suppressVaultContext: session.suppressVaultContext ?? false,
+      permissionMode: session.permissionMode,
+      model: session.model,
+      effort: session.effort || undefined,
+      rawSession: session.rawSession ?? false,
+      backend: sessionBackend(session),
+      backendPinned: !!session.backend,
+      hasCustomTitle: false,
+    };
 
     await this.host.saveLastActiveSessionId(session.id);
 
-    const isNew = !session.claudeSessionId;
     const canResume = hasReadableHistory(session, this.host.getSessionsDir());
-
-    if (isNew) this._placeholderSessionId = session.id;
 
     const messages: ChatMessage[] = canResume ? loadHistory(session, this.host.getSessionsDir()) : [];
 
@@ -357,6 +388,35 @@ export class SessionCoordinator {
   }
 
   /**
+   * Stop the running process and wait until it has ended — its turn finished
+   * and saved to the session it started on, and `turn:done` (or `turn:error`)
+   * already emitted. Resolves straight away when nothing is running. Never
+   * rejects, but never resolves if the process can't be ended — callers that
+   * must not hang add their own timeout.
+   */
+  stop(): Promise<void> {
+    if (!this._activeProc) return Promise.resolve();
+    const ended = new Promise<void>((resolve) => { this._turnEndWaiters.push(resolve); });
+    this.cancel();
+    return ended;
+  }
+
+  /** The process `proc` has ended. Ignored for a process that's no longer the active one. */
+  private _procEnded(proc: ChildProcess): boolean {
+    if (this._activeProc !== proc) return false;
+    this._activeProc = null;
+    return true;
+  }
+
+  /** Release stop() callers. Called after the turn's own events so the panel has
+   *  rendered the (partial) reply before a caller switches session. */
+  private _releaseTurnEndWaiters(): void {
+    const waiters = this._turnEndWaiters;
+    this._turnEndWaiters = [];
+    for (const w of waiters) w();
+  }
+
+  /**
    * Trigger the backend's native compact command (Claude Code's /compact) via a resumed turn.
    * Shares the busy guard and _activeProc tracking with send() — previously this
    * spawned its own untracked process directly from TokenGauge, so compacting
@@ -368,7 +428,7 @@ export class SessionCoordinator {
       onError('A turn is already in progress — wait for it to finish or cancel it first.');
       return;
     }
-    if (!this._sessionId) {
+    if (!this._s.sessionId) {
       onError('No active session to compact.');
       return;
     }
@@ -377,7 +437,7 @@ export class SessionCoordinator {
       onError(`${backend.displayName} doesn't support compacting a session.`);
       return;
     }
-    const binary = this.host.getBinaryPath(this._backend);
+    const binary = this.host.getBinaryPath(this._s.backend);
     if (!binary) {
       onError(`${backend.displayName} binary not found.`);
       return;
@@ -388,9 +448,9 @@ export class SessionCoordinator {
       proc = backend.spawnTurn({
         binaryPath: binary,
         prompt: backend.compactPrompt,
-        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
+        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), this._s.cwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
-        resumeSessionId: this._sessionId,
+        resumeSessionId: this._s.sessionId,
         permissionMode: this.getEffectivePermissionMode(),
         model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
@@ -403,8 +463,16 @@ export class SessionCoordinator {
 
     this._activeProc = proc;
     proc.stdout?.resume();
-    proc.on('close', () => { this._activeProc = null; onDone(); });
-    proc.on('error', (err) => { this._activeProc = null; onError(err.message); });
+    proc.on('close', () => {
+      if (!this._procEnded(proc)) return;
+      onDone();
+      this._releaseTurnEndWaiters();
+    });
+    proc.on('error', (err) => {
+      if (!this._procEnded(proc)) return;
+      onError(err.message);
+      this._releaseTurnEndWaiters();
+    });
   }
 
   /**
@@ -423,8 +491,11 @@ export class SessionCoordinator {
       return;
     }
 
+    // The session this turn runs for. Its result is saved here even if the panel
+    // has switched to another session by the time the turn ends (#398).
+    const turnSession = this._s;
     const backend = this.backend;
-    const binary = this.host.getBinaryPath(this._backend);
+    const binary = this.host.getBinaryPath(turnSession.backend);
     if (!binary) {
       this.emit('turn:error', `${backend.displayName} binary not found.`);
       return;
@@ -436,9 +507,9 @@ export class SessionCoordinator {
       proc = backend.spawnTurn({
         binaryPath: binary,
         prompt,
-        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), this._sessionCwd, this.host.getVaultRoot()),
+        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), turnSession.cwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
-        resumeSessionId: this._sessionId,
+        resumeSessionId: turnSession.sessionId,
         permissionMode: this.getEffectivePermissionMode(),
         model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
@@ -526,18 +597,20 @@ export class SessionCoordinator {
         this.emit('turn:stderr', err);
       },
       onDone: (sessionId, clean) => {
-        this._activeProc = null;
+        if (!this._procEnded(proc)) return;
         if (sessionId) {
-          this._persistSessionAfterTurn(sessionId, firstUserInput);
-          if (!backend.readableHistory) this._appendTranscript(prompt, transcriptReply);
+          this._persistSessionAfterTurn(turnSession, sessionId, firstUserInput);
+          if (!backend.readableHistory) this._appendTranscript(turnSession, prompt, transcriptReply);
         }
         this.emit('turn:done', { sessionId, clean, pendingQueries, pendingPermissionRequest });
+        this._releaseTurnEndWaiters();
       },
     });
 
     proc.on('error', (err) => {
-      this._activeProc = null;
+      if (!this._procEnded(proc)) return;
       this.emit('turn:error', err.message);
+      this._releaseTurnEndWaiters();
     });
   }
 
@@ -545,8 +618,8 @@ export class SessionCoordinator {
 
   /** Record a finished turn for backends whose own history BojuBot can't read.
    *  Best-effort: a failed write costs the replay, never the turn. */
-  private _appendTranscript(prompt: string, reply: string): void {
-    const fileId = this._sessionFileId;
+  private _appendTranscript(s: SessionState, prompt: string, reply: string): void {
+    const fileId = s.fileId;
     if (!fileId) return;
     try {
       appendTranscript(this.host.getSessionsDir(), fileId, transcriptEntries(prompt, reply, new Date().toISOString()));
@@ -558,11 +631,12 @@ export class SessionCoordinator {
   /** The session record as persisted. Optional fields are only written when set,
    *  so a plain Claude Code session's JSON is unchanged from before backends. */
   private _storedSession(
+    s: SessionState,
     id: string,
     claudeSessionId: string,
     updatedAt: string,
-    title = this._sessionTitle ?? 'Untitled session',
-    createdAt = this._sessionCreatedAt ?? updatedAt,
+    title = s.title ?? 'Untitled session',
+    createdAt = s.createdAt ?? updatedAt,
   ): StoredSession {
     return {
       id,
@@ -570,50 +644,57 @@ export class SessionCoordinator {
       createdAt,
       updatedAt,
       claudeSessionId,
-      ...(this._backend !== 'claude-code' && { backend: this._backend }),
-      ...(this._sessionCwd && { cwd: this._sessionCwd }),
-      ...(this._suppressVaultContext && { suppressVaultContext: true }),
-      ...(this._sessionPermissionMode && { permissionMode: this._sessionPermissionMode }),
-      ...(this._sessionModel && { model: this._sessionModel }),
-      ...(this._sessionEffort && { effort: this._sessionEffort }),
-      ...(this._rawSession && { rawSession: true }),
+      ...(s.backend !== 'claude-code' && { backend: s.backend }),
+      ...(s.cwd && { cwd: s.cwd }),
+      ...(s.suppressVaultContext && { suppressVaultContext: true }),
+      ...(s.permissionMode && { permissionMode: s.permissionMode }),
+      ...(s.model && { model: s.model }),
+      ...(s.effort && { effort: s.effort }),
+      ...(s.rawSession && { rawSession: true }),
     };
   }
 
-  private _persistSessionAfterTurn(sessionId: string, firstUserInput?: string): void {
+  /**
+   * Save a finished turn to the session `s` it ran for. When the panel has since
+   * moved to another session, `s` is no longer the panel's state: it's still
+   * updated and written to disk, but `session:updated` (which drives the
+   * panel's header) is not emitted.
+   */
+  private _persistSessionAfterTurn(s: SessionState, sessionId: string, firstUserInput?: string): void {
     const vaultRoot = this.host.getVaultRoot();
     const sessionsDir = this.host.getSessionsDir();
     const now = new Date().toISOString();
-    const wasNew = !this._sessionId;
+    const wasNew = !s.sessionId;
+    const inPanel = s === this._s;
 
-    if (this._placeholderSessionId) {
+    if (s.placeholderId) {
       // First turn on a placeholder session → bind the real Claude session ID
-      this._sessionId = sessionId;
-      if (firstUserInput && !this._hasCustomTitle) this._sessionTitle = titleFromPrompt(firstUserInput);
-      saveSession(vaultRoot, this._storedSession(this._placeholderSessionId, sessionId, now, this._sessionTitle ?? 'Untitled session', this._sessionCreatedAt ?? now), sessionsDir);
-      const placeholderId = this._placeholderSessionId;
-      this._placeholderSessionId = undefined;
-      this.emit('session:updated', { title: this._sessionTitle, sessionId });
+      s.sessionId = sessionId;
+      if (firstUserInput && !s.hasCustomTitle) s.title = titleFromPrompt(firstUserInput);
+      saveSession(vaultRoot, this._storedSession(s, s.placeholderId, sessionId, now, s.title ?? 'Untitled session', s.createdAt ?? now), sessionsDir);
+      const placeholderId = s.placeholderId;
+      s.placeholderId = undefined;
+      if (inPanel) this.emit('session:updated', { title: s.title, sessionId });
       this.emit('session:started', sessionId);
-      log('Placeholder session updated:', placeholderId, '→', sessionId);
+      log('Placeholder session updated:', placeholderId, '→', sessionId, inPanel ? '' : '(no longer in the panel)');
     } else if (wasNew && firstUserInput) {
       // Brand-new session with no pre-created placeholder.
       // In practice this branch is unreachable through the normal UI: startNewSession()
-      // always sets _placeholderSessionId, and loadSession() sets it for new sessions.
+      // always sets placeholderId, and loadSession() sets it for new sessions.
       // This is a defensive guard in case send() is called on an unconfigured coordinator.
-      this._sessionId = sessionId;
-      this._sessionFileId = sessionId;
-      this._sessionTitle = titleFromPrompt(firstUserInput);
-      this._sessionCreatedAt = now;
-      saveSession(vaultRoot, this._storedSession(sessionId, sessionId, now, this._sessionTitle, now), sessionsDir);
-      this.emit('session:updated', { title: this._sessionTitle, sessionId });
+      s.sessionId = sessionId;
+      s.fileId = sessionId;
+      s.title = titleFromPrompt(firstUserInput);
+      s.createdAt = now;
+      saveSession(vaultRoot, this._storedSession(s, sessionId, sessionId, now, s.title, now), sessionsDir);
+      if (inPanel) this.emit('session:updated', { title: s.title, sessionId });
       this.emit('session:started', sessionId);
-      log('Session saved:', sessionId, this._sessionTitle);
-    } else if (this._sessionId) {
+      log('Session saved:', sessionId, s.title);
+    } else if (s.sessionId) {
       // Continuing session — update the updatedAt timestamp
-      this._sessionId = sessionId;
-      const fileId = this._sessionFileId ?? this._sessionId;
-      saveSession(vaultRoot, this._storedSession(fileId, this._sessionId, now, this._sessionTitle ?? this._sessionId.substring(0, 8), this._sessionCreatedAt ?? now), sessionsDir);
+      s.sessionId = sessionId;
+      const fileId = s.fileId ?? s.sessionId;
+      saveSession(vaultRoot, this._storedSession(s, fileId, s.sessionId, now, s.title ?? s.sessionId.substring(0, 8), s.createdAt ?? now), sessionsDir);
     }
   }
 }

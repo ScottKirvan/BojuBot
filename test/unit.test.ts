@@ -3835,3 +3835,174 @@ describe('vaultTarget', () => {
     assert.equal(vaultTarget('file:///E:/vault/x.md', ''), null);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SessionCoordinator: switching session while a reply is running (#398)
+// ---------------------------------------------------------------------------
+
+describe('SessionCoordinator switching session mid-turn', () => {
+  /** A backend that hands each turn's mock process and stream callbacks to the test. */
+  function controllableHost(dir: string, base: AgentBackend = claudeCodeBackend) {
+    const procs: ReturnType<typeof mockProc>[] = [];
+    const streams: StreamCallbacks[] = [];
+    const spawns: TurnOptions[] = [];
+    const backend: AgentBackend = {
+      ...base,
+      spawnTurn: (opts) => { spawns.push(opts); const p = mockProc(); procs.push(p); return p; },
+      parseStream: (_proc, cb) => { streams.push(cb); },
+    };
+    const host = makeTestHost(dir, {
+      getBackend: () => backend,
+      getBinaryPath: () => 'C:\\cli.exe',
+      getDefaultBackend: () => base.id,
+    });
+    return { host, procs, streams, spawns };
+  }
+
+  const stored = (dir: string, id: string) => storedSessions(dir).find(s => s.id === id);
+
+  const sessionB = {
+    id: 'session-b', title: 'Session B', createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z', claudeSessionId: 'conv-b',
+  };
+
+  test('a first turn that ends after the panel switched binds the session it started on', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const fileA = coordinator.sessionFileId!;
+    coordinator.send('Summarise my notes', 'Summarise my notes');
+
+    saveSession(dir, sessionB, dir);
+    await coordinator.loadSession(sessionB);
+
+    const updates: unknown[] = [];
+    const started: string[] = [];
+    coordinator.on('session:updated', (u) => updates.push(u));
+    coordinator.on('session:started', (id) => started.push(id));
+    streams[0].onDone('conv-a', false);
+
+    assert.equal(stored(dir, fileA)?.claudeSessionId, 'conv-a');
+    assert.equal(stored(dir, fileA)?.title, 'Summarise my notes');
+    assert.equal(stored(dir, 'session-b')?.claudeSessionId, 'conv-b', 'the session switched to is untouched');
+    assert.equal(stored(dir, 'session-b')?.updatedAt, sessionB.updatedAt);
+    assert.equal(coordinator.sessionId, 'conv-b', 'the panel stays on the session it switched to');
+    assert.equal(coordinator.sessionFileId, 'session-b');
+    assert.equal(coordinator.sessionTitle, 'Session B');
+    assert.deepEqual(updates, [], 'no header update for a session no longer in the panel');
+    assert.deepEqual(started, ['conv-a'], 'the session still counts as started');
+  }));
+
+  test('a continuing turn that ends after the switch saves to its own session, not the loaded one', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    const sessionA = { ...sessionB, id: 'session-a', title: 'Session A', claudeSessionId: 'conv-a' };
+    saveSession(dir, sessionA, dir);
+    saveSession(dir, sessionB, dir);
+    await coordinator.loadSession(sessionA);
+    coordinator.send('more');
+    await coordinator.loadSession(sessionB);
+    streams[0].onDone('conv-a', true);
+
+    assert.notEqual(stored(dir, 'session-a')?.updatedAt, sessionA.updatedAt, 'session A was saved');
+    assert.equal(stored(dir, 'session-a')?.title, 'Session A');
+    assert.equal(stored(dir, 'session-b')?.updatedAt, sessionB.updatedAt, 'session B was not saved');
+    assert.equal(stored(dir, 'session-b')?.claudeSessionId, 'conv-b');
+    assert.equal(coordinator.sessionId, 'conv-b');
+  }));
+
+  test('an Antigravity turn writes its transcript to the session it started on', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir, antigravityBackend);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ backend: 'antigravity' });
+    const fileA = coordinator.sessionFileId!;
+    coordinator.send('hello', 'hello');
+    await coordinator.loadSession({ ...sessionB, backend: 'antigravity' });
+    streams[0].onText('Hi there.');
+    streams[0].onDone('agy-a', true);
+
+    assert.deepEqual(loadTranscript(dir, fileA).map(m => m.content), ['hello', 'Hi there.']);
+    assert.equal(existsSync(transcriptPath(dir, 'session-b')), false);
+  }));
+
+  test('the next turn after a switch resumes the loaded session, not the old one', withSessionsDir(async (dir) => {
+    const { host, streams, spawns } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('first', 'first');
+    await coordinator.loadSession(sessionB);
+    streams[0].onDone('conv-a', true);
+
+    coordinator.send('next');
+    assert.equal(spawns[0].resumeSessionId, undefined);
+    assert.equal(spawns[1].resumeSessionId, 'conv-b');
+  }));
+
+  test('stop() resolves straight away when nothing is running', withSessionsDir(async (dir) => {
+    const coordinator = new SessionCoordinator(controllableHost(dir).host);
+    coordinator.startNewSession();
+    await coordinator.stop();
+    assert.equal(coordinator.isBusy, false);
+  }));
+
+  test('stop() resolves only after the turn has ended, saved and emitted turn:done', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const fileA = coordinator.sessionFileId!;
+    coordinator.send('long question', 'long question');
+
+    const order: string[] = [];
+    coordinator.on('turn:done', (r) => order.push(`done:${r.clean}`));
+    const stopping = coordinator.stop().then(() => { order.push('stopped'); });
+
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, [], 'still waiting while the process runs');
+    assert.equal(coordinator.isBusy, true);
+
+    streams[0].onText('Partial ans');
+    streams[0].onDone('conv-a', false); // the killed process closes
+    await stopping;
+    assert.deepEqual(order, ['done:false', 'stopped']);
+    assert.equal(coordinator.isBusy, false);
+    assert.equal(stored(dir, fileA)?.claudeSessionId, 'conv-a', 'the stopped turn is saved to its session');
+  }));
+
+  test('stop() also resolves when the process fails instead of closing', withSessionsDir(async (dir) => {
+    const { host, procs } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const errors: string[] = [];
+    coordinator.on('turn:error', (e) => errors.push(e));
+    coordinator.send('q');
+    const stopping = coordinator.stop();
+    procs[0].emit('error', new Error('spawn failed'));
+    await stopping;
+    assert.deepEqual(errors, ['spawn failed']);
+    assert.equal(coordinator.isBusy, false);
+  }));
+
+  test('a close that follows a process error is ignored', withSessionsDir((dir) => {
+    const { host, procs, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const fileA = coordinator.sessionFileId!;
+    const done: unknown[] = [];
+    coordinator.on('turn:done', (r) => done.push(r));
+    coordinator.on('turn:error', () => { /* expected */ });
+    coordinator.send('q', 'q');
+    procs[0].emit('error', new Error('boom'));
+    streams[0].onDone('conv-late', false);
+    assert.deepEqual(done, []);
+    assert.equal(stored(dir, fileA)?.claudeSessionId, '');
+  }));
+
+  test('a new session does not follow a default-backend change while its first turn runs', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('hello', 'hello');
+    assert.equal(coordinator.followDefaultBackend('antigravity'), false);
+    assert.equal(coordinator.backendId, 'claude-code');
+  }));
+});
