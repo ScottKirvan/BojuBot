@@ -50,6 +50,7 @@ import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
+import { IDLE_STATUS, StatusEvent, nextStatus, displayStatus, statusNotice, STATUS_LABELS } from '../src/utils/sessionStatus';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -4520,6 +4521,92 @@ describe('parseChatPanelState', () => {
     assert.deepEqual(parseChatPanelState(undefined), {});
     assert.deepEqual(parseChatPanelState(null), {});
     assert.deepEqual(parseChatPanelState('x'), {});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live session status (#399)
+// ---------------------------------------------------------------------------
+
+describe('nextStatus / displayStatus', () => {
+  const run = (...events: StatusEvent[]) => events.reduce(nextStatus, IDLE_STATUS);
+
+  test('a turn shows as replying', () => {
+    assert.equal(displayStatus(run({ type: 'turn-start' })), 'running');
+  });
+
+  test('a reply seen as it arrives leaves nothing to flag', () => {
+    assert.equal(displayStatus(run({ type: 'turn-start' }, { type: 'turn-end', visible: true })), 'idle');
+  });
+
+  test('a reply that arrives out of sight is finished until viewed', () => {
+    const s = run({ type: 'turn-start' }, { type: 'turn-end', visible: false });
+    assert.equal(displayStatus(s), 'finished');
+    assert.equal(displayStatus(nextStatus(s, { type: 'viewed' })), 'idle');
+  });
+
+  test('an error out of sight stays until viewed; a seen error clears', () => {
+    const s = run({ type: 'turn-start' }, { type: 'turn-end', visible: false, error: true });
+    assert.equal(displayStatus(s), 'error');
+    assert.equal(displayStatus(nextStatus(s, { type: 'viewed' })), 'idle');
+    assert.equal(displayStatus(run({ type: 'turn-start' }, { type: 'turn-end', visible: true, error: true })), 'idle');
+  });
+
+  test('viewing a running session changes nothing', () => {
+    assert.equal(displayStatus(run({ type: 'turn-start' }, { type: 'viewed' })), 'running');
+  });
+
+  test('a dialog waiting for the user wins over everything until it closes', () => {
+    const s = run({ type: 'turn-start' }, { type: 'wait-start' });
+    assert.equal(displayStatus(s), 'waiting');
+    assert.equal(displayStatus(nextStatus(s, { type: 'wait-end' })), 'running');
+  });
+
+  test('a permission request after the turn ends: waiting, then idle once answered', () => {
+    const s = run({ type: 'turn-start' }, { type: 'wait-start' }, { type: 'turn-end', visible: false });
+    assert.equal(displayStatus(s), 'waiting');
+    assert.equal(displayStatus(nextStatus(s, { type: 'wait-end' })), 'finished');
+  });
+
+  test('nested dialogs count: waiting until the last one closes; never below zero', () => {
+    const s = run({ type: 'wait-start' }, { type: 'wait-start' }, { type: 'wait-end' });
+    assert.equal(displayStatus(s), 'waiting');
+    const done = run({ type: 'wait-end' }, { type: 'wait-end' });
+    assert.equal(done.waiting, 0);
+  });
+
+  test('a denial card waits until answered, dismissed, or the next turn starts', () => {
+    const shown = run({ type: 'turn-start' }, { type: 'denial-shown' }, { type: 'turn-end', visible: true });
+    assert.equal(displayStatus(shown), 'waiting');
+    assert.equal(displayStatus(nextStatus(shown, { type: 'denial-resolved' })), 'idle');
+    assert.equal(displayStatus(nextStatus(shown, { type: 'turn-start' })), 'running');
+  });
+
+  test('switching session clears an unseen reply and a denial card', () => {
+    const s = run({ type: 'turn-start' }, { type: 'denial-shown' }, { type: 'turn-end', visible: false }, { type: 'reset' });
+    assert.equal(displayStatus(s), 'idle');
+  });
+});
+
+describe('statusNotice', () => {
+  test('a session out of sight that needs the user, finishes or fails', () => {
+    assert.equal(statusNotice('running', 'waiting', false, 'Vault cleanup'), 'Vault cleanup is waiting for you');
+    assert.equal(statusNotice('running', 'finished', false, 'Draft'), 'Draft finished');
+    assert.equal(statusNotice('running', 'error', false, 'Draft'), 'Draft stopped with an error');
+  });
+
+  test('nothing for a visible session, an unchanged status, or replying / idle', () => {
+    assert.equal(statusNotice('running', 'finished', true, 'Draft'), null);
+    assert.equal(statusNotice('waiting', 'waiting', false, 'Draft'), null);
+    assert.equal(statusNotice('idle', 'running', false, 'Draft'), null);
+    assert.equal(statusNotice('finished', 'idle', false, 'Draft'), null);
+  });
+});
+
+describe('STATUS_LABELS', () => {
+  test('every visible status has a label; idle has none', () => {
+    assert.equal(STATUS_LABELS.idle, '');
+    for (const s of ['running', 'waiting', 'finished', 'error'] as const) assert.ok(STATUS_LABELS[s].length > 0, s);
   });
 });
 

@@ -31,6 +31,8 @@ export interface UIBridgeOptions {
   onSetLabel?: (userLabel: string, assistantLabel: string) => void;
   /** The user thanked the agent (#385). */
   onThanked?: () => void;
+  /** A dialog asking the user opened (true) or closed (false), for the session's live status (#399). */
+  onAwaitUser?: (waiting: boolean) => void;
 }
 
 class ConfirmCommandModal extends Modal {
@@ -294,9 +296,11 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
         log('UIBridge: run-command hard-blocked by denylist:', commandId);
       } else if (confirmUnlistedCommands) {
         // Neither list — prompt
+        options.onAwaitUser?.(true);
         const { allow, remember } = await new Promise<{ allow: boolean; remember: boolean }>(resolve => {
           new ConfirmCommandModal(app, displayName, resolve).open();
         });
+        options.onAwaitUser?.(false);
         if (allow) {
           if (remember && onAddToAllowlist) await onAddToAllowlist(commandId);
           const executed = appInternal.commands.executeCommandById(commandId);

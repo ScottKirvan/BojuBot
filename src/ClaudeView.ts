@@ -6,6 +6,7 @@ import signatureUrl from '../assets/media/signature.png';
 
 import { AppInternal, LeafInternal } from './obsidianInternal';
 import { ChatPanelState, parseChatPanelState } from './utils/chatPanels';
+import { IDLE_STATUS, SessionStatus, StatusEvent, StatusState, displayStatus, nextStatus } from './utils/sessionStatus';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
 import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
@@ -241,6 +242,7 @@ export class ClaudeView extends ItemView {
       this.currentAssistantLabel = this.plugin.brand.name;
       this.attachmentHandler.reset();
       // Custom session state is set before this event fires — don't clear it here
+      this.applyStatus({ type: 'reset' });
       this.messagesEl.empty();
       this.renderWelcomeScreen();
       this.updateExportBtn();
@@ -357,7 +359,10 @@ export class ClaudeView extends ItemView {
       this.appendMessage('system', `stderr: ${err.trim()}`);
     });
 
+    this.coordinator.on('turn:start', () => this.applyStatus({ type: 'turn-start' }));
+
     this.coordinator.on('turn:error', (err) => {
+      this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: true });
       if (!this._activeTurnEls) return;
       const { statusEl, assistantEl, unlock } = this._activeTurnEls;
       this.cancelTextFrame(this._activeTurnEls);
@@ -374,7 +379,10 @@ export class ClaudeView extends ItemView {
     });
 
     this.coordinator.on('turn:done', (result) => {
-      if (!this._activeTurnEls) return;
+      if (!this._activeTurnEls) {
+        this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this) });
+        return;
+      }
       const {
         assistantEl, statusEl, toolEventsEl, responseGroupEl,
         toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError, thanked,
@@ -429,6 +437,14 @@ export class ClaudeView extends ItemView {
       this.updateSessionStatus();
       // The turn moved the session's last-active time
       this.plugin.refreshSessionsViews();
+
+      // Live status (#399): a vault-query follow-up keeps the session replying;
+      // a permission request waits for the user before the turn counts as ended.
+      const continues = !this._stoppingForSwitch && !isInjectTurn && result.pendingQueries.some(q => q.mode === 'inject');
+      if (!continues) {
+        if (!this._stoppingForSwitch && result.pendingPermissionRequest) this.applyStatus({ type: 'wait-start' });
+        this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: !!apiError || this.isAuthError(accumulated) });
+      }
 
       // Stopped so the panel can switch session: no follow-up turn in this one.
       if (this._stoppingForSwitch) {
@@ -613,6 +629,41 @@ export class ClaudeView extends ItemView {
 
     // Show welcome screen if no session was loaded
     if (this.messagesEl.childElementCount === 0) this.renderWelcomeScreen();
+  }
+
+  // ── Live status (#399) ─────────────────────────────────────────────────────
+
+  private status: StatusState = IDLE_STATUS;
+
+  /** What this panel's session is doing: replying, waiting for the user, an unseen reply or error. */
+  get sessionStatus(): SessionStatus {
+    return displayStatus(this.status);
+  }
+
+  private applyStatus(event: StatusEvent): void {
+    const prev = displayStatus(this.status);
+    this.status = nextStatus(this.status, event);
+    const next = displayStatus(this.status);
+    if (prev === next) return;
+    this.renderTabStatus(next);
+    this.plugin.onChatStatusChanged(this, prev, next);
+  }
+
+  /** The panel is on screen: a finished reply or error counts as seen. */
+  markViewed(): void {
+    if (this.plugin.isChatVisible(this)) this.applyStatus({ type: 'viewed' });
+  }
+
+  onResize(): void {
+    this.markViewed();
+  }
+
+  /** Status dot on the tab (styled from the attribute; see styles.css). */
+  private renderTabStatus(status: SessionStatus): void {
+    const header = (this.leaf as unknown as LeafInternal).tabHeaderEl;
+    if (!header) return;
+    if (status === 'idle') header.removeAttribute('data-bojubot-status');
+    else header.setAttribute('data-bojubot-status', status);
   }
 
   /** Redraw the model and effort indicators (a global default changed). */
@@ -1361,6 +1412,7 @@ export class ClaudeView extends ItemView {
           await this.plugin.saveSettings();
         }
       },
+      onAwaitUser: (waiting: boolean) => this.applyStatus({ type: waiting ? 'wait-start' : 'wait-end' }),
       onThanked: () => {
         if (this._activeTurnEls) this._activeTurnEls.thanked = true;
       },
@@ -1456,6 +1508,7 @@ export class ClaudeView extends ItemView {
   }
 
   async loadSession(session: StoredSession) {
+    this.applyStatus({ type: 'reset' });
     this.dropPendingSessionState();
     this.chatOnlyFreshSessionPending = false;
     this.currentUserLabel = session.userLabel ?? 'User';
@@ -2109,6 +2162,7 @@ export class ClaudeView extends ItemView {
     // The request belongs to the session open now; the answer must never reach another one.
     const requestSessionId = this.coordinator.sessionFileId;
     void promptPermissionRequest(this.app, request.tool, request.reason).then(granted => {
+      this.applyStatus({ type: 'wait-end' });
       unlock();
       if (this.coordinator.sessionFileId !== requestSessionId) {
         log('Permission request answered after its session closed — ignored');
@@ -2142,6 +2196,8 @@ export class ClaudeView extends ItemView {
       const upgradeMsg = currentMode === 'restricted'
         ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`
         : (toolList: string) => `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
+      // The card offers a choice: the session is waiting for the user until it's answered
+      this.applyStatus({ type: 'denial-shown' });
       const btnRow = card.createDiv({ cls: 'bojubot-permission-btn-row' });
       const upgradeBtn = btnRow.createEl('button', {
         cls: 'mod-cta',
@@ -2158,6 +2214,7 @@ export class ClaudeView extends ItemView {
         this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
+        this.applyStatus({ type: 'denial-resolved' });
         const toolList = [...new Set(denials.map(d => d.tool))].join(', ');
         this.inputEl.value = upgradeMsg(toolList);
         void this.handleSend();
@@ -2175,7 +2232,10 @@ export class ClaudeView extends ItemView {
         cls: 'bojubot-permission-dismiss',
         text: 'Dismiss',
       });
-      dismissBtn.addEventListener('click', () => card.remove());
+      dismissBtn.addEventListener('click', () => {
+        card.remove();
+        this.applyStatus({ type: 'denial-resolved' });
+      });
     }
     this.scrollToBottom();
   }
