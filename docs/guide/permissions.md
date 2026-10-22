@@ -18,7 +18,7 @@ The same picker is available from the Command Palette: **BojuBot: Change permiss
 ## The mode belongs to the session
 
 - **A new session starts in your default mode** and saves it. The default is set in **Settings → BojuBot → Default permission mode**. Changing the default there doesn't change any session that already exists, including the one open in the panel.
-- **The picker changes the open session only.** The mode you pick is saved with that session, and it also becomes the default for new sessions. Other sessions keep their own modes.
+- **The picker changes the open session only.** The mode you pick is saved with that session, and it also becomes the default for new sessions. Other sessions keep their own modes, including the ones open in other [chat tabs](./sessions#several-sessions-at-once).
 - **Opening a session never changes what it's allowed to do.** It opens in the mode it was saved with, whatever the picker showed before. Sessions from older versions of BojuBot, which didn't save a mode, open in **Standard** (and that's saved).
 - **Nothing carries over when you switch sessions.** Opening, starting or clearing a session drops anything waiting to be sent with the previous session's next message: attachments in the input area (pinned ones too), a queued **Refresh context**, notes about permission or allowlist changes, and Custom Session setup that hadn't been sent yet.
 

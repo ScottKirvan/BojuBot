@@ -49,6 +49,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
+import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2947,6 +2948,28 @@ describe('SessionCoordinator session-owned permission mode', () => {
     assert.deepEqual(noted, [started, 'a']);
   }));
 
+  test('two chat tabs keep their own modes: a change in one never reaches the other (#399)', withSessionsDir(async (dir) => {
+    let defaultMode: 'standard' | 'full' = 'standard';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'readonly' }), dir);
+    const tabA = new SessionCoordinator(host);
+    const tabB = new SessionCoordinator(host);
+    await tabA.loadSession(readSessionFile(dir, 'a'));
+    await tabB.loadSession(readSessionFile(dir, 'b'));
+
+    // Tab A's picker: A's session changes, and the default moves with it
+    tabA.setSessionPermissionMode('full');
+    defaultMode = 'full';
+    assert.equal(tabB.getEffectivePermissionMode(), 'readonly');
+    tabB.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'readonly');
+    // A card in tab B can't name tab A's session
+    assert.equal(tabB.setSessionPermissionMode('standard', tabA.sessionFileId), false);
+    assert.equal(tabA.getEffectivePermissionMode(), 'full');
+  }));
+
   test('changing the mode leaves the session\'s last-active time alone', withSessionsDir(async (dir) => {
     const updatedAt = '2026-01-01T00:00:00.000Z';
     saveSession(dir, storedSession('a', { permissionMode: 'standard', updatedAt }), dir);
@@ -4396,6 +4419,107 @@ describe('loadSessionFile', () => {
     assert.equal(loadSessionFile(dir, 'two'), undefined);
     writeFileSync(join(dir, 'bad.json'), '{ nope');
     assert.equal(loadSessionFile(dir, 'bad'), undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat tabs (#399)
+// ---------------------------------------------------------------------------
+
+describe('pickTargetPanel', () => {
+  test('the panel used most recently', () => {
+    assert.equal(pickTargetPanel([
+      { panel: 'a', lastActive: 100 },
+      { panel: 'b', lastActive: 300 },
+      { panel: 'c', lastActive: 200 },
+    ]), 'b');
+  });
+
+  test('panels never used count as oldest; ties go to the first listed', () => {
+    assert.equal(pickTargetPanel([{ panel: 'a', lastActive: 0 }, { panel: 'b', lastActive: 0 }]), 'a');
+    assert.equal(pickTargetPanel([{ panel: 'a', lastActive: 0 }, { panel: 'b', lastActive: 5 }]), 'b');
+    assert.equal(pickTargetPanel([{ panel: 'a', lastActive: 5 }, { panel: 'b', lastActive: 5 }]), 'a');
+  });
+
+  test('no panels → undefined', () => {
+    assert.equal(pickTargetPanel([]), undefined);
+  });
+});
+
+describe('panelForSession', () => {
+  const panels = [
+    { panel: 'a', lastActive: 0, sessionFileId: 's1' },
+    { panel: 'b', lastActive: 0, sessionFileId: 's2' },
+    { panel: 'c', lastActive: 0 },
+  ];
+
+  test('finds the panel showing the session', () => {
+    assert.equal(panelForSession(panels, 's2'), 'b');
+  });
+
+  test('ignores the excluded panel and panels without a session', () => {
+    assert.equal(panelForSession(panels, 's1', 'a'), undefined);
+    assert.equal(panelForSession(panels, 'nope'), undefined);
+  });
+});
+
+describe('planOpenSession', () => {
+  test('a session already open is revealed where it is, even with a free panel or a forced new tab', () => {
+    assert.deepEqual(planOpenSession({ openIn: 'x', preferred: 'y', preferredReusable: true }), { kind: 'reveal', panel: 'x' });
+    assert.deepEqual(planOpenSession({ openIn: 'x', preferred: 'y', preferredReusable: true, forceNewTab: true }), { kind: 'reveal', panel: 'x' });
+  });
+
+  test('loads into a free preferred panel', () => {
+    assert.deepEqual(planOpenSession({ preferred: 'y', preferredReusable: true }), { kind: 'load', panel: 'y' });
+  });
+
+  test('a busy or used preferred panel keeps its session: new tab', () => {
+    assert.deepEqual(planOpenSession({ preferred: 'y', preferredReusable: false }), { kind: 'new-tab' });
+  });
+
+  test('forced new tab, or no panel at all → new tab', () => {
+    assert.deepEqual(planOpenSession({ preferred: 'y', preferredReusable: true, forceNewTab: true }), { kind: 'new-tab' });
+    assert.deepEqual(planOpenSession({ preferredReusable: false }), { kind: 'new-tab' });
+  });
+});
+
+describe('planNewSession', () => {
+  test('a running reply keeps running: new tab', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: true, pristine: false }), { kind: 'new-tab' });
+  });
+
+  test('no panel, or a forced new tab → new tab', () => {
+    assert.deepEqual(planNewSession({ busy: false, pristine: false }), { kind: 'new-tab' });
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: true, forceNewTab: true }), { kind: 'new-tab' });
+  });
+
+  test('an untouched new session is reused as it is', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: true }), { kind: 'reuse', panel: 't' });
+  });
+
+  test('custom settings always start a fresh session, even in an untouched panel', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: true, custom: true }), { kind: 'start', panel: 't' });
+  });
+
+  test('a panel with a conversation starts a new session in place', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: false }), { kind: 'start', panel: 't' });
+  });
+});
+
+describe('parseChatPanelState', () => {
+  test('keeps a session ID and the blank flag', () => {
+    assert.deepEqual(parseChatPanelState({ sessionFileId: 'abc', blank: true }), { sessionFileId: 'abc', blank: true });
+  });
+
+  test('ignores wrong types, empty IDs and unknown keys', () => {
+    assert.deepEqual(parseChatPanelState({ sessionFileId: 5, blank: 'yes', other: 1 }), {});
+    assert.deepEqual(parseChatPanelState({ sessionFileId: '' }), {});
+  });
+
+  test('missing or non-object state → empty', () => {
+    assert.deepEqual(parseChatPanelState(undefined), {});
+    assert.deepEqual(parseChatPanelState(null), {});
+    assert.deepEqual(parseChatPanelState('x'), {});
   });
 });
 
