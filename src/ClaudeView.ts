@@ -27,6 +27,7 @@ import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
+import { repairLinks } from './utils/linkRepair';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
 import { historyKeyAction } from './utils/inputHistory';
@@ -404,9 +405,10 @@ export class ClaudeView extends ItemView {
       } else if (this.isAuthError(accumulated)) {
         this.renderAuthError(assistantEl);
       } else {
-        assistantEl.dataset.markdown = accumulated;
+        const repaired = this.repairLinks(accumulated);
+        assistantEl.dataset.markdown = repaired;
         assistantEl.empty();
-        void MarkdownRenderer.render(this.app, this.addHardLineBreaks(accumulated), assistantEl, '', this);
+        void MarkdownRenderer.render(this.app, this.addHardLineBreaks(repaired), assistantEl, '', this);
         this.wireInternalLinks(assistantEl);
       }
       if (result.pendingQueries.length > 0) {
@@ -1308,7 +1310,7 @@ export class ClaudeView extends ItemView {
             }
           } else {
             const el = this.appendMessage('assistant', '');
-            const clean = this.cleanContent(msg.content);
+            const clean = this.repairLinks(this.cleanContent(msg.content));
             el.dataset.markdown = clean;
             await MarkdownRenderer.render(this.app, this.addHardLineBreaks(clean), el, '', this);
             this.wireInternalLinks(el);
@@ -2124,6 +2126,15 @@ export class ClaudeView extends ItemView {
    */
   private cleanContent(content: string): string {
     return extractActions(content).clean;
+  }
+
+  /** Repair links an agent wrote in a form Obsidian can't follow (#400) —
+   *  display only; stored transcripts and CLI history keep the original. */
+  private repairLinks(markdown: string): string {
+    return repairLinks(markdown, {
+      vaultRoot: this.plugin.getVaultRoot(),
+      noteExists: (linkpath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, '') !== null,
+    });
   }
 
   /** Convert single newlines to hard line breaks (two trailing spaces) outside
