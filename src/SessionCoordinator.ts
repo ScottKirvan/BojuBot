@@ -11,6 +11,7 @@ import {
   ChatMessage,
   saveSession,
   saveSessionAtTop,
+  loadSessionFile,
   updateStoredSession,
   hasReadableHistory,
   loadHistory,
@@ -24,6 +25,7 @@ import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
 import { resolveEffort } from './utils/effort';
 import { composeStreamingText } from './utils/streamPreview';
+import { preserveUserFields } from './utils/sessionList';
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -250,7 +252,7 @@ export class SessionCoordinator {
       // A patch, so the session's last-active time and user fields stay as they are
       if (!updateStoredSession(this.host.getSessionsDir(), fileId, { permissionMode: mode })) {
         const now = new Date().toISOString();
-        saveSession(this.host.getVaultRoot(), this._storedSession(s, fileId, s.sessionId ?? '', now), this.host.getSessionsDir());
+        this._save(this._storedSession(s, fileId, s.sessionId ?? '', now));
       }
     } catch (e) {
       log('Saving the session permission mode failed:', e instanceof Error ? e.message : String(e));
@@ -369,7 +371,7 @@ export class SessionCoordinator {
     // A model pin belongs to the old backend's model list.
     s.model = undefined;
     const now = new Date().toISOString();
-    saveSession(this.host.getVaultRoot(), this._storedSession(s, s.placeholderId, '', now), this.host.getSessionsDir());
+    this._save(this._storedSession(s, s.placeholderId, '', now));
     return true;
   }
 
@@ -718,9 +720,14 @@ export class SessionCoordinator {
    * updated and written to disk, but `session:updated` (which drives the
    * panel's header) is not emitted.
    */
-  private _persistSessionAfterTurn(s: SessionState, sessionId: string, firstUserInput?: string): void {
-    const vaultRoot = this.host.getVaultRoot();
+  /** Save a rebuilt record, keeping the user's own fields (drag order, pin,
+   *  name labels) from the file on disk, which the record doesn't carry. */
+  private _save(session: StoredSession): void {
     const sessionsDir = this.host.getSessionsDir();
+    saveSession(this.host.getVaultRoot(), preserveUserFields(session, loadSessionFile(sessionsDir, session.id)), sessionsDir);
+  }
+
+  private _persistSessionAfterTurn(s: SessionState, sessionId: string, firstUserInput?: string): void {
     const now = new Date().toISOString();
     const wasNew = !s.sessionId;
     const inPanel = s === this._s;
@@ -729,7 +736,7 @@ export class SessionCoordinator {
       // First turn on a placeholder session → bind the real Claude session ID
       s.sessionId = sessionId;
       if (firstUserInput && !s.hasCustomTitle) s.title = titleFromPrompt(firstUserInput);
-      saveSession(vaultRoot, this._storedSession(s, s.placeholderId, sessionId, now, s.title ?? 'Untitled session', s.createdAt ?? now), sessionsDir);
+      this._save(this._storedSession(s, s.placeholderId, sessionId, now, s.title ?? 'Untitled session', s.createdAt ?? now));
       const placeholderId = s.placeholderId;
       s.placeholderId = undefined;
       if (inPanel) this.emit('session:updated', { title: s.title, sessionId });
@@ -744,7 +751,7 @@ export class SessionCoordinator {
       s.fileId = sessionId;
       s.title = titleFromPrompt(firstUserInput);
       s.createdAt = now;
-      saveSession(vaultRoot, this._storedSession(s, sessionId, sessionId, now, s.title, now), sessionsDir);
+      this._save(this._storedSession(s, sessionId, sessionId, now, s.title, now));
       if (inPanel) this.emit('session:updated', { title: s.title, sessionId });
       this.emit('session:started', sessionId);
       log('Session saved:', sessionId, s.title);
@@ -752,7 +759,7 @@ export class SessionCoordinator {
       // Continuing session — update the updatedAt timestamp
       s.sessionId = sessionId;
       const fileId = s.fileId ?? s.sessionId;
-      saveSession(vaultRoot, this._storedSession(s, fileId, s.sessionId, now, s.title ?? s.sessionId.substring(0, 8), s.createdAt ?? now), sessionsDir);
+      this._save(this._storedSession(s, fileId, s.sessionId, now, s.title ?? s.sessionId.substring(0, 8), s.createdAt ?? now));
     }
   }
 }

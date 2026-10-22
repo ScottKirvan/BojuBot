@@ -39,44 +39,60 @@ A pinned model isn't locked in: switching models from the [model picker](./chat-
 
 ---
 
-## Session Manager
+## Sessions Panel
 
-Open the session manager by clicking the **session name** in the panel toolbar, or via **BojuBot: Show session history** in the Command Palette.
+The **Sessions** panel lists every saved session. It opens in the left sidebar, next to the file explorer, and stays open while you chat, so you can jump between sessions without opening a dialog each time. Like any Obsidian sidebar panel, you can drag its tab to the other sidebar or into the main area.
 
-![](images/session_manager.png)
+Open it by clicking the **session name** in the chat toolbar, **More…** under the welcome screen's recent sessions, `/` → **Show sessions** in the chat, or **BojuBot: Show sessions panel** in the Command Palette.
 
-The small icon before each session shows which agent it runs on: the Claude mark for Claude Code, the Gemini sparkle for Antigravity (hover it for the name). A session always stays on its agent, so opening it switches to that agent. The welcome screen's recent-sessions list shows the same icons. See [Choosing an Agent](./agents).
-## Actions
+### Rows
 
-| Action               | How                                                           |
-| -------------------- | ------------------------------------------------------------- |
-| **Resume a session** | Click any row                                                 |
-| **Save to vault**    | Hover a row → click the **download icon** → enter export path |
-| **Rename**           | Click the **pencil icon** → edit inline → Enter or click away |
-| **Delete**           | Click the **trash icon** → confirm                            |
-| **Reorder**          | Drag the ⠿ grip handle up or down                             |
-| **Filter**           | Type in the search box at the top                             |
+Each session takes two lines:
 
-Sessions with a locally-cached transcript show an estimated token count (e.g. "2.1k tokens"), with a "+context" figure alongside it — the estimated size of the context (vault tree, context file, orientation, etc.) a brand-new session would inject at start under your current settings. Sessions with no local transcript (New / Remote) show neither. Hover either number for details.
+- **The title** on top (a pin icon in front when it's pinned).
+- **The agent and model** below, in small text: the agent's icon (the Claude mark for Claude Code, the Gemini sparkle for Antigravity), the agent and model names, and when the session was last active ("5m ago", "yesterday", "Mar 4").
 
-## Active Session
+Hover a row for the details that don't fit on it: the full last-active date and time, an estimated token count of its saved history (with a "+context" figure: the estimated context a brand-new session would start with under your current settings), and whether it's **New** (no messages yet) or **Remote** (its history isn't on this machine, for example a session from another computer; Remote rows are dimmed).
 
-The currently open session is marked with an accent-coloured left border and bold title.
+A session always stays on its agent, so opening it switches to that agent. See [Choosing an Agent](./agents).
+
+### Groups
+
+Sessions are grouped by when they were last active: **Today**, **This week** (the past seven days) and **Older**. **Pinned** sessions sit above all of them.
+
+### Actions
+
+| Action               | How                                                                  |
+| -------------------- | -------------------------------------------------------------------- |
+| **Open a session**   | Click its row (or select it and press **Enter**)                     |
+| **New session**      | Click the **+** button next to the filter                            |
+| **Filter**           | Type in the filter box at the top                                    |
+| **Rename**           | Right-click the row, or click **⋯** → **Rename** → edit → **Enter**  |
+| **Pin / Unpin**      | Right-click or **⋯** → **Pin** keeps the session at the top          |
+| **Save to vault**    | Right-click or **⋯** → **Save to vault** → enter the export path     |
+| **Delete**           | Right-click or **⋯** → **Delete** → confirm                          |
+| **Reorder**          | Drag a row up or down within its group                               |
+
+### Active session
+
+The session open in the chat panel is highlighted, with an accent-coloured left edge and a bold title.
 
 ## Storage Location
 
 Sessions are stored as JSON files in `.obsidian/bojubot/sessions/` by default (gitignored). You can change this to a vault-relative or absolute path in **Settings → BojuBot → Session storage path** — for example, to track sessions in git alongside your notes.
 
 ::: warning
-Changing the storage path only affects new sessions. Existing sessions stay where they are and won't appear in the manager until you switch back. Move the `.json` files manually if you want to bring them along.
+Changing the storage path only affects new sessions. Existing sessions stay where they are and won't appear in the Sessions panel until you switch back. Move the `.json` files manually if you want to bring them along.
 :::
 
 ## Sort Order
 
-Sessions are listed most-recent-first by default. Once you drag any row, that order is saved and persists across restarts. New sessions are always inserted at the top of the list — drag them into position afterwards.
+Inside each group, sessions are listed most-recent-first by default. Once you drag any row, that order is saved and persists across restarts. New sessions are always inserted at the top of the list.
+
+A session can only be dragged within its own group: to move a session to the top, pin it.
 
 ::: tip
-Drag handles are hidden while the search filter is active — filtering shows a subset, so reordering would produce confusing results.
+Dragging is turned off while the filter is active. Filtering shows a subset, so reordering would produce confusing results.
 :::
 
 ---
@@ -88,8 +104,8 @@ Understanding when tokens are spent helps you use BojuBot efficiently.
 | Action                                    | Token cost     | Notes                                             |
 | ----------------------------------------- | -------------- | ------------------------------------------------- |
 | Opening the panel                         | Free           | No API call                                       |
-| Switching sessions in History             | Free           | Local disk read only                              |
-| Browsing session history                  | Free           | All local                                         |
+| Switching sessions in the Sessions panel  | Free           | Local disk read only                              |
+| Browsing the Sessions panel               | Free           | All local                                         |
 | **First message of a new session**        | **Full price** | Context injection + prompt; cache created         |
 | **Continuing a session (within ~1 hour)** | **Cheap**      | History from prompt cache (~10× cheaper)          |
 | **Resuming after restart or 1+ hour gap** | **Full price** | Cache expired; history re-charged as fresh tokens |

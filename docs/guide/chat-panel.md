@@ -12,7 +12,7 @@ In **Standard** permissions mode, Claude has access to your full vault — it ca
 
 ## Welcome Screen
 
-Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. A session you haven't typed in yet shows the welcome screen again whenever you come back to it. The header shows which agent and model the session uses (BojuBot's version is in the [About dialog](#about-dialog)). Click the mascot to open the About dialog.
+Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume (**More…** opens the [Sessions panel](./sessions#sessions-panel) with all of them). A session you haven't typed in yet shows the welcome screen again whenever you come back to it. The header shows which agent and model the session uses (BojuBot's version is in the [About dialog](#about-dialog)). Click the mascot to open the About dialog.
 
 ![](images/new_session_window.png)
 
