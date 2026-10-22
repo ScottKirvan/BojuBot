@@ -19,12 +19,13 @@ import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { refuseQuery, sharesVaultInfo, canRunCommands, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_NEW_SESSION_NOTICE, CHAT_ONLY_PENDING_NOTICE, CHAT_ONLY_ATTACHMENT_NOTICE } from './utils/modeGates';
+import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { ClaudeModel } from './settings';
 import { BACKEND_IDS } from './backends';
+import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
@@ -170,8 +171,9 @@ export class ClaudeView extends ItemView {
   private _customAttachments: PendingContext[] = [];
   private _customInitialInstructions = '';
   private _customSuppressVaultContext = false;
-  /** Chat only was picked while a turn ran: start a new Chat only session before the next send (#406). */
-  private chatOnlyFreshSessionPending = false;
+  /** A mode picked while a reply ran that this session's conversation can't
+   *  continue in: the next send starts a new session in it. */
+  private pendingNewSessionMode: PermissionMode | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
@@ -235,7 +237,7 @@ export class ClaudeView extends ItemView {
     });
 
     this.coordinator.on('session:new', () => {
-      this.chatOnlyFreshSessionPending = false;
+      this.pendingNewSessionMode = null;
       if (!this.messagesEl) return;
       this.tokenGauge.reset();
       this.currentUserLabel = 'User';
@@ -441,8 +443,11 @@ export class ClaudeView extends ItemView {
       // Live status (#399): a vault-query follow-up keeps the session replying;
       // a permission request waits for the user before the turn counts as ended.
       const continues = !this._stoppingForSwitch && !isInjectTurn && result.pendingQueries.some(q => q.mode === 'inject');
+      // Granting a request means full access, which some conversations can't
+      // take (Antigravity Chat only, #403): no request card for those.
+      const permissionRequest = this.coordinator.modeNeedsNewSession('full') ? null : result.pendingPermissionRequest;
       if (!continues) {
-        if (!this._stoppingForSwitch && result.pendingPermissionRequest) this.applyStatus({ type: 'wait-start' });
+        if (!this._stoppingForSwitch && permissionRequest) this.applyStatus({ type: 'wait-start' });
         this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: !!apiError || this.isAuthError(accumulated) });
       }
 
@@ -464,8 +469,8 @@ export class ClaudeView extends ItemView {
         }
       }
 
-      if (result.pendingPermissionRequest) {
-        this.handlePermissionRequest(result.pendingPermissionRequest, unlock);
+      if (permissionRequest) {
+        this.handlePermissionRequest(permissionRequest, unlock);
         return;
       }
 
@@ -721,8 +726,8 @@ export class ClaudeView extends ItemView {
               models: this.plugin.getModels(id),
               defaultModel: this.plugin.getDefaultModel(id),
               effortLevels: this.supportedEffortLevels(id),
-              unavailableModes: backend.unavailableModes,
-              modeDescriptions: backend.modeDescriptions,
+              unavailableModes: backend.unavailableModes(this.plugin.getCapabilities(id)),
+              modeDescriptions: backend.modeDescriptions(this.plugin.getCapabilities(id)),
             };
           }),
           this.plugin.settings.backend,
@@ -1012,14 +1017,21 @@ export class ClaudeView extends ItemView {
    * default for new sessions.
    */
   onPermissionModePicked(mode: PermissionMode): void {
-    const before = this.coordinator.getEffectivePermissionMode();
-    // A conversation that wasn't Chat only can't become Chat only: its earlier turns
-    // (vault tree, context file, anything the agent read) stay in context (#406)
-    if (needsFreshSessionForChatOnly(mode, !!this.coordinator.sessionId, before)) {
-      this.startChatOnlySession();
+    // The conversation can't continue in this mode — into Chat only from any
+    // other mode (#406), or Antigravity out of Chat only (#403): the session
+    // keeps its own mode and a new session starts in the picked one.
+    if (this.coordinator.modeNeedsNewSession(mode)) {
+      if (this.coordinator.isBusy) {
+        // The next send makes the switch (handleSend).
+        this.pendingNewSessionMode = mode;
+        new Notice(modeChangeNotice(mode, this.coordinator.backend.displayName, true), 8000);
+      } else {
+        this.startSessionForModeChange(mode);
+      }
       return;
     }
-    this.chatOnlyFreshSessionPending = false;
+    this.pendingNewSessionMode = null;
+    const before = this.coordinator.getEffectivePermissionMode();
     const changed = this.coordinator.setSessionPermissionMode(mode) && before !== mode;
     this.updatePermissionIcon();
     if (changed && this.coordinator.sessionId) {
@@ -1032,45 +1044,24 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  /** The default for new sessions changed in settings. The open session keeps its own
-   *  mode; the icon only follows the default while no session is open. */
+  /** The default for new sessions changed (settings, or a picker in another
+   *  panel). The open session keeps its own mode; the icon only follows the
+   *  default while no session is open. */
   onDefaultPermissionModeChanged(): void {
     this.updatePermissionIcon();
   }
 
   /** Anything held for the open session's next message: attachments (pinned too),
-   *  unsent Custom Session setup and queued system notes. Dropped whenever a
-   *  different session opens or the session is cleared, so none of it reaches
-   *  another session. */
+   *  unsent Custom Session setup, a pending mode change and queued system notes.
+   *  Dropped whenever a different session opens or the session is cleared, so
+   *  none of it reaches another session. */
   private dropPendingSessionState(): void {
     this.attachmentHandler.reset();
     this._customAttachments = [];
     this._customInitialInstructions = '';
     this._customSuppressVaultContext = false;
+    this.pendingNewSessionMode = null;
     this.coordinator.clearPendingSystemMessage();
-  }
-
-  /**
-   * Open a new session saved in Chat only (#406), leaving the current one, in its
-   * own mode, in the Sessions panel. Backend-agnostic. While a turn is running the
-   * current session is left alone and the new one starts with the next send.
-   * Returns true when the new session started now.
-   */
-  private startChatOnlySession(): boolean {
-    if (this.coordinator.isBusy) {
-      this.chatOnlyFreshSessionPending = true;
-      new Notice(CHAT_ONLY_PENDING_NOTICE, 8000);
-      return false;
-    }
-    const announce = !this.chatOnlyFreshSessionPending;
-    this.chatOnlyFreshSessionPending = false;
-    log('ClaudeView: switched into Chat only, starting a new session');
-    this.startNewSession();
-    // The picker already made Chat only the default; save it with the session explicitly
-    this.coordinator.setSessionPermissionMode('restricted');
-    this.updatePermissionIcon();
-    if (announce) new Notice(CHAT_ONLY_NEW_SESSION_NOTICE, 8000);
-    return true;
   }
 
   /**
@@ -1160,7 +1151,7 @@ export class ClaudeView extends ItemView {
         this.permissionIconEl.addClass('bojubot-perm-standard');
     }
     // The session's agent may behave differently from Claude Code's wording above
-    const description = this.coordinator.backend.modeDescriptions[mode];
+    const description = this.coordinator.backend.modeDescriptions(this.plugin.getCapabilities(this.coordinator.backendId))[mode];
     const label = PERMISSION_MODES.find(m => m.mode === mode)?.label;
     if (description && label) this.permissionIconEl.title = `Permissions: ${label} — ${description}. Click to change.`;
   }
@@ -1184,6 +1175,35 @@ export class ClaudeView extends ItemView {
   /** Load a session into this panel (asks first if a reply is still running). */
   loadSessionHere(session: StoredSession) {
     this.guardSessionChange(() => this.loadSession(session));
+  }
+
+  /**
+   * `mode` can't continue this session's conversation (coordinator
+   * `modeNeedsNewSession()`): start a new session in this tab on the same agent
+   * with the same settings, saved in `mode`, and say why. The old session keeps
+   * its own mode and stays in the Sessions panel. `announce` false: the user was
+   * already told when the mode was picked (a reply was running).
+   */
+  private startSessionForModeChange(mode: PermissionMode, announce = true): void {
+    const c = this.coordinator;
+    const agent = c.backend.displayName;
+    this._customAttachments = [];
+    this._customInitialInstructions = '';
+    this._customSuppressVaultContext = c.suppressVaultContext;
+    c.startNewSession({
+      backend: c.backendId,
+      cwd: c.sessionCwd,
+      suppressVaultContext: c.suppressVaultContext,
+      permissionMode: mode,
+      model: c.sessionModel,
+      effort: c.sessionEffort,
+      rawSession: c.rawSession,
+    });
+    this.updatePermissionIcon();
+    const message = modeChangeNotice(mode, agent);
+    if (announce) new Notice(message, 8000);
+    this.appendMessage('system', message);
+    log('ClaudeView: new session for permission mode', mode);
   }
 
   private applyNewSession(custom?: CustomSessionOptions) {
@@ -1510,7 +1530,6 @@ export class ClaudeView extends ItemView {
   async loadSession(session: StoredSession) {
     this.applyStatus({ type: 'reset' });
     this.dropPendingSessionState();
-    this.chatOnlyFreshSessionPending = false;
     this.currentUserLabel = session.userLabel ?? 'User';
     this.currentAssistantLabel = session.assistantLabel ?? this.plugin.brand.name;
 
@@ -1626,19 +1645,27 @@ export class ClaudeView extends ItemView {
       return;
     }
 
-    // Chat only never sends file paths (#406): stop here and keep the message and
-    // attachments, so the user can remove them or switch mode.
+    // A mode was picked while a reply was running that this conversation can't
+    // continue in, or the session was opened in such a mode: start the new
+    // session now. Starting one drops pending attachments; keep the ones meant
+    // for this message.
+    const newSessionMode = this.pendingNewSessionMode
+      ?? (this.coordinator.modeNeedsNewSession() ? this.coordinator.getEffectivePermissionMode() : null);
+
+    // Chat only reads nothing, so it sends no files, notes or selections (#406):
+    // stop here and keep the message and attachments, so the user can remove
+    // them or switch mode.
     const pendingFiles = [...this.attachmentHandler.getContexts(), ...(this.coordinator.sessionId ? [] : this._customAttachments)];
-    if (blockedAttachments(pendingFiles, this.chatOnlyFreshSessionPending ? 'restricted' : this.coordinator.getEffectivePermissionMode()).length > 0) {
+    if (blockedAttachments(pendingFiles, newSessionMode ?? this.coordinator.getEffectivePermissionMode()).length > 0) {
       new Notice(`${this.plugin.brand.name}: ${CHAT_ONLY_ATTACHMENT_NOTICE}`);
       return;
     }
 
-    if (this.chatOnlyFreshSessionPending) {
-      // Chat only was picked while a turn ran. A new session clears pending
-      // attachments; keep the ones meant for this message.
+    if (newSessionMode) {
+      const announced = this.pendingNewSessionMode !== null;
       const attachments = [...this.attachmentHandler.getContexts()];
-      if (this.startChatOnlySession()) attachments.forEach(c => this.attachmentHandler.add(c));
+      this.startSessionForModeChange(newSessionMode, !announced);
+      attachments.forEach(c => this.attachmentHandler.add(c));
     }
 
     const unlock = () => this.setSendState(false);
@@ -2190,8 +2217,10 @@ export class ClaudeView extends ItemView {
     }
 
     const currentMode = this.coordinator.getEffectivePermissionMode();
-    if (currentMode !== 'full') {
-      const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    // No upgrade offer when this conversation can't continue in the wider
+    // mode (Antigravity Chat only, #403): switching modes starts a new session.
+    if (currentMode !== 'full' && !this.coordinator.modeNeedsNewSession(upgradeTarget)) {
       const upgradeLabel = currentMode === 'restricted' ? 'Allow standard access for this session' : 'Allow full access for this session';
       const upgradeMsg = currentMode === 'restricted'
         ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`

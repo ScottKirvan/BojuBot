@@ -90,6 +90,16 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
     };
   }
 
+  if (err.errorCode === 'agy_agent_rejected') {
+    return {
+      title: "Antigravity couldn't start this mode's agent",
+      details: [
+        err.message.split('\n')[0],
+        "Until Obsidian restarts, new Antigravity sessions start without it and Chat only is unavailable. Send your message again.",
+      ],
+    };
+  }
+
   if (err.errorCode === 'agy_error') {
     return { title: 'Antigravity error', details: [err.message] };
   }
