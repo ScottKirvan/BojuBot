@@ -142,5 +142,5 @@ You can change this in **Settings → BojuBot → Session storage path**:
 | `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely.                                         |
 
 ::: warning Sessions are not migrated
-Changing this setting affects **new sessions only**. Existing sessions remain in their original location and will not appear in the session manager until you change the path back. If you want to move existing sessions, copy the `.json` files manually to the new path before restarting BojuBot.
+Changing this setting affects **new sessions only**. Existing sessions remain in their original location and will not appear in the Sessions panel until you change the path back. If you want to move existing sessions, copy the `.json` files manually to the new path before restarting BojuBot.
 :::
