@@ -74,7 +74,7 @@ Sessions are grouped by when they were last active: **Today**, **This week** (th
 
 ### Active session
 
-The session in the chat panel you used last is highlighted, with an accent-coloured left edge and a bold title. Sessions open in any chat tab have a small ring before their title.
+The session in the chat panel you used last is highlighted, with an accent-coloured left edge and a bold title. Sessions open in any chat tab have a small ring before their title, or a coloured dot showing what they're doing (see [Live status](#live-status)).
 
 ## Several sessions at once
 
@@ -89,6 +89,20 @@ You can have several chat panels open, each running its own session, using Obsid
 ::: tip Plan limits
 Sessions running at the same time each use your plan or quota, so limits run out faster.
 :::
+
+### Live status
+
+A dot in the Sessions panel (before the title) and on each chat tab (on its icon in a sidebar, before its title in the main area) shows what a session is doing. Hover the dot in the Sessions panel for its name.
+
+| Dot | Status | Means |
+| --- | --- | --- |
+| Pulsing accent | **Replying…** | A reply is running. |
+| Orange | **Waiting for you** | The session needs a decision: a permission request, a denial card offering more access, or a command confirmation. |
+| Green | **Finished** | A reply arrived while the session wasn't on screen. Clears when you look at it. |
+| Red | **Error** | The reply stopped with an error while the session wasn't on screen. Clears when you look at it. |
+| Ring | Open | Open in a chat tab, nothing to report. |
+
+When a session you can't see finishes, stops with an error or needs you, a notice says so (for example "Vault cleanup is waiting for you"). Click it to switch to that session's tab. Notices for sessions waiting for you stay until you click them.
 
 ## Storage Location
 

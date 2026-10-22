@@ -5,6 +5,7 @@ import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { SessionsView, VIEW_TYPE_SESSIONS } from './src/SessionsView';
 import type { CustomSessionOptions } from './src/modals/CustomSessionModal';
 import { ChatPanelState, PanelInfo, panelForSession, pickTargetPanel, planNewSession, planOpenSession } from './src/utils/chatPanels';
+import { SessionStatus, statusNotice } from './src/utils/sessionStatus';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab, CLAUDE_MODELS, DEFAULT_MODEL_ID } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
@@ -48,6 +49,8 @@ export default class BojuBotPlugin extends Plugin {
   private skillCommandIds = new Set<string>();
   /** When each chat panel was last used, for picking the panel commands act on (#399). */
   private chatLastActive = new WeakMap<WorkspaceLeaf, number>();
+  /** The status notice showing for each chat panel, replaced when its status moves on. */
+  private statusNotices = new WeakMap<ClaudeView, Notice>();
 
   /** Recompute the resolved brand and mirror it to the module-level accessor. */
   refreshBrand(): void {
@@ -114,7 +117,10 @@ export default class BojuBotPlugin extends Plugin {
         this.markChatActive(leaf);
         this.refreshSessionsViews();
       }
+      this.markChatsViewed();
     }));
+    // Switching tabs or opening a sidebar shows a panel: its unseen reply counts as seen
+    this.registerEvent(this.app.workspace.on('layout-change', () => this.markChatsViewed()));
 
     this.addRibbonIcon(this.brand.icon, `Open ${this.brand.name} agent`, () => {
       void this.activateView();
@@ -526,6 +532,54 @@ export default class BojuBotPlugin extends Plugin {
   getActiveChatSessionId(): string | undefined {
     const leaf = this.targetChatLeaf();
     return leaf ? this.leafSessionId(leaf) : undefined;
+  }
+
+  // ── Live status (#399) ─────────────────────────────────────────────────────
+
+  /** True when a chat panel is on screen: its tab is showing and its sidebar isn't collapsed. */
+  isChatVisible(view: ClaudeView): boolean {
+    const { workspace } = this.app;
+    const root = view.leaf.getRoot();
+    if (root === workspace.leftSplit && workspace.leftSplit.collapsed) return false;
+    if (root === workspace.rightSplit && workspace.rightSplit.collapsed) return false;
+    return view.containerEl.isShown();
+  }
+
+  private markChatsViewed(): void {
+    for (const view of this.chatViews()) view.markViewed();
+  }
+
+  /** Live status of every session open in a chat panel. */
+  getSessionStatuses(): Map<string, SessionStatus> {
+    const statuses = new Map<string, SessionStatus>();
+    for (const view of this.chatViews()) {
+      if (view.sessionFileId) statuses.set(view.sessionFileId, view.sessionStatus);
+    }
+    return statuses;
+  }
+
+  /** A chat panel's status changed: update the Sessions panel's dots, and tell
+   *  the user when a session they can't see finishes or needs them. */
+  onChatStatusChanged(view: ClaudeView, prev: SessionStatus, next: SessionStatus): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_SESSIONS)) {
+      if (leaf.view instanceof SessionsView) leaf.view.updateStatuses();
+    }
+    // A notice about the old status is out of date now (e.g. the wait was answered)
+    this.statusNotices.get(view)?.hide();
+    this.statusNotices.delete(view);
+    const text = statusNotice(prev, next, this.isChatVisible(view), view.getDisplayText());
+    if (!text) return;
+    const notice = new Notice('', next === 'waiting' ? 0 : 8000);
+    this.statusNotices.set(view, notice);
+    notice.messageEl.empty();
+    notice.messageEl.addClass('bojubot-status-notice');
+    notice.messageEl.createSpan({ text: `${text}. ` });
+    notice.messageEl.createEl('a', { cls: 'bojubot-notice-link', text: 'Show', href: '#' });
+    notice.messageEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      notice.hide();
+      if (view.leaf.view === view) void this.showChatLeaf(view.leaf);
+    });
   }
 
   /** Session file IDs open in any chat panel. */
