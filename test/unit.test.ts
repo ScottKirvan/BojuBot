@@ -40,6 +40,7 @@ import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFor
 import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
+import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
@@ -3688,5 +3689,149 @@ describe('historyKeyAction', () => {
 
   test('↓ while browsing with a selection reaching the end moves the cursor', () => {
     assert.equal(historyKeyAction('ArrowDown', { ...base, length: 20, selectionStart: 5, selectionEnd: 20, browsing: true }), 'move');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// repairLinks — link-repair guard (#400)
+// ---------------------------------------------------------------------------
+
+const WIN_CTX: LinkRepairContext = {
+  vaultRoot: 'E:\\vault',
+  noteExists: (p) => ['Note', 'docs/Setup', 'Setup.md'].includes(p),
+};
+const POSIX_CTX: LinkRepairContext = { vaultRoot: '/home/u/vault/', noteExists: () => true };
+
+describe('repairLinks — backticked wikilinks', () => {
+  test('unwraps a backticked wikilink when the note exists', () => {
+    assert.equal(repairLinks('See `[[Note]]` for details.', WIN_CTX), 'See [[Note]] for details.');
+  });
+  test('keeps alias and heading when unwrapping; lookup uses the bare path', () => {
+    assert.equal(repairLinks('`[[docs/Setup#Install|Setup]]`', WIN_CTX), '[[docs/Setup#Install|Setup]]');
+  });
+  test('leaves a syntax example as code when the note does not exist', () => {
+    assert.equal(repairLinks('Write `[[Note name]]` to link.', WIN_CTX), 'Write `[[Note name]]` to link.');
+  });
+  test('leaves code that only contains a wikilink among other text', () => {
+    assert.equal(repairLinks('`see [[Note]]`', WIN_CTX), '`see [[Note]]`');
+  });
+  test('leaves backticked embeds and heading-only links', () => {
+    assert.equal(repairLinks('`![[Note]]` and `[[#Heading]]`', WIN_CTX), '`![[Note]]` and `[[#Heading]]`');
+  });
+  test('does not unwrap inside fenced code blocks', () => {
+    const md = 'Example:\n```md\n`[[Note]]`\n```\nAfter `[[Note]]`';
+    assert.equal(repairLinks(md, WIN_CTX), 'Example:\n```md\n`[[Note]]`\n```\nAfter [[Note]]');
+  });
+  test('does not unwrap inside an unclosed fence', () => {
+    const md = '~~~\n`[[Note]]`\n';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+});
+
+describe('repairLinks — file:// links', () => {
+  test('converts a Markdown link into the vault to a wikilink with alias', () => {
+    assert.equal(
+      repairLinks('[Preface](file:///E:/vault/docs/00.01-preface.md)', WIN_CTX),
+      '[[docs/00.01-preface|Preface]]',
+    );
+  });
+  test('handles lowercase drive letters and backslashes', () => {
+    assert.equal(repairLinks('[Guide](file:///e:\\Vault\\docs\\guide.md)', WIN_CTX), '[[docs/guide|Guide]]');
+  });
+  test('decodes URL-encoded spaces', () => {
+    assert.equal(repairLinks('[My note](file:///E:/vault/My%20Notes/My%20note.md)', WIN_CTX), '[[My Notes/My note]]');
+  });
+  test('handles an angle-bracketed destination and a link title', () => {
+    assert.equal(repairLinks('[A](<file:///E:/vault/a b.md>) [B](file:///E:/vault/b.md "t")', WIN_CTX), '[[a b|A]] [[b|B]]');
+  });
+  test('drops the alias when it just repeats the file name', () => {
+    assert.equal(repairLinks('[setup.md](file:///E:/vault/docs/setup.md)', WIN_CTX), '[[docs/setup]]');
+  });
+  test('keeps the extension of non-Markdown files', () => {
+    assert.equal(repairLinks('[Plan](file:///E:/vault/plan.pdf)', WIN_CTX), '[[plan.pdf|Plan]]');
+  });
+  test('keeps a heading fragment and drops editor line anchors', () => {
+    assert.equal(
+      repairLinks('[A](file:///E:/vault/a.md#Intro) [B](file:///E:/vault/b.md#L12-L20)', WIN_CTX),
+      '[[a#Intro|A]] [[b|B]]',
+    );
+  });
+  test('leaves file:// links outside the vault alone', () => {
+    const md = '[Other](file:///E:/elsewhere/x.md) [Sibling](file:///E:/vault2/x.md) [D](file:///D:/vault/x.md)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('leaves UNC hosts and the vault root itself alone', () => {
+    const md = '[S](file://server/share/vault/x.md) [Root](file:///E:/vault/)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('leaves file:// images alone', () => {
+    const md = '![pic](file:///E:/vault/img.png)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('works with a POSIX vault root', () => {
+    assert.equal(repairLinks('[N](file:///home/u/vault/n.md)', POSIX_CTX), '[[n|N]]');
+    const outside = '[N](file:///home/u/other/n.md)';
+    assert.equal(repairLinks(outside, POSIX_CTX), outside);
+  });
+  test('POSIX paths are case-sensitive', () => {
+    const md = '[N](file:///home/U/vault/n.md)';
+    assert.equal(repairLinks(md, POSIX_CTX), md);
+  });
+  test('converts bare file:// URLs and autolinks, keeping trailing punctuation', () => {
+    assert.equal(
+      repairLinks('Open file:///E:/vault/docs/setup.md. Or <file:///E:/vault/a%20b.md>', WIN_CTX),
+      'Open [[docs/setup]]. Or [[a b]]',
+    );
+  });
+  test('leaves bare file:// URLs outside the vault alone', () => {
+    const md = 'See file:///C:/Windows/x.txt';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('does not change file:// URLs inside inline code or fenced code', () => {
+    const md = '`file:///E:/vault/a.md`\n```\n[A](file:///E:/vault/a.md)\nfile:///E:/vault/a.md\n```';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+});
+
+describe('repairLinks — backticked link text', () => {
+  test('removes backticks around a Markdown link label', () => {
+    assert.equal(repairLinks('[`Setup`](guides/setup.md)', WIN_CTX), '[Setup](guides/setup.md)');
+  });
+  test('combines with the file:// repair', () => {
+    assert.equal(repairLinks('[`Setup`](file:///E:/vault/guides/setup.md)', WIN_CTX), '[[guides/setup|Setup]]');
+  });
+  test('leaves partial code in a label and other inline code alone', () => {
+    const md = '[run `npm test`](docs/test.md) and `code`';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+});
+
+describe('repairLinks — untouched text', () => {
+  test('returns text without links unchanged', () => {
+    const md = 'Plain *text* with `code`, ``double `tick` code``, and [a link](https://x.y).';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('leaves valid wikilinks and relative Markdown links alone', () => {
+    const md = '[[Note]] and [Setup](guides/setup.md)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('an unmatched backtick does not swallow later repairs', () => {
+    assert.equal(repairLinks('a ` b `[[Note]]`', WIN_CTX), 'a ` b `[[Note]]`');
+    assert.equal(repairLinks('a `` b `[[Note]]`', WIN_CTX), 'a `` b [[Note]]');
+  });
+});
+
+describe('vaultTarget', () => {
+  test('maps an in-vault URI to a vault-relative path', () => {
+    assert.deepEqual(vaultTarget('file:///E:/vault/docs/x.md', 'E:\\vault'), { path: 'docs/x', subpath: '' });
+  });
+  test('accepts file://E:/ (two slashes) and localhost', () => {
+    assert.deepEqual(vaultTarget('file://E:/vault/x.md', 'E:/vault'), { path: 'x', subpath: '' });
+    assert.deepEqual(vaultTarget('file://localhost/E:/vault/x.md', 'E:/vault'), { path: 'x', subpath: '' });
+  });
+  test('returns null for malformed encoding, wikilink-unsafe names and an empty root', () => {
+    assert.equal(vaultTarget('file:///E:/vault/100%.md', 'E:/vault'), null);
+    assert.equal(vaultTarget('file:///E:/vault/a[1].md', 'E:/vault'), null);
+    assert.equal(vaultTarget('file:///E:/vault/x.md', ''), null);
   });
 });
