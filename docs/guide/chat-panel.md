@@ -1,6 +1,6 @@
 # Chat Panel
 
-The chat panel opens as a sidebar. Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. 
+The chat panel opens as a sidebar. You can open several, as tabs or splits, each with its own session: see [Several sessions at once](./sessions#several-sessions-at-once). Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. 
 
 If you would prefer to exclusively use the **Up Arrow** icon to send messages rather than the **Enter** key, the "Send on Enter" behavior can be toggled in **Settings → BojuBot → Send On Enter**.
 

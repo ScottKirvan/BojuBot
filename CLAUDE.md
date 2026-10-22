@@ -22,6 +22,7 @@ BojuBot is not limited to features that involve Claude Code directly. Obsidian-n
 - Delete `CLAUDECODE` from spawn env or claude refuses nested launch
 - `--resume <sessionId>` on every turn after first; uses cache_read_input_tokens (~10x cheaper)
 - Do NOT prepend history manually — that costs MORE than --resume
+- **Chat tabs** (#399): several `ClaudeView` panels can be open at once (Obsidian tabs/splits), one session each, each with its own `SessionCoordinator`. Never `getLeavesOfType(VIEW_TYPE_CLAUDE)[0]`: commands go to the **target panel** = the chat leaf used most recently (`plugin.markChatActive()` on `active-leaf-change` and on focus inside the view; ties/never-used → first leaf; none → open one) via `plugin.withTargetChatView()` / `targetChatView()`; settings/permission/allowlist/capability/default-model changes fan out to every loaded view (`plugin.chatViews()`). A session is never open in two panels: `plugin.openSession()` reveals the leaf that has it (`leafForSession()`, which reads unloaded background tabs' saved view state), else loads into the preferred panel only when `isReusable()` (untouched new session, idle, empty input), else `openChatTab({ sessionFileId })`. `newSession()` opens a new tab when the target is busy (a running reply keeps running instead of #398's Stop prompt; the prompt now only guards Clear session) or on Ctrl/Cmd-click / `new-chat-tab`. Each view persists `{ sessionFileId }` through `getState()`/`setState()` (the first session is chosen in `setState`, with a timer fallback; `{ blank: true }` = choose nothing) and retitles its tab with the session name (`getDisplayText()` + private `leaf.updateHeader()`). Closing a busy tab cancels its turn.
 - Vault root = cwd for all spawns by default; per-session `cwd` override stored in session JSON and used on every spawn including `--resume`
 - Sessions: `.obsidian/bojubot/sessions/<id>.json` (metadata only; actual history in `~/.claude/projects/`); schema includes optional `cwd` field and optional `backend` (absent = Claude Code; a session stays bound to its backend, `claudeSessionId` holds the conversation ID for every backend)
 - **Backends** (agent-backends spec): `settings.backend` picks the CLI for new sessions; the plugin keeps binary path, capabilities and model list per backend (`getBinaryPath(id)`, `getCapabilities(id)`, `getModels(id)`, `getDefaultModel(id)`); `SessionCoordinator` resolves everything through its session's `backendId`. Antigravity's Chat only mode is unavailable (`backend.unavailableModes`), and compact and the gauge are hidden (`compactPrompt: null`). History: backends with `readableHistory: false` (Antigravity) get a BojuBot transcript, `sessions/<id>.transcript.jsonl`, appended by `SessionCoordinator` when each turn ends (user text cleaned like Claude history, reply with its @@BOJU lines). Read history only through `hasReadableHistory(session, sessionsDir)` / `loadHistory(session, sessionsDir)`, never `loadSessionMessages()` directly.
@@ -55,6 +56,7 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` �
 | `src/QueryHandler.ts`           | @@BOJU query resolution; resolveQuery(), queryLabel(), buildInjectMessage()                    |
 | `src/settings.ts`               | Settings schema + tab UI; command browser (searchable checklist)                               |
 | `src/utils/sessionStorage.ts`   | Session CRUD, .jsonl parse, canResumeLocally                                                   |
+| `src/utils/chatPanels.ts`       | Multi-tab rules (#399): `pickTargetPanel`, `panelForSession`, `planOpenSession`, `planNewSession`, `parseChatPanelState` |
 | `src/utils/sessionList.ts`      | Sessions panel pure helpers: date groups, `relativeTime`, filter, `moveSession`, tooltip, `preserveUserFields` |
 | `src/utils/logger.ts`           | File + console logging, estimateTokens                                                         |
 | `src/utils/cliCapabilities.ts`  | Parse `claude --help`/`--version` into flags, permission modes, effort levels                  |
@@ -109,7 +111,7 @@ Run all three before opening any PR — all must pass clean:
 ```bash
 npm run build   # TypeScript check + bundle
 npm run lint    # ESLint — zero warnings or errors
-npm test        # 459 unit tests via tsx --test
+npm test        # 476 unit tests via tsx --test
 ```
 Lint and TypeScript violations are `fix:` commits, not `chore:`.
 

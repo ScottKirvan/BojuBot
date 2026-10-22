@@ -2,7 +2,7 @@
 
 ## Starting a new session
 
-Click the **+** button in the toolbar to start a new session with default settings.
+Click the **+** button in the toolbar to start a new session with default settings. **Ctrl+click** (**Cmd+click** on Mac) opens the new session in a new chat tab instead, keeping the current one open.
 
 **Shift+click +** to open a **Custom Session** dialog and configure the session before it starts:
 
@@ -62,8 +62,9 @@ Sessions are grouped by when they were last active: **Today**, **This week** (th
 
 | Action               | How                                                                  |
 | -------------------- | -------------------------------------------------------------------- |
-| **Open a session**   | Click its row (or select it and press **Enter**)                     |
-| **New session**      | Click the **+** button next to the filter                            |
+| **Open a session**   | Click its row (or select it and press **Enter**). See below for which tab it opens in |
+| **Open in a new tab** | **Ctrl/Cmd+click** the row, or right-click → **Open in new tab**    |
+| **New session**      | Click the **+** button next to the filter (**Ctrl/Cmd+click** for a new tab) |
 | **Filter**           | Type in the filter box at the top                                    |
 | **Rename**           | Right-click the row, or click **⋯** → **Rename** → edit → **Enter**  |
 | **Pin / Unpin**      | Right-click or **⋯** → **Pin** keeps the session at the top          |
@@ -73,7 +74,21 @@ Sessions are grouped by when they were last active: **Today**, **This week** (th
 
 ### Active session
 
-The session open in the chat panel is highlighted, with an accent-coloured left edge and a bold title.
+The session in the chat panel you used last is highlighted, with an accent-coloured left edge and a bold title. Sessions open in any chat tab have a small ring before their title.
+
+## Several sessions at once
+
+You can have several chat panels open, each running its own session, using Obsidian's own tabs and splits. A session keeps running when you switch to another tab, so you can start a long task on one agent and keep working in another session meanwhile. Each tab's title is its session's name, and tabs come back with their sessions when you restart Obsidian.
+
+- **Open a new chat tab** with **Ctrl/Cmd+click** on **+** (in the chat toolbar or the Sessions panel), or **BojuBot: Open new chat tab**. Drag tabs to split them side by side, or between the sidebars and the main area, like any Obsidian tab.
+- **Opening a session** from the Sessions panel or the recent-sessions list: if it's already open in a tab, BojuBot switches to that tab. A session is never open in two tabs. Otherwise it opens in the chat panel you used last when that panel is free (a new session you haven't typed in, with nothing running), or in a new tab next to it.
+- **Starting a new session while a reply is running** keeps that reply running and opens the new session in a new tab.
+- **Commands** that act on a chat panel (send selection, switch model, show plan usage, export, skills, and so on) use the chat panel you used last. Changing settings, the permission mode or the default model applies to every open chat panel.
+- **Closing a chat tab** while it's replying stops the reply.
+
+::: tip Plan limits
+Sessions running at the same time each use your plan or quota, so limits run out faster.
+:::
 
 ## Storage Location
 

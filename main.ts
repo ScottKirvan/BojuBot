@@ -1,8 +1,10 @@
-import { Plugin, Notice, addIcon, debounce } from 'obsidian';
+import { Plugin, Notice, addIcon, debounce, WorkspaceLeaf } from 'obsidian';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { SessionsView, VIEW_TYPE_SESSIONS } from './src/SessionsView';
+import type { CustomSessionOptions } from './src/modals/CustomSessionModal';
+import { ChatPanelState, PanelInfo, panelForSession, pickTargetPanel, planNewSession, planOpenSession } from './src/utils/chatPanels';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab, CLAUDE_MODELS, DEFAULT_MODEL_ID } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
@@ -44,6 +46,8 @@ export default class BojuBotPlugin extends Plugin {
     BACKEND_IDS.map(id => [id, { binaryPath: null, caps: UNKNOWN_CAPABILITIES, models: [], probeSeq: 0 }]),
   ) as Record<BackendId, BackendRuntime>;
   private skillCommandIds = new Set<string>();
+  /** When each chat panel was last used, for picking the panel commands act on (#399). */
+  private chatLastActive = new WeakMap<WorkspaceLeaf, number>();
 
   /** Recompute the resolved brand and mirror it to the module-level accessor. */
   refreshBrand(): void {
@@ -104,6 +108,14 @@ export default class BojuBotPlugin extends Plugin {
     this.registerView(VIEW_TYPE_CLAUDE, (leaf) => new ClaudeView(leaf, this));
     this.registerView(VIEW_TYPE_SESSIONS, (leaf) => new SessionsView(leaf, this));
 
+    // The chat panel used most recently is the one commands act on (#399)
+    this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf) => {
+      if (leaf && leaf.view.getViewType() === VIEW_TYPE_CLAUDE) {
+        this.markChatActive(leaf);
+        this.refreshSessionsViews();
+      }
+    }));
+
     this.addRibbonIcon(this.brand.icon, `Open ${this.brand.name} agent`, () => {
       void this.activateView();
     });
@@ -129,7 +141,15 @@ export default class BojuBotPlugin extends Plugin {
       id: 'new-session',
       name: 'New session',
       callback: () => {
-        this.newSession();
+        void this.newSession();
+      }
+    });
+
+    this.addCommand({
+      id: 'new-chat-tab',
+      name: 'Open new chat tab',
+      callback: () => {
+        void this.newSession({ forceNewTab: true });
       }
     });
 
@@ -193,16 +213,7 @@ export default class BojuBotPlugin extends Plugin {
         }
         const file = this.app.workspace.getActiveFile();
         const sourceName = file?.basename ?? 'note';
-        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (existing.length) {
-          void this.app.workspace.revealLeaf(existing[0]);
-          (existing[0].view as ClaudeView).injectSelectionContext(selection, sourceName);
-        } else {
-          void this.activateView().then(() => {
-            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-            if (leaves.length) (leaves[0].view as ClaudeView).injectSelectionContext(selection, sourceName);
-          });
-        }
+        void this.withTargetChatView(view => view.injectSelectionContext(selection, sourceName));
       }
     });
 
@@ -226,15 +237,7 @@ export default class BojuBotPlugin extends Plugin {
       id: 'refresh-context',
       name: 'Refresh session context',
       callback: () => {
-        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (leaves.length) {
-          void (leaves[0].view as ClaudeView).refreshSessionContext();
-        } else {
-          void this.activateView().then(() => {
-            const l = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-            if (l.length) void (l[0].view as ClaudeView).refreshSessionContext();
-          });
-        }
+        void this.withTargetChatView(view => void view.refreshSessionContext());
       }
     });
 
@@ -270,15 +273,7 @@ export default class BojuBotPlugin extends Plugin {
       id: 'switch-model',
       name: 'Switch model',
       callback: () => {
-        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (existing.length) {
-          (existing[0].view as ClaudeView).openModelPicker();
-        } else {
-          void this.activateView().then(() => {
-            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-            if (leaves.length) (leaves[0].view as ClaudeView).openModelPicker();
-          });
-        }
+        void this.withTargetChatView(view => view.openModelPicker());
       },
     });
 
@@ -290,15 +285,7 @@ export default class BojuBotPlugin extends Plugin {
         const caps = this.getCapabilities(this.getActiveBackendId());
         if (!has(caps, '--effort') || caps.effortLevels.length === 0) return false;
         if (checking) return true;
-        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (existing.length) {
-          (existing[0].view as ClaudeView).openEffortPicker();
-        } else {
-          void this.activateView().then(() => {
-            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-            if (leaves.length) (leaves[0].view as ClaudeView).openEffortPicker();
-          });
-        }
+        void this.withTargetChatView(view => view.openEffortPicker());
         return true;
       },
     });
@@ -313,16 +300,7 @@ export default class BojuBotPlugin extends Plugin {
       id: 'show-plan-usage',
       name: 'Show plan usage',
       callback: () => {
-        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (existing.length) {
-          void this.app.workspace.revealLeaf(existing[0]);
-          (existing[0].view as ClaudeView).showPlanUsage();
-        } else {
-          void this.activateView().then(() => {
-            const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-            if (leaves.length) (leaves[0].view as ClaudeView).showPlanUsage();
-          });
-        }
+        void this.withTargetChatView(view => view.showPlanUsage());
       },
     });
 
@@ -353,51 +331,168 @@ export default class BojuBotPlugin extends Plugin {
     // location and discards any position the user has moved it to.
   }
 
-  async activateView() {
+  // ── Chat panels (#399) ───────────────────────────────────────────────────
+  // Several chat panels can be open at once, one session each. Commands act on
+  // the target panel: the chat panel used most recently (focused, or made the
+  // active leaf), falling back to the first one open. Settings changes go to
+  // every panel. A session is never open in two panels.
+
+  /** Record that a chat panel was just used. */
+  markChatActive(leaf: WorkspaceLeaf): void {
+    this.chatLastActive.set(leaf, Date.now());
+  }
+
+  /** Every chat panel's leaf, loaded or not. */
+  private chatLeaves(): WorkspaceLeaf[] {
+    return this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+  }
+
+  /** Every loaded chat panel. A background tab Obsidian hasn't loaded yet has none. */
+  chatViews(): ClaudeView[] {
+    return this.chatLeaves().map(l => l.view).filter((v): v is ClaudeView => v instanceof ClaudeView);
+  }
+
+  /** Session open in a chat panel; read from its saved state while it's still unloaded. */
+  private leafSessionId(leaf: WorkspaceLeaf): string | undefined {
+    if (leaf.view instanceof ClaudeView) return leaf.view.sessionFileId;
+    const id = leaf.getViewState().state?.sessionFileId;
+    return typeof id === 'string' ? id : undefined;
+  }
+
+  private panelInfos(): PanelInfo<WorkspaceLeaf>[] {
+    return this.chatLeaves().map(leaf => ({
+      panel: leaf,
+      lastActive: this.chatLastActive.get(leaf) ?? 0,
+      sessionFileId: this.leafSessionId(leaf),
+    }));
+  }
+
+  /** The chat panel commands act on, if any is open. */
+  targetChatLeaf(): WorkspaceLeaf | undefined {
+    return pickTargetPanel(this.panelInfos());
+  }
+
+  /** The target chat panel's view, without opening or loading anything. */
+  private targetChatView(): ClaudeView | undefined {
+    const leaf = this.targetChatLeaf();
+    if (leaf?.view instanceof ClaudeView) return leaf.view;
+    return this.chatViews()[0];
+  }
+
+  /** The chat panel a session is open in (never `exclude`). */
+  leafForSession(sessionFileId: string, exclude?: WorkspaceLeaf): WorkspaceLeaf | undefined {
+    return panelForSession(this.panelInfos(), sessionFileId, exclude);
+  }
+
+  /** True when another loaded chat panel exists besides `view`. */
+  otherChatViewOpen(view: ClaudeView): boolean {
+    return this.chatViews().some(v => v !== view);
+  }
+
+  /** Load (if it's a background tab) and reveal a chat panel; its view. */
+  private async showChatLeaf(leaf: WorkspaceLeaf, reveal = true): Promise<ClaudeView | undefined> {
+    await leaf.loadIfDeferred();
+    if (reveal) await this.app.workspace.revealLeaf(leaf);
+    this.markChatActive(leaf);
+    return leaf.view instanceof ClaudeView ? leaf.view : undefined;
+  }
+
+  /**
+   * Open a new chat panel: a new tab next to `near` (same sidebar, or the main
+   * area), or in the right sidebar when no chat panel is open yet. `state`
+   * picks its session; empty = the usual first session (Resume last session).
+   */
+  async openChatTab(state: ChatPanelState = {}, near?: WorkspaceLeaf): Promise<ClaudeView | undefined> {
     const { workspace } = this.app;
-    const existing = workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    const root = near?.getRoot();
+    let leaf: WorkspaceLeaf | null;
+    if (!near || root === workspace.rightSplit) leaf = workspace.getRightLeaf(false);
+    else if (root === workspace.leftSplit) leaf = workspace.getLeftLeaf(false);
+    else leaf = workspace.getLeaf('tab');
+    if (!leaf) return undefined;
+    await leaf.setViewState({ type: VIEW_TYPE_CLAUDE, active: true, state: { ...state } });
+    const view = await this.showChatLeaf(leaf);
+    await view?.ensureInitialized(state);
+    return view;
+  }
 
-    if (existing.length) {
-      await workspace.revealLeaf(existing[0]);
-      return;
-    }
+  /** Reveal the target chat panel, opening one when none is open. */
+  async activateView(): Promise<ClaudeView | undefined> {
+    const leaf = this.targetChatLeaf();
+    if (leaf) return this.showChatLeaf(leaf);
+    return this.openChatTab();
+  }
 
-    const leaf = workspace.getRightLeaf(false);
-    if (leaf) {
-      await leaf.setViewState({ type: VIEW_TYPE_CLAUDE, active: true });
-      await workspace.revealLeaf(leaf);
+  /** Run `fn` on the target chat panel, revealing it (and opening one if needed). */
+  private async withTargetChatView(fn: (view: ClaudeView) => void, reveal = true): Promise<void> {
+    const leaf = this.targetChatLeaf();
+    const view = leaf ? await this.showChatLeaf(leaf, reveal) : await this.openChatTab();
+    if (view) fn(view);
+  }
+
+  /**
+   * Open a stored session (#399). Already open in a panel: reveal that panel.
+   * Otherwise it loads into `from` (or the target panel) when that panel is
+   * free, or opens in a new tab so the panel's own session keeps going.
+   */
+  async openSession(session: StoredSession, opts: { from?: ClaudeView; forceNewTab?: boolean } = {}): Promise<void> {
+    const preferredLeaf = opts.from?.leaf ?? this.targetChatLeaf();
+    const preferred = opts.from ?? (preferredLeaf ? await this.showChatLeaf(preferredLeaf, false) : undefined);
+    const plan = planOpenSession<WorkspaceLeaf>({
+      openIn: this.leafForSession(session.id),
+      preferred: preferredLeaf,
+      preferredReusable: !!preferred?.isReusable(),
+      forceNewTab: opts.forceNewTab,
+    });
+    if (plan.kind === 'reveal') {
+      await this.showChatLeaf(plan.panel);
+    } else if (plan.kind === 'load' && preferred) {
+      await this.showChatLeaf(plan.panel);
+      preferred.loadSessionHere(session);
+    } else {
+      await this.openChatTab({ sessionFileId: session.id }, preferredLeaf);
     }
   }
 
-  newSession() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      const view = existing[0].view as ClaudeView;
-      view.startNewSession();
+  /**
+   * New session in the target panel. A panel with a reply running keeps it
+   * running and the new session opens in a new tab; so does `forceNewTab`
+   * (Ctrl/Cmd-click on +, "Open new chat tab").
+   */
+  async newSession(opts: { custom?: CustomSessionOptions; forceNewTab?: boolean; near?: WorkspaceLeaf } = {}): Promise<void> {
+    const targetLeaf = opts.near ?? this.targetChatLeaf();
+    const target = targetLeaf ? await this.showChatLeaf(targetLeaf, false) : undefined;
+    const plan = planNewSession({
+      target,
+      busy: !!target?.isBusy,
+      pristine: !!target?.isPristine,
+      forceNewTab: opts.forceNewTab,
+      custom: !!opts.custom,
+    });
+    if (plan.kind === 'new-tab') {
+      const view = await this.openChatTab({ blank: true }, targetLeaf);
+      view?.startNewSession(opts.custom);
+      view?.focusInput();
     } else {
-      void this.activateView().then(() => {
-        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (leaves.length) (leaves[0].view as ClaudeView).startNewSession();
-      });
+      await this.showChatLeaf(plan.panel.leaf);
+      if (plan.kind === 'start') plan.panel.startNewSession(opts.custom);
+      plan.panel.focusInput();
     }
   }
 
   clearCurrentSession() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      const view = existing[0].view as ClaudeView;
-      view.clearCurrentSession();
-    }
+    this.targetChatView()?.clearCurrentSession();
   }
 
+  /** Hide or show the target chat panel: collapses or expands its sidebar. */
   togglePanel() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      // Panel is open, detach it
-      this.app.workspace.detachLeavesOfType(VIEW_TYPE_CLAUDE);
-    } else {
-      void this.activateView();
-    }
+    const leaf = this.targetChatLeaf();
+    if (!leaf) { void this.activateView(); return; }
+    const { workspace } = this.app;
+    const root = leaf.getRoot();
+    const side = root === workspace.rightSplit ? workspace.rightSplit : root === workspace.leftSplit ? workspace.leftSplit : null;
+    if (side && !side.collapsed && leaf.view.containerEl.isShown()) side.collapse();
+    else void this.showChatLeaf(leaf);
   }
 
   /** Reveal the Sessions panel, opening it in the left sidebar the first time. */
@@ -427,55 +522,47 @@ export default class BojuBotPlugin extends Plugin {
     return resolveSessionsDir(this.getVaultRoot(), this.settings.sessionStoragePath, this.app.vault.configDir);
   }
 
-  /** The chat panel, if one is open and loaded. */
-  private chatView(): ClaudeView | undefined {
-    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE)) {
-      if (leaf.view instanceof ClaudeView) return leaf.view;
-    }
-    return undefined;
-  }
-
-  /** The chat panel, opening it first when needed. */
-  private async ensureChatView(): Promise<ClaudeView | undefined> {
-    await this.activateView();
-    return this.chatView();
-  }
-
-  /** Session file ID open in the chat panel, for the Sessions panel's active marker. */
+  /** Session file ID open in the target chat panel, for the Sessions panel's active marker. */
   getActiveChatSessionId(): string | undefined {
-    return this.chatView()?.sessionFileId;
+    const leaf = this.targetChatLeaf();
+    return leaf ? this.leafSessionId(leaf) : undefined;
   }
 
-  /** Open a session from the Sessions panel. */
-  openSession(session: StoredSession): void {
-    void this.ensureChatView().then(view => view?.openSession(session));
+  /** Session file IDs open in any chat panel. */
+  getOpenSessionIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const leaf of this.chatLeaves()) {
+      const id = this.leafSessionId(leaf);
+      if (id) ids.add(id);
+    }
+    return ids;
   }
 
   /** Save any session to the vault (Sessions panel menu). */
   exportSession(session: StoredSession): void {
-    void this.ensureChatView().then(view => view?.exportSessionToVault(session));
+    void this.withTargetChatView(view => view.exportSessionToVault(session), false);
   }
 
   /** A session was renamed in the Sessions panel: update the chat panel showing it. */
   onSessionRenamed(sessionFileId: string, title: string): void {
-    this.chatView()?.onSessionRenamed(sessionFileId, title);
+    for (const view of this.chatViews()) view.onSessionRenamed(sessionFileId, title);
   }
 
   /** A session can't be deleted while a reply is running in it. */
   canDeleteSession(sessionFileId: string): boolean {
-    const view = this.chatView();
-    return !(view && view.sessionFileId === sessionFileId && view.isBusy);
+    return !this.chatViews().some(v => v.sessionFileId === sessionFileId && v.isBusy);
   }
 
   /** A session was deleted: a chat panel showing it moves to a new session. */
   onSessionDeleted(sessionFileId: string): void {
-    const view = this.chatView();
-    if (view && view.sessionFileId === sessionFileId) view.startNewSession();
+    for (const view of this.chatViews()) {
+      if (view.sessionFileId === sessionFileId) view.startNewSession();
+    }
   }
 
   /** Estimated context a brand-new session would start with, for the Sessions panel. */
   async estimateFreshContextTokens(): Promise<number> {
-    return (await this.chatView()?.estimateFreshContextTokens()) ?? 0;
+    return (await this.targetChatView()?.estimateFreshContextTokens()) ?? 0;
   }
 
   /** Display name of a model ('' or undefined = the backend's default; undefined when the CLI picks). */
@@ -486,44 +573,19 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   exportConversation() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      const view = existing[0].view as ClaudeView;
-      view.exportConversation();
-    }
+    this.targetChatView()?.exportConversation();
   }
 
   exportToVault() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      void (existing[0].view as ClaudeView).exportToVault();
-    } else {
-      void this.activateView().then(() => {
-        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (leaves.length) void (leaves[0].view as ClaudeView).exportToVault();
-      });
-    }
+    void this.withTargetChatView(view => view.exportToVault());
   }
 
   copyLastResponse() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      const view = existing[0].view as ClaudeView;
-      view.copyLastResponse();
-    }
+    this.targetChatView()?.copyLastResponse();
   }
 
   focusChatInput() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      void this.app.workspace.revealLeaf(existing[0]);
-      (existing[0].view as ClaudeView).focusInput();
-    } else {
-      void this.activateView().then(() => {
-        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (leaves.length) (leaves[0].view as ClaudeView).focusInput();
-      });
-    }
+    void this.withTargetChatView(view => view.focusInput());
   }
 
   openContextFile() {
@@ -602,11 +664,9 @@ export default class BojuBotPlugin extends Plugin {
     return getBackend(id);
   }
 
-  /** The backend of the session open in the panel, or the default when no panel is open. */
+  /** The backend of the target chat panel's session, or the default when no panel is open. */
   getActiveBackendId(): BackendId {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) return (leaves[0].view as ClaudeView).getBackendId();
-    return this.settings.backend;
+    return this.targetChatView()?.getBackendId() ?? this.settings.backend;
   }
 
   getBinaryPath(id: BackendId): string | null {
@@ -654,8 +714,7 @@ export default class BojuBotPlugin extends Plugin {
    * form was opened from an error card. All of it stays editable.
    */
   openReportForm(extra: { type?: ReportType; errorText?: string } = {}): void {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    const session = leaves.length ? (leaves[0].view as ClaudeView).sessionSummary() : '';
+    const session = this.targetChatView()?.sessionSummary() ?? '';
     const details = [
       formatVersionInfo(this.brand.name, this.manifest.version, __BUILD_INFO__, this.installedAgentVersions(), osLabel(process.platform, os.release())),
       session,
@@ -680,8 +739,7 @@ export default class BojuBotPlugin extends Plugin {
 
   /** Settings changed the backend for new sessions. */
   onDefaultBackendChanged(): void {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) (leaves[0].view as ClaudeView).onDefaultBackendChanged();
+    for (const view of this.chatViews()) view.onDefaultBackendChanged();
   }
 
   /**
@@ -709,19 +767,21 @@ export default class BojuBotPlugin extends Plugin {
         warn(`${backend.displayName} model list failed:`, e instanceof Error ? e.message : String(e));
       }
     }
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) (leaves[0].view as ClaudeView).onCliCapabilitiesChanged(id);
+    for (const view of this.chatViews()) view.onCliCapabilitiesChanged(id);
+  }
+
+  /** A global default model or effort changed: every chat panel's indicator follows. */
+  refreshChatIndicators(): void {
+    for (const view of this.chatViews()) view.refreshIndicators();
   }
 
   notifyPermissionChanged(): void {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) (leaves[0].view as ClaudeView).onSettingsChanged();
+    for (const view of this.chatViews()) view.onSettingsChanged();
   }
 
+  /** The target chat panel's permission mode, or the global default when no panel is open. */
   getEffectivePermissionMode(): PermissionMode {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) return (leaves[0].view as ClaudeView).getEffectivePermissionMode();
-    return this.settings.permissionMode;
+    return this.targetChatView()?.getEffectivePermissionMode() ?? this.settings.permissionMode;
   }
 
   private showMemoryUpdateNotice(): void {
@@ -737,15 +797,8 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   async triggerMemoryAudit(): Promise<void> {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (existing.length) {
-      await this.app.workspace.revealLeaf(existing[0]);
-      (existing[0].view as ClaudeView).auditMemoryFile();
-    } else {
-      await this.activateView();
-      const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-      if (leaves.length) (leaves[0].view as ClaudeView).auditMemoryFile();
-    }
+    // A busy panel keeps its reply running and audits in a new tab (ClaudeView.auditMemoryFile)
+    await this.withTargetChatView(view => view.auditMemoryFile());
   }
 
   private resolveCommandsFolder(): string {
@@ -780,16 +833,7 @@ export default class BojuBotPlugin extends Plugin {
           id: commandId,
           name: `Skill: ${name}`,
           callback: () => {
-            const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-            if (existing.length) {
-              void this.app.workspace.revealLeaf(existing[0]);
-              (existing[0].view as ClaudeView).executeSkill(filePath);
-            } else {
-              void this.activateView().then(() => {
-                const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-                if (leaves.length) (leaves[0].view as ClaudeView).executeSkill(filePath);
-              });
-            }
+            void this.withTargetChatView(view => view.executeSkill(filePath));
           }
         });
 
@@ -818,8 +862,7 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   notifyAllowlistChanged(newAllowlist: string[]) {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) (leaves[0].view as ClaudeView).injectAllowlistUpdate(newAllowlist);
+    for (const view of this.chatViews()) view.injectAllowlistUpdate(newAllowlist);
   }
 
   reconfigureLogger() {

@@ -1,10 +1,11 @@
-import { ItemView, sanitizeHTMLToDom, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
+import { ItemView, Keymap, sanitizeHTMLToDom, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App, ViewStateResult } from 'obsidian';
 import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import sponsorImageUrl from '../assets/media/sk_watercolor_300_circle.png';
 import signatureUrl from '../assets/media/signature.png';
 
-import { AppInternal } from './obsidianInternal';
+import { AppInternal, LeafInternal } from './obsidianInternal';
+import { ChatPanelState, parseChatPanelState } from './utils/chatPanels';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
 import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
@@ -239,12 +240,12 @@ export class ClaudeView extends ItemView {
       this.updateExportBtn();
       this.updateSessionStatus();
       this.updateModelIndicator();
-      this.plugin.refreshSessionsViews();
+      this.onPanelSessionChanged();
     });
 
     this.coordinator.on('session:updated', () => {
       this.updateSessionStatus();
-      this.plugin.refreshSessionsViews();
+      this.onPanelSessionChanged();
     });
 
     // ── Turn streaming ───────────────────────────────────────────────────────
@@ -534,13 +535,110 @@ export class ClaudeView extends ItemView {
   }
 
   getViewType(): string { return VIEW_TYPE_CLAUDE; }
-  getDisplayText(): string { return this.plugin.brand.name; }
+  /** The tab title: the session's name. */
+  getDisplayText(): string { return this.coordinator?.sessionTitle || this.plugin.brand.name; }
   getIcon(): string { return this.plugin.brand.icon; }
+
+  // ── Panel state (#399) ─────────────────────────────────────────────────────
+  // Each chat panel remembers its session in the workspace layout, so tabs come
+  // back with their own sessions after a restart. Obsidian opens the view, then
+  // hands it the saved state: the first session is chosen once both are in.
+
+  /** The initial session has been chosen (or the setup card is showing instead). */
+  private initialized = false;
+  /** View state received before the initial session was chosen. */
+  private pendingState: ChatPanelState | null = null;
+  /** Fallback in case no view state ever arrives. */
+  private initTimer: number | null = null;
+  private setupShown = false;
+
+  getState(): Record<string, unknown> {
+    const state = super.getState();
+    const id = this.coordinator.sessionFileId ?? this.pendingState?.sessionFileId;
+    if (id) state.sessionFileId = id;
+    return state;
+  }
+
+  async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    await super.setState(state, result);
+    const st = parseChatPanelState(state);
+    if (!this.initialized) {
+      this.pendingState = st;
+      await this.runInitialSession();
+      return;
+    }
+    // Already showing something: a state change asks for another session
+    if (st.sessionFileId && st.sessionFileId !== this.coordinator.sessionFileId && !this.plugin.leafForSession(st.sessionFileId, this.leaf)) {
+      const session = this.findSession(st.sessionFileId);
+      if (session) this.loadSessionHere(session);
+    }
+  }
+
+  private findSession(id: string): StoredSession | undefined {
+    return loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir).find(s => s.id === id);
+  }
+
+  /** Choose the panel's first session: the one its saved state names, a blank
+   *  panel, or (Resume last session) the last one used, unless another panel
+   *  already has it open. */
+  private async runInitialSession(): Promise<void> {
+    if (this.initialized || this.setupShown || !this.messagesEl) return;
+    this.initialized = true;
+    if (this.initTimer !== null) { window.clearTimeout(this.initTimer); this.initTimer = null; }
+    const st = this.pendingState ?? {};
+    this.pendingState = null;
+
+    let target: StoredSession | undefined;
+    if (st.sessionFileId) {
+      target = this.findSession(st.sessionFileId);
+    } else if (!st.blank && this.plugin.settings.resumeLastSession) {
+      const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir);
+      const lastId = this.plugin.settings.lastActiveSessionId;
+      target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
+    }
+    if (target && !this.plugin.leafForSession(target.id, this.leaf)) {
+      try {
+        await this.loadSession(target);
+      } catch (e) {
+        log('Failed to load session, starting new:', e);
+        this.applyNewSession();
+      }
+    }
+
+    // Show welcome screen if no session was loaded
+    if (this.messagesEl.childElementCount === 0) this.renderWelcomeScreen();
+  }
+
+  /** Redraw the model and effort indicators (a global default changed). */
+  refreshIndicators(): void {
+    this.updateModelIndicator();
+  }
+
+  /** Make sure the first session has been chosen, from `state` if it hasn't.
+   *  Called by the plugin right after opening a panel, before using it. */
+  async ensureInitialized(state: ChatPanelState): Promise<void> {
+    if (this.initialized) return;
+    this.pendingState = this.pendingState ?? state;
+    await this.runInitialSession();
+  }
+
+  /** True when loading another session here loses nothing: an untouched new
+   *  session, nothing running, nothing typed. */
+  isReusable(): boolean {
+    return this.initialized && !this.setupShown && !this.coordinator.sessionId && !this.coordinator.isBusy && !this.inputEl?.value.trim();
+  }
+
+  /** No conversation yet in this panel. */
+  get isPristine(): boolean {
+    return !this.coordinator.sessionId;
+  }
 
   async onOpen() {
     const root = this.containerEl.children[1] as HTMLElement;
     root.empty();
     root.addClass('bojubot-view');
+    // Using a panel makes it the one commands act on
+    this.registerDomEvent(root, 'focusin', () => this.plugin.markChatActive(this.leaf));
 
     const toolbar = root.createDiv({ cls: 'bojubot-toolbar' });
     this.sessionStatusEl = toolbar.createSpan({ cls: 'bojubot-session-status', text: 'New session' });
@@ -549,8 +647,9 @@ export class ClaudeView extends ItemView {
 
     const newSessionBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(newSessionBtn, 'message-square-plus');
-    newSessionBtn.title = 'New session (Shift+click to configure)';
+    newSessionBtn.title = 'New session (Shift+click to configure, Ctrl/Cmd+click for a new tab)';
     newSessionBtn.addEventListener('click', (evt) => {
+      const newTab = Keymap.isModEvent(evt) !== false;
       if (evt.shiftKey) {
         new CustomSessionModal(
           this.app,
@@ -572,8 +671,13 @@ export class ClaudeView extends ItemView {
           this.plugin.settings.backend,
           this.plugin.settings.permissionMode,
           this.plugin.settings.defaultEffort ?? '',
-          (opts) => this.startNewSession(opts),
+          (opts) => {
+            if (newTab) void this.plugin.newSession({ custom: opts, forceNewTab: true, near: this.leaf });
+            else this.startNewSession(opts);
+          },
         ).open();
+      } else if (newTab) {
+        void this.plugin.newSession({ forceNewTab: true, near: this.leaf });
       } else {
         this.startNewSession();
       }
@@ -767,30 +871,24 @@ export class ClaudeView extends ItemView {
 
     // If the default agent's binary is missing, show setup guide and stop here
     if (!this.plugin.getBinaryPath(this.plugin.settings.backend)) {
+      this.setupShown = true;
       this.renderSetupPanel();
       return;
     }
+    this.setupShown = false;
 
-    if (this.plugin.settings.resumeLastSession) {
-      const vaultRoot = this.plugin.getVaultRoot();
-      const sessions = loadAllSessions(vaultRoot, this.getSessionsDir(), this.app.vault.configDir);
-      if (sessions.length > 0) {
-        const lastId = this.plugin.settings.lastActiveSessionId;
-        const target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
-        try {
-          await this.loadSession(target);
-        } catch (e) {
-          log('Failed to load session, starting new:', e);
-          this.applyNewSession();
-        }
-      }
+    // Reopened in place (Check again, Done after signing in): show the same session again
+    if (this.initialized) {
+      this.initialized = false;
+      this.pendingState = this.coordinator.sessionFileId ? { sessionFileId: this.coordinator.sessionFileId } : null;
     }
+    // The saved view state normally arrives right after this (setState); this is the fallback
+    this.initTimer = window.setTimeout(() => { this.initTimer = null; void this.runInitialSession(); }, 200);
 
-    // Show welcome screen if no session was loaded
-    if (this.messagesEl.childElementCount === 0) this.renderWelcomeScreen();
-
-    // Show context file setup modal if the configured file doesn't exist and user hasn't skipped
+    // Show context file setup modal if the configured file doesn't exist and user hasn't skipped.
+    // Once per batch of panels: not again for each restored tab.
     if (
+      !this.plugin.otherChatViewOpen(this) &&
       !this.plugin.settings.skipContextFilePrompt &&
       !this.app.vault.getFileByPath(this.plugin.settings.contextFilePath)
     ) {
@@ -807,7 +905,12 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  async onClose() { /* nothing to clean up yet */ }
+  async onClose() {
+    if (this.initTimer !== null) window.clearTimeout(this.initTimer);
+    // Closing the tab ends its reply: nothing would be left to show or save it
+    if (this.coordinator.isBusy) this.coordinator.cancel();
+    this.plugin.refreshSessionsViews();
+  }
 
   getEffectivePermissionMode(): PermissionMode {
     return this.coordinator.getEffectivePermissionMode();
@@ -897,6 +1000,11 @@ export class ClaudeView extends ItemView {
   }
 
   auditMemoryFile(): void {
+    if (this.coordinator.isBusy) {
+      // Keep this reply running; audit in a new tab
+      void this.plugin.openChatTab({ blank: true }, this.leaf).then(view => view?.auditMemoryFile());
+      return;
+    }
     this.guardSessionChange(() => this.startAuditSession());
   }
 
@@ -946,13 +1054,24 @@ export class ClaudeView extends ItemView {
     if (description && label) this.permissionIconEl.title = `Permissions: ${label} — ${description}. Click to change.`;
   }
 
-  /** Start a new session in the panel (asks first if a reply is still running). */
+  /** Start a new session in the panel. While a reply is running here it keeps
+   *  running, and the new session opens in a new tab instead (#399). */
   startNewSession(custom?: CustomSessionOptions) {
+    if (this.coordinator.isBusy) {
+      void this.plugin.newSession({ custom, forceNewTab: true, near: this.leaf });
+      return;
+    }
     this.guardSessionChange(() => this.applyNewSession(custom));
   }
 
-  /** Open a stored session in the panel (asks first if a reply is still running). */
+  /** Open a stored session: here when this panel is free, otherwise in the tab
+   *  that already has it or a new tab (the plugin decides, #399). */
   openSession(session: StoredSession) {
+    void this.plugin.openSession(session, { from: this });
+  }
+
+  /** Load a session into this panel (asks first if a reply is still running). */
+  loadSessionHere(session: StoredSession) {
     this.guardSessionChange(() => this.loadSession(session));
   }
 
@@ -1341,6 +1460,14 @@ export class ClaudeView extends ItemView {
     } else {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }
+    this.onPanelSessionChanged();
+  }
+
+  /** The panel's session changed: retitle its tab, remember it in the saved
+   *  layout, and redraw the Sessions panel. */
+  private onPanelSessionChanged(): void {
+    (this.leaf as unknown as LeafInternal).updateHeader?.();
+    this.app.workspace.requestSaveLayout();
     this.plugin.refreshSessionsViews();
   }
 
@@ -2439,7 +2566,8 @@ export class ClaudeView extends ItemView {
       void this.plugin.saveSettings().then(() => {
         // Same as a model switch: every turn passes --effort alongside --resume
         this.coordinator.switchSessionEffort(level);
-        this.updateModelIndicator();
+        // The global default changed: other panels that follow it show the new level
+        this.plugin.refreshChatIndicators();
         if (this.coordinator.sessionId) {
           this.appendMessage('system', `Effort set to ${level || 'default'} — takes effect on your next message.`);
         }
@@ -2467,7 +2595,8 @@ export class ClaudeView extends ItemView {
       void this.plugin.saveSettings().then(() => {
         // The session continues — every turn passes --model alongside --resume
         this.coordinator.switchSessionModel(model.id);
-        this.updateModelIndicator();
+        // The global default changed: other panels that follow it show the new model
+        this.plugin.refreshChatIndicators();
         if (this.coordinator.sessionId) {
           this.appendMessage('system', `Switched to ${model.displayName} — takes effect on your next message.`);
         }
