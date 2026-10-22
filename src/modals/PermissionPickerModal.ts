@@ -44,8 +44,10 @@ export function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean, 
 
 /** Overrides for the backend of the session open in the panel. */
 export function activeModeOverrides(plugin: BojuBotPlugin): ModeOverrides {
-  const backend = plugin.getBackend(plugin.getActiveBackendId());
-  return { unavailable: backend.unavailableModes, descriptions: backend.modeDescriptions };
+  const id = plugin.getActiveBackendId();
+  const backend = plugin.getBackend(id);
+  const caps = plugin.getCapabilities(id);
+  return { unavailable: backend.unavailableModes(caps), descriptions: backend.modeDescriptions(caps) };
 }
 
 // ---------------------------------------------------------------------------

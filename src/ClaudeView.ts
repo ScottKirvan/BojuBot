@@ -435,8 +435,11 @@ export class ClaudeView extends ItemView {
       // Live status (#399): a vault-query follow-up keeps the session replying;
       // a permission request waits for the user before the turn counts as ended.
       const continues = !this._stoppingForSwitch && !isInjectTurn && result.pendingQueries.some(q => q.mode === 'inject');
+      // Granting a request means full access, which some conversations can't
+      // take (Antigravity Chat only, #403): no request card for those.
+      const permissionRequest = this.coordinator.modeNeedsNewSession('full') ? null : result.pendingPermissionRequest;
       if (!continues) {
-        if (!this._stoppingForSwitch && result.pendingPermissionRequest) this.applyStatus({ type: 'wait-start' });
+        if (!this._stoppingForSwitch && permissionRequest) this.applyStatus({ type: 'wait-start' });
         this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: !!apiError || this.isAuthError(accumulated) });
       }
 
@@ -458,8 +461,8 @@ export class ClaudeView extends ItemView {
         }
       }
 
-      if (result.pendingPermissionRequest) {
-        this.handlePermissionRequest(result.pendingPermissionRequest, unlock);
+      if (permissionRequest) {
+        this.handlePermissionRequest(permissionRequest, unlock);
         return;
       }
 
@@ -715,8 +718,8 @@ export class ClaudeView extends ItemView {
               models: this.plugin.getModels(id),
               defaultModel: this.plugin.getDefaultModel(id),
               effortLevels: this.supportedEffortLevels(id),
-              unavailableModes: backend.unavailableModes,
-              modeDescriptions: backend.modeDescriptions,
+              unavailableModes: backend.unavailableModes(this.plugin.getCapabilities(id)),
+              modeDescriptions: backend.modeDescriptions(this.plugin.getCapabilities(id)),
             };
           }),
           this.plugin.settings.backend,
@@ -1003,6 +1006,11 @@ export class ClaudeView extends ItemView {
   onSettingsChanged(): void {
     this.coordinator.setPermissionOverride(null);
     this.updatePermissionIcon();
+    if (this.coordinator.modeNeedsNewSession()) {
+      // While a reply runs, the next send makes the switch (handleSend).
+      if (!this.coordinator.isBusy) this.startSessionForModeChange();
+      return;
+    }
     if (this.coordinator.sessionId) {
       const perm = this.coordinator.backend.orientation.permissions[this.plugin.settings.permissionMode];
       this.coordinator.setPendingSystemMessage(
@@ -1100,7 +1108,7 @@ export class ClaudeView extends ItemView {
         this.permissionIconEl.addClass('bojubot-perm-standard');
     }
     // The session's agent may behave differently from Claude Code's wording above
-    const description = this.coordinator.backend.modeDescriptions[mode];
+    const description = this.coordinator.backend.modeDescriptions(this.plugin.getCapabilities(this.coordinator.backendId))[mode];
     const label = PERMISSION_MODES.find(m => m.mode === mode)?.label;
     if (description && label) this.permissionIconEl.title = `Permissions: ${label} — ${description}. Click to change.`;
   }
@@ -1124,6 +1132,38 @@ export class ClaudeView extends ItemView {
   /** Load a session into this panel (asks first if a reply is still running). */
   loadSessionHere(session: StoredSession) {
     this.guardSessionChange(() => this.loadSession(session));
+  }
+
+  /**
+   * The new permission mode can't continue this session's conversation
+   * (Antigravity into or out of Chat only: agy fixes a conversation's tools
+   * when it starts, #403). Start a new session on the same agent with the
+   * same settings, and say why. The old one stays in the Sessions panel.
+   */
+  private startSessionForModeChange(): void {
+    const c = this.coordinator;
+    const mode = c.getEffectivePermissionMode();
+    const agent = c.backend.displayName;
+    // A mode that came from a pin or an in-session upgrade isn't the global
+    // default, so the new session pins it to keep it.
+    const pin = mode !== this.plugin.settings.permissionMode ? mode : undefined;
+    this._customAttachments = [];
+    this._customInitialInstructions = '';
+    this._customSuppressVaultContext = c.suppressVaultContext;
+    c.startNewSession({
+      backend: c.backendId,
+      cwd: c.sessionCwd,
+      suppressVaultContext: c.suppressVaultContext,
+      permissionMode: pin,
+      model: c.sessionModel,
+      effort: c.sessionEffort,
+      rawSession: c.rawSession,
+    });
+    this.updatePermissionIcon();
+    const message = `${mode === 'restricted' ? 'Chat only' : 'Leaving Chat only'} needs a new ${agent} session. Your previous session is in the Sessions panel.`;
+    new Notice(message);
+    this.appendMessage('system', message);
+    log('ClaudeView: new session for permission mode', mode);
   }
 
   private applyNewSession(custom?: CustomSessionOptions) {
@@ -1559,6 +1599,10 @@ export class ClaudeView extends ItemView {
       this.appendMessage('system', `${this.coordinator.backend.displayName} binary not found. Check ${this.plugin.brand.name} settings.`);
       return;
     }
+
+    // The mode changed while a reply was running, or this session was opened
+    // in a mode its conversation can't continue in.
+    if (this.coordinator.modeNeedsNewSession()) this.startSessionForModeChange();
 
     const unlock = () => this.setSendState(false);
     const isNewSession = !this.coordinator.sessionId;
@@ -2099,8 +2143,10 @@ export class ClaudeView extends ItemView {
     }
 
     const currentMode = this.coordinator.getEffectivePermissionMode();
-    if (currentMode !== 'full') {
-      const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    // No upgrade offer when this conversation can't continue in the wider
+    // mode (Antigravity Chat only, #403): switching modes starts a new session.
+    if (currentMode !== 'full' && !this.coordinator.modeNeedsNewSession(upgradeTarget)) {
       const upgradeLabel = currentMode === 'restricted' ? 'Allow standard access for this session' : 'Allow full access for this session';
       const upgradeMsg = currentMode === 'restricted'
         ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`

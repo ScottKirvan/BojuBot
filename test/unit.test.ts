@@ -24,7 +24,7 @@ import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
-import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
+import type { AgentBackend, BackendId, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
 import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands, RENAMED_COMMANDS } from '../src/utils/commandsReference';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
@@ -32,13 +32,14 @@ import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildIn
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
 import { reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
+import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from '../src/utils/apiError';
-import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
+import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
 import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
 import { resolveShellEnv } from '../src/utils/shellEnv';
@@ -2314,6 +2315,20 @@ const AGY_HELP_1_4_0 = [
   '  --model                         Model for the current CLI session',
 ].join('\n');
 
+const AGY_HELP_1_4_4 = [
+  'Usage of agy.exe:',
+  '  --add-dir                       Add a directory to the workspace (repeatable) (default [])',
+  '  --agent                         Agent for the current CLI session',
+  '  --conversation                  Resume a previous conversation by ID',
+  '  --dangerously-skip-permissions  Auto-approve all tool permission requests without prompting',
+  '  --effort                        Reasoning effort for the current CLI session (low|medium|high|xhigh|max)',
+  '  --mode                          Set the agent execution mode for this session (accept-edits, auto, plan)',
+  '  --model                         Model for the current CLI session',
+].join('\n');
+
+/** agy 1.4.4 capabilities after the probe installed BojuBot's agent definitions. */
+const AGY_CAPS_AGENTS = { ...parseCliCapabilities(AGY_HELP_1_4_4, '1.4.4\n'), agentDefinitions: true };
+
 const AGY_READ = [
   { event: 'init', conversation_id: 'conv-read', init: { model: 'gemini-3.8-flash-low', tools: ['view_file'], permission_mode: 'request-review' } },
   { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 0, state: 'DONE', step_type: 'user_input' } },
@@ -2790,9 +2805,11 @@ describe('backend registry helpers', () => {
     for (const id of BACKEND_IDS) assert.equal(getBackend(id).id, id);
   });
 
-  test('Chat only is unavailable on Antigravity, everything is available on Claude Code', () => {
-    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes), []);
-    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes), ['restricted']);
+  test('Chat only is unavailable on Antigravity without its agent definitions, everything is available on Claude Code', () => {
+    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes(UNKNOWN_CAPABILITIES)), []);
+    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes(AGY_CAPS_AGENTS)), []);
+    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes(UNKNOWN_CAPABILITIES)), ['restricted']);
+    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes(AGY_CAPS_AGENTS)), []);
     assert.equal(claudeCodeBackend.listModels, null);
   });
 });
@@ -2892,6 +2909,349 @@ describe('appendTranscript / loadTranscript', () => {
     deleteSession(dir, 's', undefined, dir);
     assert.equal(existsSync(transcriptPath(dir, 's')), false);
     assert.deepEqual(loadAllSessions(dir, dir, '.obsidian'), []);
+  }));
+});
+
+describe('agy agents: spawn args', () => {
+  const base = ['--input-format', 'stream-json', '--output-format', 'stream-json'];
+
+  test('a new conversation passes its agent before today\'s mode flags', () => {
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', capabilities: AGY_CAPS_AGENTS }), [...base, '--agent', 'bojubot', '--mode', 'accept-edits']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'readonly' }), [...base, '--agent', 'bojubot', '--mode', 'plan']);
+    assert.deepEqual(
+      buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'standard', model: 'gemini-3.8-flash-high', effort: 'high', capabilities: AGY_CAPS_AGENTS }),
+      [...base, '--agent', 'bojubot', '--mode', 'accept-edits', '--model', 'gemini-3.8-flash-high', '--effort', 'high'],
+    );
+  });
+
+  test('a resumed conversation keeps today\'s mode flags and sends no --agent (agy keeps the one it started with)', () => {
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', resumeSessionId: 'c1', permissionMode: 'full' }), [...base, '--dangerously-skip-permissions', '--conversation', 'c1']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', resumeSessionId: 'c1', permissionMode: 'readonly' }), [...base, '--mode', 'plan', '--conversation', 'c1']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', resumeSessionId: 'c1', permissionMode: 'standard' }), [...base, '--mode', 'accept-edits', '--conversation', 'c1']);
+  });
+
+  test('Chat only runs bojubot-chat with prompts off, on its first turn and after', () => {
+    assert.deepEqual(buildAgySpawnArgs({ agent: AGY_CHAT_AGENT, permissionMode: 'restricted' }), [...base, '--agent', 'bojubot-chat', '--dangerously-skip-permissions']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: AGY_CHAT_AGENT, permissionMode: 'restricted', resumeSessionId: 'c2' }), [...base, '--dangerously-skip-permissions', '--conversation', 'c2']);
+  });
+
+  test('no agent: exactly today\'s args, Chat only failing closed to plan mode', () => {
+    for (const mode of ['standard', 'readonly', 'restricted', 'full'] as const) {
+      assert.deepEqual(buildAgySpawnArgs({ permissionMode: mode, capabilities: AGY_CAPS_AGENTS }), [...base, ...agyPermissionArgs(mode)], mode);
+    }
+    assert.deepEqual(buildAgySpawnArgs({ permissionMode: 'restricted' }), [...base, '--mode', 'plan']);
+  });
+});
+
+describe('agyConversationAgent / agyNeedsNewConversation', () => {
+  test('Standard and Read only start as bojubot, Chat only as bojubot-chat, Full access with no agent', () => {
+    assert.equal(agyConversationAgent('standard', AGY_CAPS_AGENTS), 'bojubot');
+    assert.equal(agyConversationAgent('readonly', AGY_CAPS_AGENTS), 'bojubot');
+    assert.equal(agyConversationAgent('restricted', AGY_CAPS_AGENTS), 'bojubot-chat');
+    assert.equal(agyConversationAgent('full', AGY_CAPS_AGENTS), undefined);
+  });
+
+  test('no agent unless agy lists --agent and the definitions were written', () => {
+    const listedOnly = parseCliCapabilities(AGY_HELP_1_4_4, '1.4.4\n');
+    const writtenButUnlisted = { ...parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n'), agentDefinitions: true };
+    for (const caps of [UNKNOWN_CAPABILITIES, listedOnly, writtenButUnlisted]) {
+      assert.equal(agyAgentsAvailable(caps), false);
+      for (const mode of ['standard', 'readonly', 'restricted', 'full'] as const) assert.equal(agyConversationAgent(mode, caps), undefined, mode);
+    }
+  });
+
+  test('only moving into or out of Chat only needs a new conversation', () => {
+    for (const agent of ['bojubot', undefined]) {
+      assert.equal(agyNeedsNewConversation(agent, 'standard'), false);
+      assert.equal(agyNeedsNewConversation(agent, 'readonly'), false);
+      assert.equal(agyNeedsNewConversation(agent, 'full'), false);
+      assert.equal(agyNeedsNewConversation(agent, 'restricted'), true);
+    }
+    assert.equal(agyNeedsNewConversation('bojubot-chat', 'restricted'), false);
+    for (const mode of ['standard', 'readonly', 'full'] as const) assert.equal(agyNeedsNewConversation('bojubot-chat', mode), true, mode);
+  });
+});
+
+describe('agyAgentDefinition', () => {
+  const frontmatter = (text: string) => text.split('\n---\n')[0];
+  const body = (text: string) => text.slice(text.indexOf('\n---\n') + 5);
+
+  test('two agents: bojubot for Standard, Read only and Full; bojubot-chat for Chat only', () => {
+    assert.deepEqual([...AGY_AGENTS], ['bojubot', 'bojubot-chat']);
+    assert.equal(AGY_MAIN_AGENT, 'bojubot');
+  });
+
+  test('bojubot lists every registry tool, shell and write tools included; bojubot-chat only the web tools', () => {
+    assert.equal(AGY_REGISTRY_TOOLS.length, 26);
+    assert.deepEqual(AGY_AGENT_TOOLS.bojubot, AGY_REGISTRY_TOOLS);
+    for (const t of ['run_command', 'write_to_file', 'replace_file_content', 'view_file', 'search_web', 'read_url_content']) assert.ok(AGY_REGISTRY_TOOLS.includes(t), t);
+    // Tools agy refuses in a definition (it then won't start the session)
+    for (const t of ['command_status', 'send_command_input', 'call_mcp_tool', 'browser_subagent', 'sed_file']) assert.ok(!AGY_REGISTRY_TOOLS.includes(t), t);
+    assert.deepEqual([...AGY_AGENT_TOOLS['bojubot-chat']], ['search_web', 'read_url_content']);
+  });
+
+  test('bojubot-chat frontmatter, exactly', () => {
+    assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
+      '---',
+      'name: bojubot-chat',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v1), which rewrites this file when it changes."',
+      'tools:',
+      '  - search_web',
+      '  - read_url_content',
+      'mainAgent: true',
+      'subagent: false',
+      'commandExecutionPolicy: "off"',
+    ].join('\n'));
+  });
+
+  test('bojubot frontmatter: every tool listed, main agent only, agy\'s default command policy', () => {
+    const fm = frontmatter(agyAgentDefinition(AGY_MAIN_AGENT));
+    assert.ok(fm.startsWith('---\nname: bojubot\ndescription: "BojuBot Standard, Read only and Full access modes. '));
+    assert.equal(fm.match(/^ {2}- /gm)?.length, 26);
+    assert.ok(fm.endsWith('\nmainAgent: true\nsubagent: false'));
+    assert.ok(!fm.includes('commandExecutionPolicy'));
+  });
+
+  test('ruleset in both: bare vault-relative wikilinks, no file:// or backticks', () => {
+    for (const name of AGY_AGENTS) {
+      const b = body(agyAgentDefinition(name));
+      assert.match(b, /## Links\n/, name);
+      assert.match(b, /bare wikilinks: \[\[folder\/note\]\]/, name);
+      assert.match(b, /Never write file:\/\/ URIs/, name);
+      assert.match(b, /Never put backticks around a link/, name);
+      assert.ok(agyAgentDefinition(name).endsWith('\n'), name);
+    }
+  });
+
+  test('bojubot ruleset is mode-neutral: file tools over shell, UI Bridge file ops, request-permission after a denial', () => {
+    const b = body(agyAgentDefinition(AGY_MAIN_AGENT));
+    assert.match(b, /Follow the latest permission note you were given\. When a tool call is denied, don't retry it/);
+    assert.match(b, /- List a folder: list_dir, not dir, ls or Get-ChildItem\./);
+    assert.match(b, /- Read a file: view_file, not cat, type or Get-Content\./);
+    assert.match(b, /- Search inside files: grep_search, not grep, findstr or Select-String\./);
+    assert.match(b, /- Create or change a file: write_to_file/);
+    assert.match(b, /Use the UI Bridge actions rename-file, move-file and delete-file/);
+    assert.match(b, /If a shell command is denied, say which command you need and why/);
+    assert.ok(b.includes('\n@@BOJU {"action":"request-permission","tool":"run_command","reason":"<why>"}\n'));
+    for (const word of ['Standard mode', 'Read only mode', 'Full access mode']) assert.ok(!b.includes(word), word);
+  });
+
+  test('bojubot-chat ruleset: web only, no file tools, no permission requests', () => {
+    const b = body(agyAgentDefinition(AGY_CHAT_AGENT));
+    assert.match(b, /You have web tools only: search_web and read_url_content\. You can't read, list, search or change files, and you have no shell\./);
+    assert.match(b, /which starts a new session/);
+    for (const word of ['view_file', 'run_command', 'request-permission', 'rename-file']) assert.ok(!b.includes(word), word);
+  });
+});
+
+describe('syncAgyAgentDefinitions', () => {
+  const withDir = (fn: (dir: string) => void) => () => {
+    const root = mkdtempSync(join(tmpdir(), 'bojubot-agy-agents-'));
+    try { fn(join(root, 'agents')); } finally { rmSync(root, { recursive: true, force: true }); }
+  };
+
+  test('global folder is ~/.gemini/config/agents', () => {
+    assert.equal(agyAgentsDir(join('C:', 'Users', 'u')), join('C:', 'Users', 'u', '.gemini', 'config', 'agents'));
+    assert.equal(agyAgentPath(join('x', 'agents'), AGY_CHAT_AGENT), join('x', 'agents', 'bojubot-chat.md'));
+  });
+
+  test('creates the folder and both definitions, then leaves unchanged files alone', withDir((dir) => {
+    assert.deepEqual(syncAgyAgentDefinitions(dir), ['bojubot', 'bojubot-chat']);
+    for (const name of AGY_AGENTS) assert.equal(readFileSync(agyAgentPath(dir, name), 'utf8'), agyAgentDefinition(name));
+    assert.deepEqual(syncAgyAgentDefinitions(dir), []);
+  }));
+
+  test('rewrites only a definition whose content changed', withDir((dir) => {
+    syncAgyAgentDefinitions(dir);
+    writeFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'edited by hand', 'utf8');
+    assert.deepEqual(syncAgyAgentDefinitions(dir), ['bojubot-chat']);
+    assert.equal(readFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'utf8'), agyAgentDefinition(AGY_CHAT_AGENT));
+  }));
+
+  test('never touches other files in the folder', withDir((dir) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'my-agent.md'), 'mine', 'utf8');
+    writeFileSync(join(dir, 'bojubot-full.md'), 'not ours to manage', 'utf8');
+    syncAgyAgentDefinitions(dir);
+    assert.equal(readFileSync(join(dir, 'my-agent.md'), 'utf8'), 'mine');
+    assert.equal(readFileSync(join(dir, 'bojubot-full.md'), 'utf8'), 'not ours to manage');
+  }));
+
+  test('throws when the folder can\'t be written', withDir((dir) => {
+    mkdirSync(join(dir, '..'), { recursive: true });
+    writeFileSync(dir, 'a file where the folder should be', 'utf8');
+    assert.throws(() => syncAgyAgentDefinitions(dir));
+  }));
+});
+
+describe('withAgyAgentDefinitions', () => {
+  const listed = parseCliCapabilities(AGY_HELP_1_4_4, '1.4.4\n');
+  const unlisted = parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n');
+
+  test('installs and marks the definitions when agy lists --agent', () => {
+    let calls = 0;
+    const caps = withAgyAgentDefinitions(listed, () => { calls++; return []; });
+    assert.equal(calls, 1);
+    assert.equal(caps.agentDefinitions, true);
+    assert.equal(caps.version, '1.4.4');
+    assert.equal(agyAgentsAvailable(caps), true);
+  });
+
+  test('writes nothing when agy does not list --agent', () => {
+    let calls = 0;
+    assert.equal(withAgyAgentDefinitions(unlisted, () => { calls++; }), unlisted);
+    assert.equal(withAgyAgentDefinitions(UNKNOWN_CAPABILITIES, () => { calls++; }), UNKNOWN_CAPABILITIES);
+    assert.equal(calls, 0);
+  });
+
+  test('a failed write leaves the capabilities unmarked: no agent, Chat only unavailable', () => {
+    const caps = withAgyAgentDefinitions(listed, () => { throw new Error('EACCES'); });
+    assert.equal(caps.agentDefinitions, undefined);
+    assert.equal(agyConversationAgent('standard', caps), undefined);
+    assert.ok(agyUnavailableModes(caps).restricted);
+  });
+});
+
+describe('agy agent rejection fallback', () => {
+  const REGISTRY_ERROR = 'failed to construct executor: failed to resolve components: unknown component: tool "sed_file" not found in registry';
+
+  test('recognizes agy\'s errors for an agent it cannot start', () => {
+    assert.equal(isAgyAgentRejection(REGISTRY_ERROR), true);
+    assert.equal(isAgyAgentRejection('unknown agent "bojubot" (available: other)'), true);
+    assert.equal(isAgyAgentRejection('quota exhausted'), false);
+    assert.equal(agyApiError('error: unknown agent "bojubot-chat" (available: x)').errorCode, 'agy_agent_rejected');
+    const display = formatApiError(agyApiError('unknown agent "bojubot-chat" (available: x)'), 'win32');
+    assert.equal(display.title, "Antigravity couldn't start this mode's agent");
+  });
+
+  test('after a rejection, new conversations start with no agent and Chat only is unavailable again', async () => {
+    resetAgyAgentRejection();
+    try {
+      assert.equal(agyAgentsAvailable(AGY_CAPS_AGENTS), true);
+      const r = await runAgy([], { stderr: ['error: unknown agent "bojubot" (available: none)\n'] });
+      assert.equal(r.apiErrors[0].errorCode, 'agy_agent_rejected');
+      assert.equal(agyAgentsAvailable(AGY_CAPS_AGENTS), false);
+      assert.equal(agyConversationAgent('standard', AGY_CAPS_AGENTS), undefined);
+      assert.ok(agyUnavailableModes(AGY_CAPS_AGENTS).restricted);
+    } finally {
+      resetAgyAgentRejection();
+    }
+  });
+
+  test('a rejected first turn binds no conversation, so the next turn starts a fresh one', async () => {
+    resetAgyAgentRejection();
+    try {
+      const r = await runAgy([
+        { event: 'init', conversation_id: 'conv-bad', init: {} },
+        { event: 'result', result: { conversation_id: 'conv-bad', status: 'ERROR', error: REGISTRY_ERROR } },
+      ]);
+      assert.equal(r.sessionId, undefined);
+      assert.equal(r.apiErrors[0].errorCode, 'agy_agent_rejected');
+    } finally {
+      resetAgyAgentRejection();
+    }
+  });
+});
+
+describe('SessionCoordinator Antigravity agents', () => {
+  const agentHost = (dir: string, mode: PermissionMode = 'standard', caps: CliCapabilities = AGY_CAPS_AGENTS) => {
+    let current = mode;
+    const env = twoBackendHost(dir, {
+      getDefaultBackend: () => 'antigravity',
+      getPermissionMode: () => current,
+      getCliCapabilities: (id: BackendId) => (id === 'antigravity' ? caps : UNKNOWN_CAPABILITIES),
+    });
+    return { ...env, setMode: (m: PermissionMode) => { current = m; } };
+  };
+
+  test('the first turn picks the agent, the session records it, later turns resume with it', withSessionsDir((dir) => {
+    const { host, agy } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    c.send('hello', 'hello');
+    assert.equal(agy.spawns[0].agent, 'bojubot');
+    agy.streams[0].onDone('conv-1', true);
+    assert.equal(c.conversationAgent, 'bojubot');
+    assert.equal(storedSessions(dir)[0].agent, 'bojubot');
+    c.send('again');
+    assert.equal(agy.spawns[1].agent, 'bojubot');
+    assert.equal(agy.spawns[1].resumeSessionId, 'conv-1');
+  }));
+
+  test('a session started in Full access has no agent; one started in Chat only runs bojubot-chat', withSessionsDir((dir) => {
+    const full = agentHost(dir, 'full');
+    const c = new SessionCoordinator(full.host);
+    c.startNewSession();
+    c.send('hi', 'hi');
+    assert.equal(full.agy.spawns[0].agent, undefined);
+    full.agy.streams[0].onDone('conv-f', true);
+    assert.equal('agent' in storedSessions(dir)[0], false);
+
+    const dir2 = mkdtempSync(join(tmpdir(), 'bojubot-backend-test-'));
+    try {
+      const chat = agentHost(dir2, 'restricted');
+      const c2 = new SessionCoordinator(chat.host);
+      c2.startNewSession();
+      c2.send('hi', 'hi');
+      assert.equal(chat.agy.spawns[0].agent, 'bojubot-chat');
+    } finally { rmSync(dir2, { recursive: true, force: true }); }
+  }));
+
+  test('an upgrade to Full access mid-session keeps the conversation\'s bojubot agent', withSessionsDir((dir) => {
+    const { host, agy } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    c.send('hello', 'hello');
+    agy.streams[0].onDone('conv-1', true);
+    c.setPermissionOverride('full');
+    assert.equal(c.modeNeedsNewSession(), false);
+    c.send('retry');
+    assert.equal(agy.spawns[1].agent, 'bojubot');
+    assert.equal(agy.spawns[1].permissionMode, 'full');
+  }));
+
+  test('moving into or out of Chat only needs a new session once the conversation has started', withSessionsDir((dir) => {
+    const { host, agy, setMode } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    setMode('restricted');
+    assert.equal(c.modeNeedsNewSession(), false, 'no conversation yet: just switches');
+    setMode('standard');
+    c.send('hello', 'hello');
+    agy.streams[0].onDone('conv-1', true);
+    assert.equal(c.modeNeedsNewSession('readonly'), false);
+    assert.equal(c.modeNeedsNewSession('full'), false);
+    assert.equal(c.modeNeedsNewSession('restricted'), true);
+    setMode('restricted');
+    assert.equal(c.modeNeedsNewSession(), true);
+  }));
+
+  test('a loaded session keeps the agent it started with', withSessionsDir(async (dir) => {
+    const { host } = agentHost(dir, 'restricted');
+    const c = new SessionCoordinator(host);
+    await c.loadSession({ id: 's1', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-c', backend: 'antigravity', agent: 'bojubot-chat' });
+    assert.equal(c.conversationAgent, 'bojubot-chat');
+    assert.equal(c.modeNeedsNewSession(), false);
+    assert.equal(c.modeNeedsNewSession('standard'), true);
+  }));
+
+  test('no definitions: no agent, and Chat only never asks for a new session it can\'t have', withSessionsDir((dir) => {
+    const { host, agy } = agentHost(dir, 'standard', AGY_CAPS);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    c.send('hello', 'hello');
+    assert.equal(agy.spawns[0].agent, undefined);
+  }));
+
+  test('Claude Code sessions never pick an agent or need a new session for a mode change', withSessionsDir((dir) => {
+    const { host, claude } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code' });
+    c.send('hello', 'hello');
+    assert.equal(claude.spawns[0].agent, undefined);
+    claude.streams[0].onDone('sess-1', true);
+    for (const mode of ['standard', 'readonly', 'restricted', 'full'] as const) assert.equal(c.modeNeedsNewSession(mode), false, mode);
+    assert.equal('agent' in storedSessions(dir)[0], false);
   }));
 });
 
@@ -3043,14 +3403,21 @@ describe('contextGenStatusForTool', () => {
 
 describe('backend permission wording', () => {
   test('Claude Code keeps the stock picker wording', () => {
-    assert.deepEqual(claudeCodeBackend.modeDescriptions, {});
+    assert.deepEqual(claudeCodeBackend.modeDescriptions(UNKNOWN_CAPABILITIES), {});
   });
   test('Antigravity says Standard has no shell commands, and describes every mode it offers', () => {
-    assert.match(antigravityBackend.modeDescriptions.standard ?? '', /no shell/);
-    for (const mode of ['standard', 'readonly', 'full'] as const) {
-      assert.ok(antigravityBackend.modeDescriptions[mode], mode);
-      assert.equal(antigravityBackend.unavailableModes[mode], undefined, mode);
+    for (const caps of [UNKNOWN_CAPABILITIES, AGY_CAPS_AGENTS]) {
+      const descriptions = antigravityBackend.modeDescriptions(caps);
+      assert.match(descriptions.standard ?? '', /no shell/);
+      for (const mode of ['standard', 'readonly', 'full'] as const) {
+        assert.ok(descriptions[mode], mode);
+        assert.equal(antigravityBackend.unavailableModes(caps)[mode], undefined, mode);
+      }
     }
+  });
+  test('Chat only is described only once it is offered', () => {
+    assert.equal(agyModeDescriptions(UNKNOWN_CAPABILITIES).restricted, undefined);
+    assert.equal(agyModeDescriptions(AGY_CAPS_AGENTS).restricted, 'web only, no file access; switching starts a new session');
   });
 });
 

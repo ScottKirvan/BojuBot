@@ -137,6 +137,8 @@ interface SessionState {
   hasCustomTitle: boolean;
   /** Set while the session file exists but no turn has bound a conversation ID. */
   placeholderId: string | undefined;
+  /** The CLI agent the conversation started as (Antigravity, #403); undefined = none. */
+  agent: string | undefined;
 }
 
 function emptySessionState(backend: BackendId): SessionState {
@@ -144,7 +146,7 @@ function emptySessionState(backend: BackendId): SessionState {
     sessionId: undefined, fileId: undefined, title: undefined, createdAt: undefined,
     backend, backendPinned: false, cwd: undefined, suppressVaultContext: false,
     permissionMode: undefined, model: undefined, effort: undefined, rawSession: false,
-    hasCustomTitle: false, placeholderId: undefined,
+    hasCustomTitle: false, placeholderId: undefined, agent: undefined,
   };
 }
 
@@ -204,6 +206,19 @@ export class SessionCoordinator {
   get sessionModel(): string | undefined { return this._s.model; }
   get sessionEffort(): string | undefined { return this._s.effort; }
   get rawSession(): boolean { return this._s.rawSession; }
+  /** The CLI agent the conversation started as; undefined = none (or not started yet). */
+  get conversationAgent(): string | undefined { return this._s.agent; }
+
+  /**
+   * True when the session's conversation can't continue in `mode` (default:
+   * the effective mode) and switching to it needs a new session — on
+   * Antigravity, moving into or out of Chat only (#403). Never true before
+   * the first turn: a session with no conversation just switches.
+   */
+  modeNeedsNewSession(mode: PermissionMode = this.getEffectivePermissionMode()): boolean {
+    if (!this._s.sessionId) return false;
+    return this.backend.needsNewConversation?.(this._s.agent, mode) ?? false;
+  }
 
   /** The `--effort` level for the next turn (session pin, then global default),
    *  or undefined when it's Default or the installed CLI doesn't list it. */
@@ -285,6 +300,7 @@ export class SessionCoordinator {
       backend: custom?.backend ?? this.host.getDefaultBackend?.() ?? 'claude-code',
       backendPinned: !!custom?.backend,
       hasCustomTitle: !!custom?.name?.trim(),
+      agent: undefined,
     };
 
     const session = this._storedSession(this._s, sessionId, '', now);
@@ -361,6 +377,7 @@ export class SessionCoordinator {
       backend: sessionBackend(session),
       backendPinned: !!session.backend,
       hasCustomTitle: false,
+      agent: session.agent || undefined,
     };
 
     await this.host.saveLastActiveSessionId(session.id);
@@ -457,6 +474,7 @@ export class SessionCoordinator {
         model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
         capabilities: this.capabilities,
+        agent: this._s.agent,
       });
     } catch (e) {
       onError(`Failed to start ${backend.displayName}: ${e}`);
@@ -504,19 +522,26 @@ export class SessionCoordinator {
     }
 
     const streaming = this.host.isStreamingEnabled?.() ?? false;
+    const mode = this.getEffectivePermissionMode();
+    // A new conversation picks its agent now; a resumed one keeps the agent it
+    // started with (the CLI fixes it at the start, #403).
+    const agent = turnSession.sessionId
+      ? turnSession.agent
+      : backend.conversationAgent?.(mode, this.capabilities);
     let proc: ChildProcess;
     try {
       proc = backend.spawnTurn({
         binaryPath: binary,
         prompt,
-        cwd: resolveSpawnCwd(this.getEffectivePermissionMode(), turnSession.cwd, this.host.getVaultRoot()),
+        cwd: resolveSpawnCwd(mode, turnSession.cwd, this.host.getVaultRoot()),
         env: this.host.getEnv(),
         resumeSessionId: turnSession.sessionId,
-        permissionMode: this.getEffectivePermissionMode(),
+        permissionMode: mode,
         model: this.getEffectiveModel(),
         effort: this.getEffectiveEffort(),
         includePartialMessages: streaming,
         capabilities: this.capabilities,
+        agent,
       });
       this._activeProc = proc;
     } catch (e) {
@@ -601,6 +626,7 @@ export class SessionCoordinator {
       onDone: (sessionId, clean) => {
         if (!this._procEnded(proc)) return;
         if (sessionId) {
+          if (!turnSession.sessionId) turnSession.agent = agent;
           this._persistSessionAfterTurn(turnSession, sessionId, firstUserInput);
           if (!backend.readableHistory) this._appendTranscript(turnSession, prompt, transcriptReply);
         }
@@ -653,6 +679,7 @@ export class SessionCoordinator {
       ...(s.model && { model: s.model }),
       ...(s.effort && { effort: s.effort }),
       ...(s.rawSession && { rawSession: true }),
+      ...(s.agent && { agent: s.agent }),
     };
   }
 
