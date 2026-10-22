@@ -535,120 +535,162 @@
   }
 }
 
-/* ── Session history modal ── */
-.bojubot-session-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+/* ── Sessions panel (#399) ── */
+.bojubot-sessions-view {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  padding: 0;
 }
 
-.bojubot-session-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid var(--background-modifier-border);
-}
-
-.bojubot-session-item:hover {
-  background: var(--background-secondary);
-}
-
-.bojubot-session-item.bojubot-session-active {
-  border-left: 3px solid var(--color-blue);
-  padding-left: 9px;
-  /* compensate for the wider border */
-}
-
-.bojubot-session-item.bojubot-session-active .bojubot-session-title {
-  font-weight: 600;
-}
-
-.bojubot-session-drag-handle {
+.bojubot-sessions-header {
   display: flex;
   align-items: center;
-  color: var(--text-faint);
-  cursor: grab;
-  flex-shrink: 0;
-  margin-right: 4px;
+  gap: 4px;
+  padding: 8px 8px 4px;
 }
 
-.bojubot-session-item.bojubot-session-dragging {
-  opacity: 0.4;
-}
-
-.bojubot-session-item.bojubot-session-dragover-above {
-  border-top: 2px solid var(--color-accent);
-}
-
-.bojubot-session-item.bojubot-session-dragover-below {
-  border-bottom: 2px solid var(--color-accent);
-}
-
-.bojubot-session-title {
+.bojubot-sessions-filter {
   flex: 1;
+  min-width: 0;
+}
+
+.bojubot-sessions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 4px 8px;
+}
+
+.bojubot-sessions-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  padding: 8px;
+}
+
+.bojubot-sessions-group-label {
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  padding: 10px 8px 2px;
+}
+
+.bojubot-sessions-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 8px;
+  border-radius: var(--radius-s);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.bojubot-sessions-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bojubot-sessions-row:focus-visible {
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+  outline: none;
+}
+
+.bojubot-sessions-row.is-active {
+  background: var(--background-modifier-active-hover);
+  border-left-color: var(--interactive-accent);
+}
+
+.bojubot-sessions-row-remote .bojubot-sessions-row-text {
+  opacity: 0.6;
+}
+
+.bojubot-sessions-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.bojubot-sessions-row-title-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bojubot-sessions-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+
+.bojubot-sessions-row.is-active .bojubot-sessions-row-title {
+  font-weight: var(--font-semibold);
+}
+
+.bojubot-sessions-row-pin {
+  display: flex;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.bojubot-sessions-row-pin svg {
+  width: 12px;
+  height: 12px;
+}
+
+.bojubot-sessions-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.bojubot-sessions-row-agent-model {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bojubot-session-date {
-  font-size: 0.8em;
-  color: var(--text-muted);
+.bojubot-sessions-row-time {
   flex-shrink: 0;
-}
-
-.bojubot-modal-empty {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.bojubot-session-remote {
-  opacity: 0.5;
-}
-
-.bojubot-session-remote-badge {
-  font-size: 0.7em;
-  color: var(--text-muted);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 3px;
-  padding: 1px 5px;
-  flex-shrink: 0;
-}
-
-.bojubot-session-tokens {
-  font-size: 0.75em;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.bojubot-session-tokens-context {
-  font-size: 0.75em;
   color: var(--text-faint);
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
-.bojubot-export-btn,
-.bojubot-rename-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 4px;
-  opacity: 0.4;
-  flex-shrink: 0;
+.bojubot-sessions-row-time::before {
+  content: '· ';
 }
 
-.bojubot-session-item:hover .bojubot-export-btn,
-.bojubot-session-item:hover .bojubot-rename-btn {
+.bojubot-sessions-row-agent svg {
+  width: 12px;
+  height: 12px;
+}
+
+.bojubot-sessions-row-more {
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.bojubot-sessions-row:hover .bojubot-sessions-row-more,
+.bojubot-sessions-row:focus-within .bojubot-sessions-row-more {
   opacity: 1;
+}
+
+.bojubot-sessions-rename {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-ui-small);
+}
+
+.bojubot-sessions-dragging {
+  opacity: 0.4;
+}
+
+.bojubot-sessions-dragover-above {
+  box-shadow: inset 0 2px 0 var(--interactive-accent);
+}
+
+.bojubot-sessions-dragover-below {
+  box-shadow: inset 0 -2px 0 var(--interactive-accent);
 }
 
 /* ── Export to vault modal ── */
@@ -682,16 +724,6 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.bojubot-rename-input {
-  flex: 1;
-  font-size: inherit;
-  padding: 1px 4px;
-  border: 1px solid var(--interactive-accent);
-  border-radius: 3px;
-  background: var(--background-primary);
-  color: var(--text-normal);
 }
 
 /* ── Session history divider ── */
@@ -2301,10 +2333,6 @@
 .bojubot-agent-icon svg {
   width: 14px;
   height: 14px;
-}
-
-.bojubot-session-agent {
-  margin-right: 6px;
 }
 
 .bojubot-welcome-recent-agent {

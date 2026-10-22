@@ -17,7 +17,7 @@ import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, updateStoredSession, ChatMessage, StoredSession } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, loadSessionFile, updateStoredSession, ChatMessage, StoredSession } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
 import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
@@ -48,6 +48,7 @@ import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, r
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
+import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2946,6 +2947,15 @@ describe('SessionCoordinator session-owned permission mode', () => {
     assert.deepEqual(noted, [started, 'a']);
   }));
 
+  test('changing the mode leaves the session\'s last-active time alone', withSessionsDir(async (dir) => {
+    const updatedAt = '2026-01-01T00:00:00.000Z';
+    saveSession(dir, storedSession('a', { permissionMode: 'standard', updatedAt }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    coordinator.setSessionPermissionMode('readonly');
+    assert.equal(readSessionFile(dir, 'a').updatedAt, updatedAt);
+  }));
+
   test('a mode changed while a turn runs is kept when that turn saves the session', withSessionsDir((dir) => {
     const { host, claude } = twoBackendHost(dir);
     const coordinator = new SessionCoordinator(host);
@@ -4208,6 +4218,188 @@ describe('SessionCoordinator switching session mid-turn', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Sessions panel (#399)
+// ---------------------------------------------------------------------------
+
+describe('sessionDateGroup', () => {
+  // Local time, so "today" means the same local calendar day as `now`
+  const now = new Date(2026, 9, 21, 15, 0, 0).getTime();
+
+  test('earlier the same local day is today', () => {
+    assert.equal(sessionDateGroup(new Date(2026, 9, 21, 0, 0, 1).toISOString(), now), 'today');
+    assert.equal(sessionDateGroup(new Date(2026, 9, 21, 14, 59).toISOString(), now), 'today');
+  });
+
+  test('yesterday evening is this week, not today', () => {
+    assert.equal(sessionDateGroup(new Date(2026, 9, 20, 23, 59).toISOString(), now), 'week');
+  });
+
+  test('within the last 7 days is this week; older than that is older', () => {
+    assert.equal(sessionDateGroup(new Date(2026, 9, 15, 16, 0).toISOString(), now), 'week');
+    assert.equal(sessionDateGroup(new Date(2026, 9, 14, 14, 0).toISOString(), now), 'older');
+  });
+
+  test('an unparseable date is older', () => {
+    assert.equal(sessionDateGroup('not a date', now), 'older');
+  });
+});
+
+describe('groupSessions', () => {
+  const now = new Date(2026, 9, 21, 15, 0, 0).getTime();
+  const today = new Date(2026, 9, 21, 9, 0).toISOString();
+  const week = new Date(2026, 9, 18, 9, 0).toISOString();
+  const old = new Date(2026, 8, 1, 9, 0).toISOString();
+
+  test('groups in Pinned / Today / This week / Older order, keeping input order inside each', () => {
+    const sessions = [
+      { id: 'a', updatedAt: old },
+      { id: 'b', updatedAt: today },
+      { id: 'c', updatedAt: week, pinned: true },
+      { id: 'd', updatedAt: today },
+      { id: 'e', updatedAt: week },
+    ];
+    const groups = groupSessions(sessions, now);
+    assert.deepEqual(groups.map(g => [g.label, g.sessions.map(s => s.id)]), [
+      ['Pinned', ['c']],
+      ['Today', ['b', 'd']],
+      ['This week', ['e']],
+      ['Older', ['a']],
+    ]);
+  });
+
+  test('empty groups are left out', () => {
+    const groups = groupSessions([{ id: 'x', updatedAt: old }], now);
+    assert.deepEqual(groups.map(g => g.key), ['older']);
+  });
+
+  test('no sessions → no groups', () => {
+    assert.deepEqual(groupSessions([], now), []);
+  });
+
+  test('sessionGroupKey matches the group a session is listed under', () => {
+    assert.equal(sessionGroupKey({ updatedAt: old, pinned: true }, now), 'pinned');
+    assert.equal(sessionGroupKey({ updatedAt: today }, now), 'today');
+  });
+});
+
+describe('relativeTime', () => {
+  const now = Date.parse('2026-10-21T15:00:00Z');
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  test('minutes, hours and days', () => {
+    assert.equal(relativeTime(ago(20_000), now), 'just now');
+    assert.equal(relativeTime(ago(5 * 60_000), now), '5m ago');
+    assert.equal(relativeTime(ago(3 * 3_600_000), now), '3h ago');
+    assert.equal(relativeTime(ago(30 * 3_600_000), now), 'yesterday');
+    assert.equal(relativeTime(ago(4 * 86_400_000), now), '4d ago');
+  });
+
+  test('a week or more shows a short date', () => {
+    const text = relativeTime(ago(30 * 86_400_000), now);
+    assert.ok(!text.endsWith('ago') && text.length > 0, text);
+  });
+
+  test('an unparseable date gives empty text', () => {
+    assert.equal(relativeTime('nope', now), '');
+  });
+});
+
+describe('filterSessions', () => {
+  const sessions = [{ title: 'Vault cleanup' }, { title: 'Draft essay' }, { title: 'cleanup notes' }];
+
+  test('case-insensitive title match', () => {
+    assert.deepEqual(filterSessions(sessions, 'CLEANUP').map(s => s.title), ['Vault cleanup', 'cleanup notes']);
+  });
+
+  test('an empty or blank query keeps everything', () => {
+    assert.equal(filterSessions(sessions, '   '), sessions);
+  });
+
+  test('no match → empty list', () => {
+    assert.deepEqual(filterSessions(sessions, 'zzz'), []);
+  });
+});
+
+describe('moveSession', () => {
+  const list = ['a', 'b', 'c', 'd'].map(id => ({ id }));
+  const ids = (l: { id: string }[]) => l.map(s => s.id).join('');
+
+  test('moves before or after the target', () => {
+    assert.equal(ids(moveSession(list, 'a', 'c', true)), 'bacd');
+    assert.equal(ids(moveSession(list, 'a', 'c', false)), 'bcad');
+    assert.equal(ids(moveSession(list, 'd', 'a', true)), 'dabc');
+    assert.equal(ids(moveSession(list, 'd', 'b', false)), 'abdc');
+  });
+
+  test('does not change the input array', () => {
+    moveSession(list, 'a', 'd', false);
+    assert.equal(ids(list), 'abcd');
+  });
+
+  test('same ID or a missing ID → unchanged', () => {
+    assert.equal(moveSession(list, 'a', 'a', true), list);
+    assert.equal(moveSession(list, 'x', 'a', true), list);
+    assert.equal(moveSession(list, 'a', 'x', true), list);
+  });
+});
+
+describe('agentModelLabel', () => {
+  test('agent and model, or "default model" when the CLI picks', () => {
+    assert.equal(agentModelLabel('Claude Code', 'Sonnet 5.5'), 'Claude Code · Sonnet 5.5');
+    assert.equal(agentModelLabel('Antigravity', undefined), 'Antigravity · default model');
+    assert.equal(agentModelLabel('Antigravity', ''), 'Antigravity · default model');
+  });
+});
+
+describe('sessionTooltip', () => {
+  test('local session with tokens and the new-session context estimate', () => {
+    assert.equal(
+      sessionTooltip({ title: 'Plan', lastActive: 'yesterday 9:00', state: 'local', tokens: 2100, contextTokens: 4000 }),
+      'Plan\nLast active yesterday 9:00\nAbout 2.1k tokens of saved history (+4.0k context a new session would start with)',
+    );
+  });
+
+  test('no context estimate → no "+context"', () => {
+    const text = sessionTooltip({ title: 'Plan', lastActive: 'x', state: 'local', tokens: 500, contextTokens: 0 });
+    assert.equal(text, 'Plan\nLast active x\nAbout 500 tokens of saved history');
+  });
+
+  test('remote and new sessions say so and show no token count', () => {
+    assert.equal(sessionTooltip({ title: 'T', lastActive: 'x', state: 'remote' }), "T\nLast active x\nRemote: this session's history isn't on this machine");
+    assert.equal(sessionTooltip({ title: 'T', lastActive: 'x', state: 'new' }), 'T\nLast active x\nNew: no messages yet');
+  });
+});
+
+describe('preserveUserFields', () => {
+  const base = { id: 's1', title: 'T', createdAt: 'c', updatedAt: 'u2', claudeSessionId: 'cs' };
+
+  test('carries drag order, pin and labels from the record on disk', () => {
+    const merged = preserveUserFields(base, { ...base, updatedAt: 'u1', sortOrder: 3, pinned: true, userLabel: 'Scott', assistantLabel: 'Boju' });
+    assert.deepEqual(merged, { ...base, sortOrder: 3, pinned: true, userLabel: 'Scott', assistantLabel: 'Boju' });
+  });
+
+  test('fields already set on the new record win; nothing else is copied', () => {
+    const merged = preserveUserFields({ ...base, sortOrder: 0 }, { ...base, title: 'Old', cwd: '/x', sortOrder: 9 });
+    assert.deepEqual(merged, { ...base, sortOrder: 0 });
+  });
+
+  test('no record on disk → the new record unchanged', () => {
+    assert.equal(preserveUserFields(base, undefined), base);
+  });
+});
+
+describe('loadSessionFile', () => {
+  test('reads one session by file ID; missing or malformed → undefined', () => {
+    const dir = join(tmpDir, 'load-session-file');
+    saveSession(tmpDir, { id: 'one', title: 'One', createdAt: 'c', updatedAt: 'u', claudeSessionId: '', pinned: true }, dir);
+    assert.equal(loadSessionFile(dir, 'one')?.pinned, true);
+    assert.equal(loadSessionFile(dir, 'two'), undefined);
+    writeFileSync(join(dir, 'bad.json'), '{ nope');
+    assert.equal(loadSessionFile(dir, 'bad'), undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Chat only / Read only gates on BojuBot's own channels (#406)
 // ---------------------------------------------------------------------------
 
@@ -4347,8 +4539,8 @@ describe('needsFreshSessionForChatOnly', () => {
     }
   });
 
-  test('the notices point to the session manager', () => {
-    assert.equal(CHAT_ONLY_NEW_SESSION_NOTICE, 'Chat only needs a new session. Your previous session is in the session manager.');
+  test('the notices point to the Sessions panel', () => {
+    assert.equal(CHAT_ONLY_NEW_SESSION_NOTICE, 'Chat only needs a new session. Your previous session is in the Sessions panel.');
     assert.match(CHAT_ONLY_PENDING_NOTICE, /^Chat only needs a new session\. It starts with your next message/);
   });
 });

@@ -57,7 +57,7 @@ What Claude *can* still do through BojuBot in Chat only: open a note you name, j
 
 Anything you hand Claude yourself still reaches it: @-mentioned notes, attachments, selections you send, and notes you pick in a skill's form.
 
-**Switching into Chat only starts a new session** if the current one already has messages, because the earlier messages may hold vault information. BojuBot shows a notice, and your previous session stays in the session manager, in the mode it had. If a reply is still running, the new session starts when you send your next message. A session with no messages just switches. A session that's already in Chat only stays as it is.
+**Switching into Chat only starts a new session** if the current one already has messages, because the earlier messages may hold vault information. BojuBot shows a notice, and your previous session stays in the [Sessions panel](./sessions#sessions-panel), in the mode it had. If a reply is still running, the new session starts when you send your next message. A session with no messages just switches. A session that's already in Chat only stays as it is.
 
 ### Read only and Obsidian commands
 

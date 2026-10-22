@@ -15,6 +15,8 @@ export interface StoredSession {
   /** Agent CLI the session is bound to. Absent = Claude Code (every session from before backends existed). */
   backend?: BackendId;
   sortOrder?: number;
+  /** Pinned to the top of the Sessions panel. Absent = not pinned. */
+  pinned?: boolean;
   userLabel?: string;
   assistantLabel?: string;
   cwd?: string;
@@ -147,21 +149,26 @@ export function saveSession(vaultRoot: string, session: StoredSession, sessionsD
   }
 }
 
+/** One session's record by its file ID, or undefined when it's missing or unreadable. */
+export function loadSessionFile(sessionsDir: string, sessionFileId: string): StoredSession | undefined {
+  const path = join(sessionsDir, `${sessionFileId}.json`);
+  if (!existsSync(path)) return undefined;
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as StoredSession;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Merge `patch` into a session file in `sessionsDir`, keeping every other field
  * (labels, sort order, …). Returns false, writing nothing, when the file isn't
  * there or can't be read.
  */
 export function updateStoredSession(sessionsDir: string, id: string, patch: Partial<StoredSession>): boolean {
-  const path = join(sessionsDir, `${id}.json`);
-  if (!existsSync(path)) return false;
-  let current: StoredSession;
-  try {
-    current = JSON.parse(readFileSync(path, 'utf8')) as StoredSession;
-  } catch {
-    return false;
-  }
-  writeFileSync(path, JSON.stringify({ ...current, ...patch, id }, null, 2));
+  const current = loadSessionFile(sessionsDir, id);
+  if (!current) return false;
+  writeFileSync(join(sessionsDir, `${id}.json`), JSON.stringify({ ...current, ...patch, id }, null, 2));
   return true;
 }
 

@@ -1,7 +1,8 @@
-import { Plugin, Notice, addIcon } from 'obsidian';
+import { Plugin, Notice, addIcon, debounce } from 'obsidian';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
+import { SessionsView, VIEW_TYPE_SESSIONS } from './src/SessionsView';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab, CLAUDE_MODELS, DEFAULT_MODEL_ID } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
@@ -12,7 +13,7 @@ import type { ReportType } from './src/utils/report';
 import { ReportModal } from './src/modals/ReportModal';
 import { isWhiteLabeled } from './src/brand';
 import * as os from 'os';
-import { loadAllSessions, resolveSessionsDir } from './src/utils/sessionStorage';
+import { loadAllSessions, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
@@ -101,6 +102,7 @@ export default class BojuBotPlugin extends Plugin {
     `);
 
     this.registerView(VIEW_TYPE_CLAUDE, (leaf) => new ClaudeView(leaf, this));
+    this.registerView(VIEW_TYPE_SESSIONS, (leaf) => new SessionsView(leaf, this));
 
     this.addRibbonIcon(this.brand.icon, `Open ${this.brand.name} agent`, () => {
       void this.activateView();
@@ -147,11 +149,12 @@ export default class BojuBotPlugin extends Plugin {
       }
     });
 
+    // ID kept from the session manager pop-up so existing hotkeys keep working
     this.addCommand({
       id: 'show-session-history',
-      name: 'Show session history',
+      name: 'Show sessions panel',
       callback: () => {
-        void this.showSessionHistory();
+        void this.activateSessionsView();
       }
     });
 
@@ -397,17 +400,89 @@ export default class BojuBotPlugin extends Plugin {
     }
   }
 
-  showSessionHistory() {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+  /** Reveal the Sessions panel, opening it in the left sidebar the first time. */
+  async activateSessionsView(): Promise<void> {
+    const { workspace } = this.app;
+    const existing = workspace.getLeavesOfType(VIEW_TYPE_SESSIONS);
     if (existing.length) {
-      const view = existing[0].view as ClaudeView;
-      void view.showSessionHistory();
-    } else {
-      void this.activateView().then(() => {
-        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-        if (leaves.length) void (leaves[0].view as ClaudeView).showSessionHistory();
-      });
+      await workspace.revealLeaf(existing[0]);
+      return;
     }
+    const leaf = workspace.getLeftLeaf(false);
+    if (leaf) {
+      await leaf.setViewState({ type: VIEW_TYPE_SESSIONS, active: true });
+      await workspace.revealLeaf(leaf);
+    }
+  }
+
+  /** Redraw every open Sessions panel (sessions changed on disk). */
+  refreshSessionsViews = debounce(() => {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_SESSIONS)) {
+      if (leaf.view instanceof SessionsView) leaf.view.refresh();
+    }
+  }, 150, true);
+
+  /** Resolved sessions directory, honoring the sessionStoragePath setting. */
+  getSessionsDir(): string {
+    return resolveSessionsDir(this.getVaultRoot(), this.settings.sessionStoragePath, this.app.vault.configDir);
+  }
+
+  /** The chat panel, if one is open and loaded. */
+  private chatView(): ClaudeView | undefined {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE)) {
+      if (leaf.view instanceof ClaudeView) return leaf.view;
+    }
+    return undefined;
+  }
+
+  /** The chat panel, opening it first when needed. */
+  private async ensureChatView(): Promise<ClaudeView | undefined> {
+    await this.activateView();
+    return this.chatView();
+  }
+
+  /** Session file ID open in the chat panel, for the Sessions panel's active marker. */
+  getActiveChatSessionId(): string | undefined {
+    return this.chatView()?.sessionFileId;
+  }
+
+  /** Open a session from the Sessions panel. */
+  openSession(session: StoredSession): void {
+    void this.ensureChatView().then(view => view?.openSession(session));
+  }
+
+  /** Save any session to the vault (Sessions panel menu). */
+  exportSession(session: StoredSession): void {
+    void this.ensureChatView().then(view => view?.exportSessionToVault(session));
+  }
+
+  /** A session was renamed in the Sessions panel: update the chat panel showing it. */
+  onSessionRenamed(sessionFileId: string, title: string): void {
+    this.chatView()?.onSessionRenamed(sessionFileId, title);
+  }
+
+  /** A session can't be deleted while a reply is running in it. */
+  canDeleteSession(sessionFileId: string): boolean {
+    const view = this.chatView();
+    return !(view && view.sessionFileId === sessionFileId && view.isBusy);
+  }
+
+  /** A session was deleted: a chat panel showing it moves to a new session. */
+  onSessionDeleted(sessionFileId: string): void {
+    const view = this.chatView();
+    if (view && view.sessionFileId === sessionFileId) view.startNewSession();
+  }
+
+  /** Estimated context a brand-new session would start with, for the Sessions panel. */
+  async estimateFreshContextTokens(): Promise<number> {
+    return (await this.chatView()?.estimateFreshContextTokens()) ?? 0;
+  }
+
+  /** Display name of a model ('' or undefined = the backend's default; undefined when the CLI picks). */
+  modelDisplayName(backend: BackendId, modelId?: string): string | undefined {
+    const id = modelId || this.getDefaultModel(backend);
+    if (!id) return undefined;
+    return this.getModels(backend).find(m => m.id === id)?.displayName ?? id;
   }
 
   exportConversation() {

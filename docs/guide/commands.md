@@ -12,7 +12,7 @@ Obsidian namespaces every plugin command as `<plugin-id>:<command-id>`. BojuBot'
 | ---------------------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
 | **BojuBot: Open agent panel**     | `open-agent`            | Opens or focuses the chat panel. Also available via the ribbon icon.                    |
 | **BojuBot: Toggle panel**         | `toggle-panel`          | Quickly hide or show the chat panel without closing it.                                 |
-| **BojuBot: Show session history** | `show-session-history`  | Show all saved sessions and resume a previous conversation.                             |
+| **BojuBot: Show sessions panel** | `show-session-history`  | Open or reveal the [Sessions panel](./sessions#sessions-panel): all saved sessions, to resume, rename, pin or delete. |
 | **BojuBot: Focus chat input**     | `focus-input`           | Open the BojuBot panel and place the cursor in the chat input. Good for hotkey binding.  |
 
 ## Session Management

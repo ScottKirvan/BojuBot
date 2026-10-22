@@ -69,11 +69,11 @@ export function needsFreshSessionForChatOnly(
 }
 
 export const CHAT_ONLY_NEW_SESSION_NOTICE =
-  'Chat only needs a new session. Your previous session is in the session manager.';
+  'Chat only needs a new session. Your previous session is in the Sessions panel.';
 
 /** Chat only picked while a reply is still running. */
 export const CHAT_ONLY_PENDING_NOTICE =
-  'Chat only needs a new session. It starts with your next message; this session stays in the session manager.';
+  'Chat only needs a new session. It starts with your next message; this session stays in the Sessions panel.';
 
 /**
  * Attachments a mode can't send. Attaching anything from disk is a read —

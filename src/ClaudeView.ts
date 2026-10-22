@@ -40,14 +40,12 @@ import {
   InjectedContextType,
   saveSession,
   loadAllSessions,
-  resolveSessionsDir,
   hasReadableHistory,
   loadHistory,
   sessionBackend,
-  estimateSessionTokens,
 } from './utils/sessionStorage';
-import { SessionListModal } from './modals/SessionListModal';
 import { StopReplyModal } from './modals/StopReplyModal';
+import { relativeTime } from './utils/sessionList';
 import { renderAgentIcon } from './agentIcon';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
@@ -247,10 +245,12 @@ export class ClaudeView extends ItemView {
       this.updateExportBtn();
       this.updateSessionStatus();
       this.updateModelIndicator();
+      this.plugin.refreshSessionsViews();
     });
 
     this.coordinator.on('session:updated', () => {
       this.updateSessionStatus();
+      this.plugin.refreshSessionsViews();
     });
 
     // ── Turn streaming ───────────────────────────────────────────────────────
@@ -364,6 +364,7 @@ export class ClaudeView extends ItemView {
       statusEl.remove();
       assistantEl.setText(`Process error: ${err}`);
       unlock();
+      this.plugin.refreshSessionsViews();
     });
 
     this.coordinator.on('permission:denied', (denials, hasPendingRequest) => {
@@ -425,6 +426,8 @@ export class ClaudeView extends ItemView {
 
       this.scrollToBottom();
       this.updateSessionStatus();
+      // The turn moved the session's last-active time
+      this.plugin.refreshSessionsViews();
 
       // Stopped so the panel can switch session: no follow-up turn in this one.
       if (this._stoppingForSwitch) {
@@ -547,8 +550,8 @@ export class ClaudeView extends ItemView {
 
     const toolbar = root.createDiv({ cls: 'bojubot-toolbar' });
     this.sessionStatusEl = toolbar.createSpan({ cls: 'bojubot-session-status', text: 'New session' });
-    this.sessionStatusEl.addEventListener('click', () => void this.showSessionHistory());
-    this.sessionStatusEl.title = 'Click to see session history';
+    this.sessionStatusEl.addEventListener('click', () => void this.plugin.activateSessionsView());
+    this.sessionStatusEl.title = 'Click to show the sessions panel';
 
     const newSessionBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(newSessionBtn, 'message-square-plus');
@@ -895,7 +898,7 @@ export class ClaudeView extends ItemView {
 
   /**
    * Open a new session saved in Chat only (#406), leaving the current one, in its
-   * own mode, in the session manager. Backend-agnostic. While a turn is running the
+   * own mode, in the Sessions panel. Backend-agnostic. While a turn is running the
    * current session is left alone and the new one starts with the next send.
    * Returns true when the new session started now.
    */
@@ -1031,41 +1034,15 @@ export class ClaudeView extends ItemView {
     this.updatePermissionIcon();
   }
 
-  async showSessionHistory() {
-    const vaultRoot = this.plugin.getVaultRoot();
-    const sessionsDir = this.getSessionsDir();
-    const sessions = loadAllSessions(vaultRoot, sessionsDir, this.app.vault.configDir);
-
-    const sessionTokens = new Map<string, number>();
-    for (const session of sessions) {
-      if (!hasReadableHistory(session, sessionsDir)) continue;
-      const messages = loadHistory(session, sessionsDir);
-      if (messages.length > 0) sessionTokens.set(session.id, estimateSessionTokens(messages));
-    }
-    const contextTokens = await this.estimateFreshContextTokens();
-
-    new SessionListModal(this.app, vaultRoot, sessions, (session) => {
-      this.openSession(session);
-    }, () => {
-      this.startNewSession();
-    }, () => {
-      this.inputEl?.focus();
-    }, this.coordinator.sessionFileId, (session) => {
-      this.coordinator.renameActiveSession(session.id, session.title);
-    }, (session) => {
-      void this.exportSessionToVault(session);
-    }, sessionsDir, sessionTokens, contextTokens).open();
-  }
-
   /**
    * Estimated size of the context that would be injected if a brand-new session
    * started right now (orientation, vault tree, context file, etc.) — used to show
    * "+context" alongside each session's own message-history token count in the
-   * Session Manager. This is a current-settings estimate, not a record of what was
+   * Sessions panel's tooltips. This is a current-settings estimate, not a record of what was
    * actually injected historically — sessions only get this once, at creation, and
    * settings may have changed since. Best-effort: returns 0 if context can't be built.
    */
-  private async estimateFreshContextTokens(): Promise<number> {
+  async estimateFreshContextTokens(): Promise<number> {
     try {
       const effectiveMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
@@ -1153,8 +1130,8 @@ export class ClaudeView extends ItemView {
     }).open();
   }
 
-  /** Export any session (by StoredSession) from the history modal. */
-  private exportSessionToVault(session: StoredSession): void {
+  /** Export any session (by StoredSession), e.g. from the Sessions panel. */
+  exportSessionToVault(session: StoredSession): void {
     const messages = loadHistory(session, this.getSessionsDir());
     if (messages.length === 0) { new Notice('No messages found for this session'); return; }
     const date = new Date(session.updatedAt).toISOString().slice(0, 10);
@@ -1344,7 +1321,22 @@ export class ClaudeView extends ItemView {
     this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
   }
 
-  private async loadSession(session: StoredSession) {
+  /** The session file ID open in this panel, if any. */
+  get sessionFileId(): string | undefined {
+    return this.coordinator.sessionFileId;
+  }
+
+  /** True while a turn is running in this panel. */
+  get isBusy(): boolean {
+    return this.coordinator.isBusy;
+  }
+
+  /** A session was renamed elsewhere (the Sessions panel). */
+  onSessionRenamed(sessionFileId: string, title: string): void {
+    this.coordinator.renameActiveSession(sessionFileId, title);
+  }
+
+  async loadSession(session: StoredSession) {
     this.dropPendingSessionState();
     this.chatOnlyFreshSessionPending = false;
     this.currentUserLabel = session.userLabel ?? 'User';
@@ -1415,6 +1407,7 @@ export class ClaudeView extends ItemView {
     } else {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }
+    this.plugin.refreshSessionsViews();
   }
 
   private updateSessionStatus() {
@@ -1735,12 +1728,12 @@ export class ClaudeView extends ItemView {
         const item = list.createDiv({ cls: 'bojubot-welcome-recent-item' });
         renderAgentIcon(item, sessionBackend(session), 'bojubot-welcome-recent-agent');
         item.createSpan({ cls: 'bojubot-welcome-recent-title', text: session.userLabel || session.title });
-        item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeDate(session.updatedAt) });
+        item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeTime(session.updatedAt, Date.now()) });
         item.addEventListener('click', () => this.openSession(session));
       });
       if (sessions.length > 3) {
         const more = recent.createSpan({ cls: 'bojubot-welcome-recent-more', text: 'More…' });
-        more.addEventListener('click', () => void this.showSessionHistory());
+        more.addEventListener('click', () => void this.plugin.activateSessionsView());
       }
     }
 
@@ -2234,8 +2227,7 @@ export class ClaudeView extends ItemView {
 
   /** Resolved sessions directory, honoring the user's sessionStoragePath setting. */
   private getSessionsDir(): string {
-    const vaultRoot = this.plugin.getVaultRoot();
-    return resolveSessionsDir(vaultRoot, this.plugin.settings.sessionStoragePath, this.app.vault.configDir);
+    return this.plugin.getSessionsDir();
   }
 
   /**
@@ -2616,9 +2608,9 @@ export class ClaudeView extends ItemView {
       },
       {
         category: 'Session',
-        name: 'Show history',
-        description: 'Browse and resume past sessions',
-        action: () => void this.showSessionHistory(),
+        name: 'Show sessions',
+        description: 'Browse and resume past sessions in the sessions panel',
+        action: () => void this.plugin.activateSessionsView(),
       },
       {
         category: 'Session',
@@ -2783,17 +2775,4 @@ class AttachUrlModal extends Modal {
     window.setTimeout(() => input.focus(), 50);
   }
   onClose() { this.contentEl.empty(); }
-}
-
-function relativeDate(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
