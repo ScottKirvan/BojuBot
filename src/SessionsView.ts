@@ -2,6 +2,7 @@ import { App, ItemView, Keymap, Menu, Modal, Notice, WorkspaceLeaf, setIcon, set
 import type BojuBotPlugin from '../main';
 import { renderAgentIcon } from './agentIcon';
 import { estimateSessionTokens, hasReadableHistory, loadAllSessions, loadHistory, loadSessionFile, saveSession, sessionBackend, deleteSession, StoredSession } from './utils/sessionStorage';
+import { STATUS_LABELS, SessionStatus } from './utils/sessionStatus';
 import { agentModelLabel, filterSessions, groupSessions, moveSession, relativeTime, sessionGroupKey, sessionTooltip, SessionHistoryState } from './utils/sessionList';
 
 export const VIEW_TYPE_SESSIONS = 'bojubot-sessions';
@@ -103,6 +104,29 @@ export class SessionsView extends ItemView {
     this.renderList();
   }
 
+  /** Update the status dots in place (cheaper than a redraw, and keeps hover and drag state). */
+  updateStatuses(): void {
+    if (!this.listEl) return;
+    const statuses = this.plugin.getSessionStatuses();
+    const openIds = this.plugin.getOpenSessionIds();
+    this.listEl.querySelectorAll<HTMLElement>('.bojubot-sessions-row').forEach(row => {
+      const id = row.dataset.sessionId ?? '';
+      const dot = row.querySelector<HTMLElement>('.bojubot-status-dot');
+      if (dot) this.renderStatusDot(dot, statuses.get(id), openIds.has(id));
+    });
+  }
+
+  private renderStatusDot(dot: HTMLElement, status: SessionStatus | undefined, isOpen: boolean): void {
+    const shown = status && status !== 'idle' ? status : isOpen ? 'open' : '';
+    if (!shown) {
+      dot.removeAttribute('data-status');
+      dot.removeAttribute('aria-label');
+      return;
+    }
+    dot.setAttribute('data-status', shown);
+    dot.setAttribute('aria-label', shown === 'open' ? 'Open in a chat tab' : STATUS_LABELS[shown as SessionStatus]);
+  }
+
   private finishDeferredRefresh(): void {
     if (this.refreshPending) this.refresh();
   }
@@ -174,6 +198,8 @@ export class SessionsView extends ItemView {
 
     const text = row.createDiv({ cls: 'bojubot-sessions-row-text' });
     const titleLine = text.createDiv({ cls: 'bojubot-sessions-row-title-line' });
+    // Live status dot (#399): replying, waiting for you, unseen reply, error; a ring when open and idle
+    this.renderStatusDot(titleLine.createSpan({ cls: 'bojubot-status-dot' }), this.plugin.getSessionStatuses().get(session.id), isOpen);
     if (session.pinned) setIcon(titleLine.createSpan({ cls: 'bojubot-sessions-row-pin' }), 'pin');
     const titleEl = titleLine.createSpan({ cls: 'bojubot-sessions-row-title', text: session.title });
 

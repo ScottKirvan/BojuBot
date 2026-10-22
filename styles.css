@@ -597,14 +597,94 @@
   border-left-color: var(--interactive-accent);
 }
 
-/* Open in a chat tab: a small ring before the title */
-.bojubot-sessions-row-open .bojubot-sessions-row-title-line::before {
-  content: '';
+/* Live status dot (#399). Open in a chat tab and idle: a ring. */
+.bojubot-status-dot:not([data-status]) {
+  display: none;
+}
+
+.bojubot-status-dot {
   flex-shrink: 0;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+}
+
+.bojubot-status-dot[data-status='open'] {
   border: 1px solid var(--text-muted);
+}
+
+.bojubot-status-dot[data-status='running'] {
+  background: var(--interactive-accent);
+  animation: bojubot-status-pulse 1.4s ease-in-out infinite;
+}
+
+.bojubot-status-dot[data-status='waiting'] {
+  background: var(--color-orange);
+}
+
+.bojubot-status-dot[data-status='finished'] {
+  background: var(--color-green);
+}
+
+.bojubot-status-dot[data-status='error'] {
+  background: var(--color-red);
+}
+
+@keyframes bojubot-status-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The same dot on a chat tab: on the icon in a sidebar (where tabs show only
+   icons), before the title in the main area */
+.workspace-tab-header[data-bojubot-status='running'] { --bojubot-status-color: var(--interactive-accent); }
+.workspace-tab-header[data-bojubot-status='waiting'] { --bojubot-status-color: var(--color-orange); }
+.workspace-tab-header[data-bojubot-status='finished'] { --bojubot-status-color: var(--color-green); }
+.workspace-tab-header[data-bojubot-status='error'] { --bojubot-status-color: var(--color-red); }
+
+.mod-sidedock .workspace-tab-header[data-bojubot-status] .workspace-tab-header-inner-icon {
+  position: relative;
+}
+
+.mod-sidedock .workspace-tab-header[data-bojubot-status] .workspace-tab-header-inner-icon::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bojubot-status-color);
+  box-shadow: 0 0 0 1px var(--background-secondary);
+}
+
+.mod-root .workspace-tab-header[data-bojubot-status] .workspace-tab-header-inner-title::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--bojubot-status-color);
+}
+
+.workspace-tab-header[data-bojubot-status='running'] .workspace-tab-header-inner-icon::after,
+.workspace-tab-header[data-bojubot-status='running'] .workspace-tab-header-inner-title::before {
+  animation: bojubot-status-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bojubot-status-dot[data-status='running'],
+  .workspace-tab-header[data-bojubot-status='running'] .workspace-tab-header-inner-icon::after,
+  .workspace-tab-header[data-bojubot-status='running'] .workspace-tab-header-inner-title::before {
+    animation: none;
+  }
+}
+
+.bojubot-status-notice {
+  cursor: pointer;
 }
 
 .bojubot-sessions-row-remote .bojubot-sessions-row-text {
