@@ -1,4 +1,4 @@
-import { App, ItemView, Menu, Modal, Notice, WorkspaceLeaf, setIcon, setTooltip } from 'obsidian';
+import { App, ItemView, Keymap, Menu, Modal, Notice, WorkspaceLeaf, setIcon, setTooltip } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import { renderAgentIcon } from './agentIcon';
 import { estimateSessionTokens, hasReadableHistory, loadAllSessions, loadHistory, loadSessionFile, saveSession, sessionBackend, deleteSession, StoredSession } from './utils/sessionStorage';
@@ -74,10 +74,10 @@ export class SessionsView extends ItemView {
 
     const newBtn = header.createDiv({ cls: 'clickable-icon bojubot-sessions-new', attr: { role: 'button', tabindex: '0' } });
     setIcon(newBtn, 'message-square-plus');
-    setTooltip(newBtn, 'New session');
-    newBtn.addEventListener('click', () => this.plugin.newSession());
+    setTooltip(newBtn, 'New session (Ctrl/Cmd+click for a new tab)');
+    newBtn.addEventListener('click', (e) => void this.plugin.newSession({ forceNewTab: Keymap.isModEvent(e) !== false }));
     newBtn.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.plugin.newSession(); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void this.plugin.newSession(); }
     });
 
     this.listEl = root.createDiv({ cls: 'bojubot-sessions-list' });
@@ -124,10 +124,11 @@ export class SessionsView extends ItemView {
     this.labelMemo.clear();
     const now = Date.now();
     const activeId = this.plugin.getActiveChatSessionId();
+    const openIds = this.plugin.getOpenSessionIds();
     for (const group of groupSessions(shown, now)) {
       const groupEl = list.createDiv({ cls: 'bojubot-sessions-group' });
       groupEl.createDiv({ cls: 'bojubot-sessions-group-label', text: group.label });
-      for (const session of group.sessions) this.renderRow(groupEl, session, now, session.id === activeId);
+      for (const session of group.sessions) this.renderRow(groupEl, session, now, session.id === activeId, openIds.has(session.id));
     }
   }
 
@@ -160,13 +161,15 @@ export class SessionsView extends ItemView {
     return label;
   }
 
-  private renderRow(parent: HTMLElement, session: StoredSession, now: number, isActive: boolean): void {
+  private renderRow(parent: HTMLElement, session: StoredSession, now: number, isActive: boolean, isOpen: boolean): void {
     const info = this.historyInfo(session);
     const row = parent.createDiv({
       cls: 'bojubot-sessions-row',
       attr: { tabindex: '0', role: 'button', 'data-session-id': session.id },
     });
     if (isActive) row.addClass('is-active');
+    // Open in a chat tab: clicking it switches to that tab
+    if (isOpen) row.addClass('bojubot-sessions-row-open');
     if (info.state === 'remote') row.addClass('bojubot-sessions-row-remote');
 
     const text = row.createDiv({ cls: 'bojubot-sessions-row-text' });
@@ -195,10 +198,11 @@ export class SessionsView extends ItemView {
       this.sessionMenu(session, row, titleEl).showAtMouseEvent(e);
     });
 
-    row.addEventListener('click', () => this.plugin.openSession(session));
+    // Ctrl/Cmd-click opens it in a new tab even when the current chat panel is free
+    row.addEventListener('click', (e) => void this.plugin.openSession(session, { forceNewTab: Keymap.isModEvent(e) !== false }));
     row.addEventListener('keydown', (e) => {
       if (e.target !== row) return;
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.plugin.openSession(session); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void this.plugin.openSession(session); }
     });
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -210,7 +214,8 @@ export class SessionsView extends ItemView {
 
   private sessionMenu(session: StoredSession, row: HTMLElement, titleEl: HTMLElement): Menu {
     const menu = new Menu();
-    menu.addItem(item => item.setTitle('Open').setIcon('message-square').onClick(() => this.plugin.openSession(session)));
+    menu.addItem(item => item.setTitle('Open').setIcon('message-square').onClick(() => void this.plugin.openSession(session)));
+    menu.addItem(item => item.setTitle('Open in new tab').setIcon('file-plus').onClick(() => void this.plugin.openSession(session, { forceNewTab: true })));
     menu.addItem(item => item.setTitle('Rename').setIcon('pencil').onClick(() => this.startRename(session, row, titleEl)));
     menu.addItem(item => item
       .setTitle(session.pinned ? 'Unpin' : 'Pin')

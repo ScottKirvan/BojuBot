@@ -597,6 +597,16 @@
   border-left-color: var(--interactive-accent);
 }
 
+/* Open in a chat tab: a small ring before the title */
+.bojubot-sessions-row-open .bojubot-sessions-row-title-line::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+}
+
 .bojubot-sessions-row-remote .bojubot-sessions-row-text {
   opacity: 0.6;
 }

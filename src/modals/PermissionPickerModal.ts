@@ -1,6 +1,7 @@
 import { App, FuzzySuggestModal, setIcon } from 'obsidian';
 import type BojuBotPlugin from '../../main';
-import type { PermissionMode } from '../backends/types';
+import type { BackendId, PermissionMode } from '../backends/types';
+import type { ClaudeView } from '../ClaudeView';
 
 export interface ModeOption {
   mode: PermissionMode;
@@ -17,11 +18,12 @@ export const PERMISSION_MODES: ModeOption[] = [
   { mode: 'full', icon: 'triangle-alert', colorClass: 'bojubot-perm-full', label: 'Full access', description: 'unrestricted, including bash' },
 ];
 
-/** The picker changes the open session's mode (saved with it) and makes it the default for new sessions. */
-function applyPermission(plugin: BojuBotPlugin, mode: PermissionMode): void {
+/** The picker changes one panel's session mode (saved with it) and makes it the
+ *  default for new sessions. `view` omitted = the panel commands act on. */
+function applyPermission(plugin: BojuBotPlugin, mode: PermissionMode, view?: ClaudeView): void {
   plugin.settings.permissionMode = mode;
   void plugin.saveSettings();
-  plugin.notifyPermissionPicked(mode);
+  plugin.notifyPermissionPicked(mode, view);
 }
 
 /** Modes the active backend can't enforce, each with the reason shown in place of its description. */
@@ -43,9 +45,9 @@ export function renderRow(el: HTMLElement, opt: ModeOption, isCurrent: boolean, 
   textEl.createSpan({ cls: 'bojubot-perm-row-desc', text: unavailableReason ?? description ?? opt.description });
 }
 
-/** Overrides for the backend of the session open in the panel. */
-export function activeModeOverrides(plugin: BojuBotPlugin): ModeOverrides {
-  const backend = plugin.getBackend(plugin.getActiveBackendId());
+/** Overrides for the backend of the session open in a panel (`id` omitted = the panel commands act on). */
+export function activeModeOverrides(plugin: BojuBotPlugin, id: BackendId = plugin.getActiveBackendId()): ModeOverrides {
+  const backend = plugin.getBackend(id);
   return { unavailable: backend.unavailableModes, descriptions: backend.modeDescriptions };
 }
 
@@ -190,10 +192,12 @@ export function openModePickerPopover(
   }, 0);
 }
 
+/** The toolbar picker of one chat panel: the choice applies to that panel's session only. */
 export function openPermissionPopover(
   plugin: BojuBotPlugin,
+  view: ClaudeView,
   iconEl: HTMLElement,
   currentMode: PermissionMode,
 ): void {
-  openModePickerPopover(iconEl, currentMode, (mode) => applyPermission(plugin, mode), activeModeOverrides(plugin));
+  openModePickerPopover(iconEl, currentMode, (mode) => applyPermission(plugin, mode, view), activeModeOverrides(plugin, view.getBackendId()));
 }
