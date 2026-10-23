@@ -638,9 +638,30 @@ export default class BojuBotPlugin extends Plugin {
     if (leaves.length) (leaves[0].view as ClaudeView).onCliCapabilitiesChanged(id);
   }
 
-  notifyPermissionChanged(): void {
+  /** The toolbar picker chose a mode: it applies to the open session (and is already the new default). */
+  notifyPermissionPicked(mode: PermissionMode): void {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
-    if (leaves.length) (leaves[0].view as ClaudeView).onSettingsChanged();
+    if (leaves.length) (leaves[0].view as ClaudeView).onPermissionModePicked(mode);
+  }
+
+  /** The default for new sessions changed in settings; open sessions keep their own mode. */
+  notifyDefaultPermissionChanged(): void {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDE);
+    if (leaves.length) (leaves[0].view as ClaudeView).onDefaultPermissionModeChanged();
+  }
+
+  /** Sessions put in Full access since Obsidian started. In memory only, keyed by
+   *  session, so it can't apply to any other session. */
+  private fullAccessSessions = new Set<string>();
+
+  /** Whether a session saved in Full access may reopen in it: always when Full access
+   *  persists between restarts, otherwise only if it was given Full access in this run. */
+  keepsFullAccess(sessionFileId: string): boolean {
+    return this.settings.persistFullAccess || this.fullAccessSessions.has(sessionFileId);
+  }
+
+  noteFullAccess(sessionFileId: string): void {
+    this.fullAccessSessions.add(sessionFileId);
   }
 
   getEffectivePermissionMode(): PermissionMode {
