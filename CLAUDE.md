@@ -108,7 +108,7 @@ Run all three before opening any PR — all must pass clean:
 ```bash
 npm run build   # TypeScript check + bundle
 npm run lint    # ESLint — zero warnings or errors
-npm test        # 427 unit tests via tsx --test
+npm test        # 431 unit tests via tsx --test
 ```
 Lint and TypeScript violations are `fix:` commits, not `chore:`.
 
