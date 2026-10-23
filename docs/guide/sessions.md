@@ -11,7 +11,7 @@ Click the **+** button in the toolbar to start a new session with default settin
 | **Agent** | Which agent CLI the session runs on (Claude Code or Antigravity), pre-filled from the **Agent** setting. Changing it refills the model and effort fields for that agent. Agents that aren't installed are listed but can't be picked. See [Choosing an Agent](./agents). |
 | **Session name** | Pre-fills the title instead of waiting for auto-naming from the first message. Leave blank to use the default. |
 | **Working directory** | Sets the directory Claude runs in (useful for code projects outside the vault). The folder browser opens at your vault root. Leave blank to use the vault root. |
-| **Permission mode** | Pre-filled with your current global default (with its colored icon), so you can see exactly what you're starting from. Click a different mode to pin this session to it instead. |
+| **Permission mode** | Pre-filled with your current default (with its colored icon), so you can see exactly what you're starting from. Click a different mode to start the session in it instead. Every session keeps its own mode; see [Permissions](./permissions#the-mode-belongs-to-the-session). |
 | **Model** | Pre-filled with your current global default model. Pick a different one to pin this session to it instead. |
 | **Effort** | Pre-filled with your current global [effort](./chat-panel.md#effort) level. Pick a level to pin this session to it; **Default** leaves it unpinned so it follows the global setting. Hidden when your Claude Code CLI doesn't support effort levels. |
 | **Raw session** | Skips *all* BojuBot context injection — no orientation, vault tree, context file, active-note note, or UI Bridge. The CLI still reads its own instruction files (e.g. Claude Code's `CLAUDE.md`) from the working directory, exactly as it would from a terminal. This is the per-session equivalent of the global Minimal mode setting. |
@@ -30,7 +30,9 @@ The working directory you set is saved in the session JSON and used on every tur
 :::
 
 ::: info Permission mode, model, and raw-session persist too
-Like the working directory, these three overrides are saved in the session JSON and re-applied every time the session is resumed — they aren't a one-time setup step.
+Like the working directory, these are saved in the session JSON and re-applied every time the session is resumed — they aren't a one-time setup step. (Every session saves its permission mode, not only custom ones.)
+
+Initial instructions and context attachments are sent with the session's first message. If you open a different session before sending one, they're dropped.
 
 A pinned model isn't locked in: switching models from the [model picker](./chat-panel.md#model-indicator) mid-session updates the pin, and the session continues with the new model.
 :::

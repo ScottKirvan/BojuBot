@@ -17,10 +17,10 @@ import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, loadSessionFile, ChatMessage } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, loadSessionFile, updateStoredSession, ChatMessage, StoredSession } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
-import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
+import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation } from '../src/utils/orientation';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
@@ -1811,15 +1811,15 @@ describe('SessionCoordinator session-level overrides (Custom Session)', () => {
     }
   });
 
-  test('runtime setPermissionOverride (denial-card upgrade) wins over the session-level override', () => {
+  test('setSessionPermissionMode (denial-card upgrade) replaces the session-level mode', () => {
     const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
     try {
       const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
       coordinator.startNewSession({ permissionMode: 'readonly', rawSession: false });
       assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
 
-      coordinator.setPermissionOverride('full');
-      assert.equal(coordinator.getEffectivePermissionMode(), 'full', 'runtime override always wins');
+      assert.equal(coordinator.setSessionPermissionMode('full'), true);
+      assert.equal(coordinator.getEffectivePermissionMode(), 'full');
     } finally {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
@@ -2794,6 +2794,250 @@ describe('SessionCoordinator backend binding', () => {
   }));
 });
 
+// ---------------------------------------------------------------------------
+// Session-owned state (#405): permission mode lives in the session, and nothing
+// pending in one session reaches another.
+// ---------------------------------------------------------------------------
+
+function storedSession(id: string, extra: Partial<StoredSession> = {}): StoredSession {
+  const now = new Date().toISOString();
+  return { id, title: id, createdAt: now, updatedAt: now, claudeSessionId: `conv-${id}`, ...extra };
+}
+
+function readSessionFile(dir: string, id: string): StoredSession {
+  return JSON.parse(readFileSync(join(dir, `${id}.json`), 'utf8')) as StoredSession;
+}
+
+describe('SessionCoordinator session-owned permission mode', () => {
+  test('a new session saves the mode it starts in and keeps it when the default changes', withSessionsDir((dir) => {
+    let defaultMode: 'readonly' | 'full' = 'readonly';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly');
+
+    defaultMode = 'full';
+    assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+    coordinator.send('hi', 'hi');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly', 'still saved after the first turn');
+  }));
+
+  test('a Custom Session saves its chosen mode', withSessionsDir((dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    coordinator.startNewSession({ permissionMode: 'restricted' });
+    assert.equal(storedSessions(dir)[0].permissionMode, 'restricted');
+  }));
+
+  test('a session with no saved mode opens as Standard, whatever the default, and that is saved', withSessionsDir(async (dir) => {
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => 'full' });
+    saveSession(dir, storedSession('legacy', { userLabel: 'Scott' }), dir);
+    const coordinator = new SessionCoordinator(host);
+    const loaded: SessionLoadedPayload[] = [];
+    coordinator.on('session:loaded', (p) => loaded.push(p));
+    await coordinator.loadSession(storedSession('legacy', { userLabel: 'Scott' }));
+
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard');
+    assert.equal(loaded[0].session.permissionMode, 'standard');
+    const saved = readSessionFile(dir, 'legacy');
+    assert.equal(saved.permissionMode, 'standard');
+    assert.equal(saved.userLabel, 'Scott', 'other fields kept');
+    coordinator.send('next');
+    assert.equal(claude.spawns[0].permissionMode, 'standard');
+  }));
+
+  test('a saved mode is used as is, and opening the session writes nothing', withSessionsDir(async (dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir, { getPermissionMode: () => 'full' }).host);
+    await coordinator.loadSession(storedSession('chat', { permissionMode: 'restricted' }));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    assert.equal(existsSync(join(dir, 'chat.json')), false);
+  }));
+
+  test('setSessionPermissionMode saves the mode in the session file and keeps its other fields', withSessionsDir(async (dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    saveSession(dir, storedSession('a', { permissionMode: 'standard', userLabel: 'Scott', sortOrder: -3 }), dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+
+    assert.equal(coordinator.setSessionPermissionMode('readonly'), true);
+    const saved = readSessionFile(dir, 'a');
+    assert.equal(saved.permissionMode, 'readonly');
+    assert.equal(saved.userLabel, 'Scott');
+    assert.equal(saved.sortOrder, -3);
+    coordinator.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+  }));
+
+  test('an upgrade in one session never reaches the next one opened', withSessionsDir(async (dir) => {
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => 'full' });
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'restricted' }), dir);
+    const coordinator = new SessionCoordinator(host);
+
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    coordinator.setSessionPermissionMode('full'); // denial card: Allow
+    await coordinator.loadSession(readSessionFile(dir, 'b'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    coordinator.send('needs files');
+    assert.equal(claude.spawns[0].permissionMode, 'restricted');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'restricted');
+
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'full', 'session A keeps its own upgrade');
+  }));
+
+  test('a request made in another session changes nothing', withSessionsDir(async (dir) => {
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'readonly' }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    const cardSession = coordinator.sessionFileId;
+    await coordinator.loadSession(readSessionFile(dir, 'b'));
+
+    assert.equal(coordinator.setSessionPermissionMode('full', cardSession), false);
+    assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'readonly');
+    assert.equal(readSessionFile(dir, 'a').permissionMode, 'standard');
+  }));
+
+  test('with no session open, setSessionPermissionMode does nothing', withSessionsDir((dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    assert.equal(coordinator.setSessionPermissionMode('full'), false);
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard', 'host default while nothing is open');
+  }));
+
+  test('the first turn with no session open saves the mode it ran in', withSessionsDir((dir) => {
+    let defaultMode: 'readonly' | 'full' = 'readonly';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.send('hello', 'hello');
+    defaultMode = 'full';
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly');
+    assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+  }));
+
+  test('a queued system note is dropped when another session opens or a new one starts', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(storedSession('a', { permissionMode: 'standard' }));
+    coordinator.setPendingSystemMessage('[System: Session context refreshed at user request.] vault tree…');
+    await coordinator.loadSession(storedSession('b', { permissionMode: 'standard' }));
+    assert.equal(coordinator.getPendingSystemMessage(), null);
+
+    coordinator.setPendingSystemMessage('[System: Permission mode changed to Full access.]');
+    coordinator.startNewSession();
+    assert.equal(coordinator.getPendingSystemMessage(), null);
+  }));
+
+  test('a Full access session reopens in Standard when Full access may not be kept, and that is saved', withSessionsDir(async (dir) => {
+    const asked: string[] = [];
+    const { host, claude } = twoBackendHost(dir, { keepsFullAccess: (id) => { asked.push(id); return false; } });
+    saveSession(dir, storedSession('f', { permissionMode: 'full' }), dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(readSessionFile(dir, 'f'));
+    assert.deepEqual(asked, ['f']);
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard');
+    assert.equal(readSessionFile(dir, 'f').permissionMode, 'standard');
+    coordinator.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'standard');
+  }));
+
+  test('a Full access session keeps it when the host allows', withSessionsDir(async (dir) => {
+    saveSession(dir, storedSession('f', { permissionMode: 'full' }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir, { keepsFullAccess: () => true }).host);
+    await coordinator.loadSession(readSessionFile(dir, 'f'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'full');
+  }));
+
+  test('the host is told about every session put in Full access', withSessionsDir(async (dir) => {
+    const noted: string[] = [];
+    const coordinator = new SessionCoordinator(twoBackendHost(dir, { noteFullAccess: (id) => noted.push(id) }).host);
+    coordinator.startNewSession({ permissionMode: 'full' });
+    const started = coordinator.sessionFileId!;
+    await coordinator.loadSession(storedSession('a', { permissionMode: 'standard' }));
+    coordinator.setSessionPermissionMode('readonly');
+    coordinator.setSessionPermissionMode('full');
+    assert.deepEqual(noted, [started, 'a']);
+  }));
+
+  test('two chat tabs keep their own modes: a change in one never reaches the other (#399)', withSessionsDir(async (dir) => {
+    let defaultMode: 'standard' | 'full' = 'standard';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'readonly' }), dir);
+    const tabA = new SessionCoordinator(host);
+    const tabB = new SessionCoordinator(host);
+    await tabA.loadSession(readSessionFile(dir, 'a'));
+    await tabB.loadSession(readSessionFile(dir, 'b'));
+
+    // Tab A's picker: A's session changes, and the default moves with it
+    tabA.setSessionPermissionMode('full');
+    defaultMode = 'full';
+    assert.equal(tabB.getEffectivePermissionMode(), 'readonly');
+    tabB.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'readonly');
+    // A card in tab B can't name tab A's session
+    assert.equal(tabB.setSessionPermissionMode('standard', tabA.sessionFileId), false);
+    assert.equal(tabA.getEffectivePermissionMode(), 'full');
+  }));
+
+  test('changing the mode leaves the session\'s last-active time alone', withSessionsDir(async (dir) => {
+    const updatedAt = '2026-01-01T00:00:00.000Z';
+    saveSession(dir, storedSession('a', { permissionMode: 'standard', updatedAt }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    coordinator.setSessionPermissionMode('readonly');
+    assert.equal(readSessionFile(dir, 'a').updatedAt, updatedAt);
+  }));
+
+  test('a mode changed while a turn runs is kept when that turn saves the session', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('hello', 'hello');
+    coordinator.setSessionPermissionMode('readonly');
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly');
+  }));
+});
+
+describe('modeChangeNotice', () => {
+  test('names the move and the agent, and points to the Sessions panel', () => {
+    assert.equal(modeChangeNotice('restricted', 'Claude Code'),
+      'Chat only needs a new Claude Code session. Your previous session is in the Sessions panel.');
+    assert.equal(modeChangeNotice('standard', 'Antigravity'),
+      'Leaving Chat only needs a new Antigravity session. Your previous session is in the Sessions panel.');
+  });
+
+  test('pending: the new session starts with the next message', () => {
+    assert.equal(modeChangeNotice('restricted', 'Antigravity', true),
+      'Chat only needs a new Antigravity session. It starts with your next message; this session stays in the Sessions panel.');
+  });
+});
+
+describe('updateStoredSession', () => {
+  test('merges the patch into the session file and keeps the id', withSessionsDir((dir) => {
+    saveSession(dir, storedSession('s', { userLabel: 'Scott' }), dir);
+    assert.equal(updateStoredSession(dir, 's', { permissionMode: 'readonly', id: 'other' }), true);
+    const saved = readSessionFile(dir, 's');
+    assert.equal(saved.permissionMode, 'readonly');
+    assert.equal(saved.userLabel, 'Scott');
+    assert.equal(saved.id, 's');
+  }));
+
+  test('returns false and writes nothing when the file is missing or unreadable', withSessionsDir((dir) => {
+    assert.equal(updateStoredSession(dir, 'missing', { permissionMode: 'full' }), false);
+    assert.equal(existsSync(join(dir, 'missing.json')), false);
+    writeFileSync(join(dir, 'bad.json'), '{ not json');
+    assert.equal(updateStoredSession(dir, 'bad', { permissionMode: 'full' }), false);
+    assert.equal(readFileSync(join(dir, 'bad.json'), 'utf8'), '{ not json');
+  }));
+});
+
 describe('backend registry helpers', () => {
   test('isBackendId accepts registered IDs only', () => {
     assert.equal(isBackendId('claude-code'), true);
@@ -3203,7 +3447,7 @@ describe('SessionCoordinator Antigravity agents', () => {
     c.startNewSession();
     c.send('hello', 'hello');
     agy.streams[0].onDone('conv-1', true);
-    c.setPermissionOverride('full');
+    assert.equal(c.setSessionPermissionMode('full'), true);
     assert.equal(c.modeNeedsNewSession(), false);
     c.send('retry');
     assert.equal(agy.spawns[1].agent, 'bojubot');
@@ -3214,25 +3458,38 @@ describe('SessionCoordinator Antigravity agents', () => {
     const { host, agy, setMode } = agentHost(dir);
     const c = new SessionCoordinator(host);
     c.startNewSession();
-    setMode('restricted');
-    assert.equal(c.modeNeedsNewSession(), false, 'no conversation yet: just switches');
-    setMode('standard');
+    assert.equal(c.modeNeedsNewSession('restricted'), false, 'no conversation yet: just switches');
     c.send('hello', 'hello');
     agy.streams[0].onDone('conv-1', true);
     assert.equal(c.modeNeedsNewSession('readonly'), false);
     assert.equal(c.modeNeedsNewSession('full'), false);
     assert.equal(c.modeNeedsNewSession('restricted'), true);
+    // The default for new sessions moving never moves this session (#405)
     setMode('restricted');
-    assert.equal(c.modeNeedsNewSession(), true);
+    assert.equal(c.getEffectivePermissionMode(), 'standard');
+    assert.equal(c.modeNeedsNewSession(), false);
   }));
 
   test('a loaded session keeps the agent it started with', withSessionsDir(async (dir) => {
-    const { host } = agentHost(dir, 'restricted');
+    const { host } = agentHost(dir, 'standard');
     const c = new SessionCoordinator(host);
-    await c.loadSession({ id: 's1', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-c', backend: 'antigravity', agent: 'bojubot-chat' });
+    await c.loadSession({ id: 's1', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-c', backend: 'antigravity', agent: 'bojubot-chat', permissionMode: 'restricted' });
     assert.equal(c.conversationAgent, 'bojubot-chat');
     assert.equal(c.modeNeedsNewSession(), false);
     assert.equal(c.modeNeedsNewSession('standard'), true);
+  }));
+
+  test('a Chat only agent session with no saved mode opens in Chat only, not Standard', withSessionsDir(async (dir) => {
+    const { host } = agentHost(dir, 'full');
+    const c = new SessionCoordinator(host);
+    await c.loadSession({ id: 's1', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-c', backend: 'antigravity', agent: 'bojubot-chat' });
+    assert.equal(c.getEffectivePermissionMode(), 'restricted');
+    assert.equal(c.modeNeedsNewSession(), false);
+    assert.equal(storedSessions(dir)[0].permissionMode, 'restricted');
+
+    const c2 = new SessionCoordinator(host);
+    await c2.loadSession({ id: 's2', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-d', backend: 'antigravity', agent: 'bojubot' });
+    assert.equal(c2.getEffectivePermissionMode(), 'standard');
   }));
 
   test('no definitions: no agent, and Chat only never asks for a new session it can\'t have', withSessionsDir((dir) => {

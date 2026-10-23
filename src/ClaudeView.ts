@@ -24,6 +24,7 @@ import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { ClaudeModel } from './settings';
 import { BACKEND_IDS } from './backends';
+import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
@@ -169,6 +170,9 @@ export class ClaudeView extends ItemView {
   private _customAttachments: PendingContext[] = [];
   private _customInitialInstructions = '';
   private _customSuppressVaultContext = false;
+  /** A mode picked while a reply ran that this session's conversation can't
+   *  continue in: the next send starts a new session in it. */
+  private pendingNewSessionMode: PermissionMode | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
@@ -182,6 +186,8 @@ export class ClaudeView extends ItemView {
       getConfigDir: () => this.app.vault.configDir,
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
+      keepsFullAccess: (id) => this.plugin.keepsFullAccess(id),
+      noteFullAccess: (id) => this.plugin.noteFullAccess(id),
       getModel: (id) => this.plugin.getDefaultModel(id),
       getEffort: () => this.plugin.settings.defaultEffort ?? '',
       getSessionsDir: () => this.getSessionsDir(),
@@ -230,6 +236,7 @@ export class ClaudeView extends ItemView {
     });
 
     this.coordinator.on('session:new', () => {
+      this.pendingNewSessionMode = null;
       if (!this.messagesEl) return;
       this.tokenGauge.reset();
       this.currentUserLabel = 'User';
@@ -809,7 +816,7 @@ export class ClaudeView extends ItemView {
 
     this.permissionIconEl = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-input-toolbar-btn bojubot-permission-icon' });
     this.permissionIconEl.addEventListener('click', () => {
-      openPermissionPopover(this.plugin, this.permissionIconEl, this.getEffectivePermissionMode());
+      openPermissionPopover(this.plugin, this, this.permissionIconEl, this.getEffectivePermissionMode());
     });
     this.updatePermissionIcon();
 
@@ -1003,22 +1010,56 @@ export class ClaudeView extends ItemView {
     return has(caps, '--effort') ? caps.effortLevels : [];
   }
 
-  onSettingsChanged(): void {
-    this.coordinator.setPermissionOverride(null);
-    this.updatePermissionIcon();
-    if (this.coordinator.modeNeedsNewSession()) {
-      // While a reply runs, the next send makes the switch (handleSend).
-      if (!this.coordinator.isBusy) this.startSessionForModeChange();
+  /**
+   * The toolbar picker (or its Ctrl+P twin) chose a mode: it applies to the open
+   * session only, and is saved with it. The plugin has already made it the
+   * default for new sessions.
+   */
+  onPermissionModePicked(mode: PermissionMode): void {
+    // The conversation can't continue in this mode (#403): the session keeps
+    // its own mode and a new session starts in the picked one.
+    if (this.coordinator.modeNeedsNewSession(mode)) {
+      if (this.coordinator.isBusy) {
+        // The next send makes the switch (handleSend).
+        this.pendingNewSessionMode = mode;
+        new Notice(modeChangeNotice(mode, this.coordinator.backend.displayName, true), 8000);
+      } else {
+        this.startSessionForModeChange(mode);
+      }
       return;
     }
-    if (this.coordinator.sessionId) {
-      const perm = this.coordinator.backend.orientation.permissions[this.plugin.settings.permissionMode];
+    this.pendingNewSessionMode = null;
+    const before = this.coordinator.getEffectivePermissionMode();
+    const changed = this.coordinator.setSessionPermissionMode(mode) && before !== mode;
+    this.updatePermissionIcon();
+    if (changed && this.coordinator.sessionId) {
+      const perm = this.coordinator.backend.orientation.permissions[this.coordinator.getEffectivePermissionMode()];
       this.coordinator.setPendingSystemMessage(
         `[System: Permission mode changed to ${perm.summary}. ` +
         `You can now: ${perm.can}. ` +
         `You cannot: ${perm.cannot}.]`,
       );
     }
+  }
+
+  /** The default for new sessions changed (settings, or a picker in another
+   *  panel). The open session keeps its own mode; the icon only follows the
+   *  default while no session is open. */
+  onDefaultPermissionModeChanged(): void {
+    this.updatePermissionIcon();
+  }
+
+  /** Anything held for the open session's next message: attachments (pinned too),
+   *  unsent Custom Session setup, a pending mode change and queued system notes.
+   *  Dropped whenever a different session opens or the session is cleared, so
+   *  none of it reaches another session. */
+  private dropPendingSessionState(): void {
+    this.attachmentHandler.reset();
+    this._customAttachments = [];
+    this._customInitialInstructions = '';
+    this._customSuppressVaultContext = false;
+    this.pendingNewSessionMode = null;
+    this.coordinator.clearPendingSystemMessage();
   }
 
   /**
@@ -1135,18 +1176,15 @@ export class ClaudeView extends ItemView {
   }
 
   /**
-   * The new permission mode can't continue this session's conversation
-   * (Antigravity into or out of Chat only: agy fixes a conversation's tools
-   * when it starts, #403). Start a new session on the same agent with the
-   * same settings, and say why. The old one stays in the Sessions panel.
+   * `mode` can't continue this session's conversation (coordinator
+   * `modeNeedsNewSession()`): start a new session in this tab on the same agent
+   * with the same settings, saved in `mode`, and say why. The old session keeps
+   * its own mode and stays in the Sessions panel. `announce` false: the user was
+   * already told when the mode was picked (a reply was running).
    */
-  private startSessionForModeChange(): void {
+  private startSessionForModeChange(mode: PermissionMode, announce = true): void {
     const c = this.coordinator;
-    const mode = c.getEffectivePermissionMode();
     const agent = c.backend.displayName;
-    // A mode that came from a pin or an in-session upgrade isn't the global
-    // default, so the new session pins it to keep it.
-    const pin = mode !== this.plugin.settings.permissionMode ? mode : undefined;
     this._customAttachments = [];
     this._customInitialInstructions = '';
     this._customSuppressVaultContext = c.suppressVaultContext;
@@ -1154,14 +1192,14 @@ export class ClaudeView extends ItemView {
       backend: c.backendId,
       cwd: c.sessionCwd,
       suppressVaultContext: c.suppressVaultContext,
-      permissionMode: pin,
+      permissionMode: mode,
       model: c.sessionModel,
       effort: c.sessionEffort,
       rawSession: c.rawSession,
     });
     this.updatePermissionIcon();
-    const message = `${mode === 'restricted' ? 'Chat only' : 'Leaving Chat only'} needs a new ${agent} session. Your previous session is in the Sessions panel.`;
-    new Notice(message);
+    const message = modeChangeNotice(mode, agent);
+    if (announce) new Notice(message, 8000);
     this.appendMessage('system', message);
     log('ClaudeView: new session for permission mode', mode);
   }
@@ -1314,6 +1352,7 @@ export class ClaudeView extends ItemView {
   }
 
   private applyClearSession() {
+    this.dropPendingSessionState();
     this.messagesEl.empty();
     this.appendMessage('system', 'Session cleared');
     this.updateSessionStatus();
@@ -1486,6 +1525,7 @@ export class ClaudeView extends ItemView {
 
   async loadSession(session: StoredSession) {
     this.applyStatus({ type: 'reset' });
+    this.dropPendingSessionState();
     this.currentUserLabel = session.userLabel ?? 'User';
     this.currentAssistantLabel = session.assistantLabel ?? this.plugin.brand.name;
 
@@ -1500,6 +1540,7 @@ export class ClaudeView extends ItemView {
     this.updateExportBtn();
     this.updateSessionStatus();
     this.updateModelIndicator();
+    this.updatePermissionIcon();
 
     if (canResume) {
       const messages = loadHistory(session, this.getSessionsDir());
@@ -1600,9 +1641,18 @@ export class ClaudeView extends ItemView {
       return;
     }
 
-    // The mode changed while a reply was running, or this session was opened
-    // in a mode its conversation can't continue in.
-    if (this.coordinator.modeNeedsNewSession()) this.startSessionForModeChange();
+    // A mode was picked while a reply was running that this conversation can't
+    // continue in, or the session was opened in such a mode: start the new
+    // session now. Starting one drops pending attachments; keep the ones meant
+    // for this message.
+    const newSessionMode = this.pendingNewSessionMode
+      ?? (this.coordinator.modeNeedsNewSession() ? this.coordinator.getEffectivePermissionMode() : null);
+    if (newSessionMode) {
+      const announced = this.pendingNewSessionMode !== null;
+      const attachments = [...this.attachmentHandler.getContexts()];
+      this.startSessionForModeChange(newSessionMode, !announced);
+      attachments.forEach(c => this.attachmentHandler.add(c));
+    }
 
     const unlock = () => this.setSendState(false);
     const isNewSession = !this.coordinator.sessionId;
@@ -2118,11 +2168,17 @@ export class ClaudeView extends ItemView {
   }
 
   private handlePermissionRequest(request: { tool: string; reason: string }, unlock: () => void) {
+    // The request belongs to the session open now; the answer must never reach another one.
+    const requestSessionId = this.coordinator.sessionFileId;
     void promptPermissionRequest(this.app, request.tool, request.reason).then(granted => {
       this.applyStatus({ type: 'wait-end' });
       unlock();
+      if (this.coordinator.sessionFileId !== requestSessionId) {
+        log('Permission request answered after its session closed — ignored');
+        return;
+      }
       if (granted) {
-        this.coordinator.setPermissionOverride('full');
+        this.coordinator.setSessionPermissionMode('full', requestSessionId);
         this.updatePermissionIcon();
         this.inputEl.value = `[Permission granted] Full access is now enabled. Please retry the blocked ${request.tool} operation and complete the task.`;
       } else {
@@ -2158,13 +2214,18 @@ export class ClaudeView extends ItemView {
         cls: 'mod-cta',
         text: upgradeLabel,
       });
+      // The card upgrades the session it was shown in, and only that one.
+      const cardSessionId = this.coordinator.sessionFileId;
       upgradeBtn.addEventListener('click', () => {
-        this.coordinator.setPermissionOverride(upgradeTarget);
+        if (!this.coordinator.setSessionPermissionMode(upgradeTarget, cardSessionId)) {
+          new Notice('This card belongs to a session that is no longer open.');
+          card.remove();
+          return;
+        }
         this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
         this.applyStatus({ type: 'denial-resolved' });
-        log(`Session permission override set to ${upgradeTarget}`);
         const toolList = [...new Set(denials.map(d => d.tool))].join(', ');
         this.inputEl.value = upgradeMsg(toolList);
         void this.handleSend();

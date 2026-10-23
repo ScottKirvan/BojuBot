@@ -27,7 +27,7 @@ With several chat panels open, commands that act on a chat panel use the one you
 | **BojuBot: Switch model**           | `switch-model`            | Open the model picker. The current session continues with the new model — see [Model Indicator](./chat-panel#model-indicator). |
 | **BojuBot: Switch effort**          | `switch-effort`           | Open the effort picker (Default / low / medium / high / …). Takes effect on the next message — see [Effort](./chat-panel#effort). Only listed when your Claude Code CLI supports effort levels. |
 | **BojuBot: Show plan usage**        | `show-plan-usage`         | Show your Claude plan's usage (current session and week) in the chat panel — see [Plan usage](./chat-panel#plan-usage). Doesn't use any of your limits and isn't part of the conversation. |
-| **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to switch the active permission mode (Chat only / Read only / Standard / Full access). Takes effect on the next message. |
+| **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to change the open session's permission mode (Chat only / Read only / Standard / Full access); it's saved with the session and becomes the default for new ones. Takes effect on the next message. |
 
 ## Context & Memory
 

@@ -829,8 +829,35 @@ export default class BojuBotPlugin extends Plugin {
     for (const view of this.chatViews()) view.refreshIndicators();
   }
 
-  notifyPermissionChanged(): void {
-    for (const view of this.chatViews()) view.onSettingsChanged();
+  /**
+   * A permission picker chose a mode (it's already the new default). It applies
+   * to the session in `view` — the panel whose toolbar was used, or the target
+   * panel for the Ctrl+P picker — and to no other panel's session.
+   */
+  notifyPermissionPicked(mode: PermissionMode, view: ClaudeView | undefined = this.targetChatView()): void {
+    for (const v of this.chatViews()) {
+      if (v === view) v.onPermissionModePicked(mode);
+      else v.onDefaultPermissionModeChanged();
+    }
+  }
+
+  /** The default for new sessions changed in settings; open sessions keep their own mode. */
+  notifyDefaultPermissionChanged(): void {
+    for (const view of this.chatViews()) view.onDefaultPermissionModeChanged();
+  }
+
+  /** Sessions put in Full access since Obsidian started. In memory only, keyed by
+   *  session, so it can't apply to any other session. */
+  private fullAccessSessions = new Set<string>();
+
+  /** Whether a session saved in Full access may reopen in it: always when Full access
+   *  persists between restarts, otherwise only if it was given Full access in this run. */
+  keepsFullAccess(sessionFileId: string): boolean {
+    return this.settings.persistFullAccess || this.fullAccessSessions.has(sessionFileId);
+  }
+
+  noteFullAccess(sessionFileId: string): void {
+    this.fullAccessSessions.add(sessionFileId);
   }
 
   /** The target chat panel's permission mode, or the global default when no panel is open. */

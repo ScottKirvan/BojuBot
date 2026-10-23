@@ -21,7 +21,9 @@ export interface StoredSession {
   assistantLabel?: string;
   cwd?: string;
   suppressVaultContext?: boolean;
-  /** Per-session permission mode override, set via Custom Session. Undefined = use the global default. */
+  /** The session's own permission mode. Every new session saves the mode it starts
+   *  in; sessions from before this field existed (undefined) open as Standard, and
+   *  that is saved when they're opened. Never taken from the global default. */
   permissionMode?: PermissionMode;
   /** Per-session model override, set via Custom Session. Undefined = use the global default. */
   model?: string;
@@ -159,6 +161,18 @@ export function loadSessionFile(sessionsDir: string, sessionFileId: string): Sto
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Merge `patch` into a session file in `sessionsDir`, keeping every other field
+ * (labels, sort order, …). Returns false, writing nothing, when the file isn't
+ * there or can't be read.
+ */
+export function updateStoredSession(sessionsDir: string, id: string, patch: Partial<StoredSession>): boolean {
+  const current = loadSessionFile(sessionsDir, id);
+  if (!current) return false;
+  writeFileSync(join(sessionsDir, `${id}.json`), JSON.stringify({ ...current, ...patch, id }, null, 2));
+  return true;
 }
 
 export function loadAllSessions(vaultRoot: string, sessionsDir: string, configDir: string): StoredSession[] {

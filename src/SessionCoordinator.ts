@@ -12,6 +12,7 @@ import {
   saveSession,
   saveSessionAtTop,
   loadSessionFile,
+  updateStoredSession,
   hasReadableHistory,
   loadHistory,
   sessionBackend,
@@ -36,7 +37,14 @@ export interface SessionCoordinatorHost {
   getVaultRoot(): string;
   getConfigDir(): string;
   getEnv(): Record<string, string>;
+  /** Default permission mode for new sessions. A session never follows it once started. */
   getPermissionMode(): PermissionMode;
+  /** False when a session saved in Full access must reopen in Standard (Full access
+   *  isn't set to persist between restarts and wasn't given to this session since
+   *  the last one). Optional — omitted means the saved mode is kept. */
+  keepsFullAccess?(sessionFileId: string): boolean;
+  /** Told whenever a session is put in Full access, so keepsFullAccess can answer for it. */
+  noteFullAccess?(sessionFileId: string): void;
   /** Global default model for the backend; '' = let the CLI choose. */
   getModel(id: BackendId): string;
   /** Global default effort level; '' = Default (flag left off). Optional — omitted means ''. */
@@ -157,7 +165,7 @@ export class SessionCoordinator {
 
   /** The session in the panel. Replaced (not mutated) when the panel switches session. */
   private _s: SessionState;
-  private _permissionOverride: PermissionMode | null = null;
+  /** A note for the open session's next turn. Dropped whenever another session opens. */
   private _pendingSystemMessage: string | null = null;
   private _activeProc: ChildProcess | null = null;
   /** stop() callers waiting for the running process to end. */
@@ -231,11 +239,10 @@ export class SessionCoordinator {
     return this.host.getCliCapabilities?.(this._s.backend) ?? UNKNOWN_CAPABILITIES;
   }
 
-  /** Session-level overrides (Custom Session) win over the global default, but a
-   *  runtime denial-card upgrade (setPermissionOverride) always wins over both —
-   *  it represents an explicit in-the-moment decision for the rest of the session. */
+  /** The open session's own mode. The global default only applies while no
+   *  session is open (it's what the next new session will start in). */
   getEffectivePermissionMode(): PermissionMode {
-    return this._permissionOverride ?? this._s.permissionMode ?? this.host.getPermissionMode();
+    return this._s.permissionMode ?? this.host.getPermissionMode();
   }
 
   /** The model for the next turn: the session pin, then the backend's global default. */
@@ -243,8 +250,30 @@ export class SessionCoordinator {
     return this._s.model || this.host.getModel(this._s.backend) || undefined;
   }
 
-  setPermissionOverride(mode: PermissionMode | null): void {
-    this._permissionOverride = mode;
+  /**
+   * Change the open session's permission mode and save it in the session file
+   * (toolbar picker, denial-card Allow, request-permission card). Only ever
+   * touches one session: `forSessionFileId` is the session the request was made
+   * in — when that's no longer the open session (or none is open) nothing
+   * changes and it returns false.
+   */
+  setSessionPermissionMode(mode: PermissionMode, forSessionFileId: string | undefined = this._s.fileId): boolean {
+    const s = this._s;
+    const fileId = s.fileId;
+    if (!fileId || forSessionFileId !== fileId) return false;
+    s.permissionMode = mode;
+    if (mode === 'full') this.host.noteFullAccess?.(fileId);
+    try {
+      // A patch, so the session's last-active time and user fields stay as they are
+      if (!updateStoredSession(this.host.getSessionsDir(), fileId, { permissionMode: mode })) {
+        const now = new Date().toISOString();
+        this._save(this._storedSession(s, fileId, s.sessionId ?? '', now));
+      }
+    } catch (e) {
+      log('Saving the session permission mode failed:', e instanceof Error ? e.message : String(e));
+    }
+    log('Session permission mode set to', mode, 'for', fileId);
+    return true;
   }
 
   getPendingSystemMessage(): string | null {
@@ -273,14 +302,15 @@ export class SessionCoordinator {
     /** Omitted = the host's default backend. */
     backend?: BackendId;
   }): void {
-    this._permissionOverride = null;
+    this._pendingSystemMessage = null;
     const vaultRoot = this.host.getVaultRoot();
     const now = new Date().toISOString();
     const sessionId = now.replace(/[:.]/g, '-');
     const title = custom?.name?.trim() || 'Untitled session';
     const cwd = custom?.cwd?.trim() || undefined;
     const suppressVaultContext = custom?.suppressVaultContext ?? false;
-    const permissionMode = custom?.permissionMode;
+    // Saved with the session from the start, so a later change to the default never moves it.
+    const permissionMode = custom?.permissionMode ?? this.host.getPermissionMode();
     const model = custom?.model?.trim() || undefined;
     const effort = custom?.effort?.trim() || undefined;
     const rawSession = custom?.rawSession ?? false;
@@ -302,6 +332,7 @@ export class SessionCoordinator {
       hasCustomTitle: !!custom?.name?.trim(),
       agent: undefined,
     };
+    if (permissionMode === 'full') this.host.noteFullAccess?.(sessionId);
 
     const session = this._storedSession(this._s, sessionId, '', now);
     saveSessionAtTop(vaultRoot, session, this.host.getSessionsDir(), this.host.getConfigDir());
@@ -361,6 +392,8 @@ export class SessionCoordinator {
   }
 
   async loadSession(session: StoredSession): Promise<void> {
+    session = this._settleSessionPermissionMode(session);
+    this._pendingSystemMessage = null;
     const isNew = !session.claudeSessionId;
     this._s = {
       placeholderId: isNew ? session.id : undefined,
@@ -521,6 +554,10 @@ export class SessionCoordinator {
       return;
     }
 
+    // No session open yet (send() before startNewSession/loadSession): the mode this
+    // first turn runs in becomes the session's own, and is saved with it.
+    turnSession.permissionMode ??= this.host.getPermissionMode();
+
     const streaming = this.host.isStreamingEnabled?.() ?? false;
     const mode = this.getEffectivePermissionMode();
     // A new conversation picks its agent now; a resumed one keeps the agent it
@@ -643,6 +680,33 @@ export class SessionCoordinator {
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
+
+  /**
+   * The mode a session opens in, never more than it was saved with: a session
+   * with no saved mode (from before modes were saved per session) gets Standard
+   * — or Chat only when its conversation can't continue in Standard (an
+   * Antigravity conversation started as the Chat only agent, #403) — and a Full
+   * access session that may not keep it (host.keepsFullAccess) drops to
+   * Standard. Either change is saved to the session file.
+   */
+  private _settleSessionPermissionMode(session: StoredSession): StoredSession {
+    const legacyMode: PermissionMode = session.claudeSessionId &&
+      this.host.getBackend(sessionBackend(session)).needsNewConversation?.(session.agent || undefined, 'standard')
+      ? 'restricted'
+      : 'standard';
+    let mode: PermissionMode = session.permissionMode ?? legacyMode;
+    if (mode === 'full' && !(this.host.keepsFullAccess?.(session.id) ?? true)) mode = 'standard';
+    if (mode === session.permissionMode) return session;
+    const settled = { ...session, permissionMode: mode };
+    try {
+      // saveSession (not a patch) so a session still in a legacy folder is migrated as before
+      saveSession(this.host.getVaultRoot(), settled, this.host.getSessionsDir());
+    } catch (e) {
+      log('Saving the session permission mode failed:', e instanceof Error ? e.message : String(e));
+    }
+    log('Session', session.id, 'opens in', mode, session.permissionMode ? `(saved: ${session.permissionMode})` : '(no saved mode)');
+    return settled;
+  }
 
   /** Record a finished turn for backends whose own history BojuBot can't read.
    *  Best-effort: a failed write costs the replay, never the turn. */
