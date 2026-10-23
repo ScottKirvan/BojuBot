@@ -8,7 +8,8 @@ export type PendingContext = {
   text: string;
   source: string;
   pinned: boolean;
-  type?: 'text' | 'url' | 'image' | 'pdf';
+  /** 'file': a binary file sent by name only (the agent is asked to open it). */
+  type?: 'text' | 'url' | 'image' | 'pdf' | 'file';
 };
 
 const TEXT_EXTS = new Set([
@@ -87,7 +88,7 @@ export class AttachmentHandler {
       } else {
         let text = TEXT_EXTS.has(ext) ? await f.text() : f.name;
         if (ext === 'canvas') text = canvasToText(f.name, text, this.host.getCanvasMaxChars());
-        this.contexts.push({ text, source: f.name, pinned: false });
+        this.contexts.push({ text, source: f.name, pinned: false, ...(!TEXT_EXTS.has(ext) && { type: 'file' as const }) });
       }
       this.render();
       this.host.focusInput();
@@ -174,7 +175,7 @@ export class AttachmentHandler {
         this.contexts.push({ text, source: f.name, pinned: false });
       } else {
         // Unknown binary — pass filename; Claude can attempt to read it
-        this.contexts.push({ text: f.name, source: f.name, pinned: false });
+        this.contexts.push({ text: f.name, source: f.name, pinned: false, type: 'file' });
       }
     }
     this.render();

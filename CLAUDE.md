@@ -23,6 +23,7 @@ BojuBot is not limited to features that involve Claude Code directly. Obsidian-n
 - Delete `CLAUDECODE` from spawn env or claude refuses nested launch
 - `--resume <sessionId>` on every turn after first; uses cache_read_input_tokens (~10x cheaper)
 - Do NOT prepend history manually — that costs MORE than --resume
+- **Chat only = no vault information from BojuBot either** (#406): gates in `src/utils/modeGates.ts`, always fed the session's effective mode. Chat only refuses vault queries except `help`, skips the open-note/split/stacked hint, and picking it for a session with messages whose saved mode isn't Chat only starts a new session saved in Chat only (`needsFreshSessionForChatOnly`, `ClaudeView.onPermissionModePicked` → `startChatOnlySession`; deferred to the next send while a turn runs). Chat only and Read only refuse `run-command`, and their orientation (`{{IF_...}}` line tags in `src/orientation.md`) and allowlist notes leave commands out. New BojuBot-to-agent channels must go through these gates.
 - Vault root = cwd for all spawns by default; per-session `cwd` override stored in session JSON and used on every spawn including `--resume`
 - Sessions: `.obsidian/bojubot/sessions/<id>.json` (metadata only; actual history in `~/.claude/projects/`); schema includes optional `cwd` field and optional `backend` (absent = Claude Code; a session stays bound to its backend, `claudeSessionId` holds the conversation ID for every backend)
 - **Backends** (agent-backends spec): `settings.backend` picks the CLI for new sessions; the plugin keeps binary path, capabilities and model list per backend (`getBinaryPath(id)`, `getCapabilities(id)`, `getModels(id)`, `getDefaultModel(id)`); `SessionCoordinator` resolves everything through its session's `backendId`. Antigravity's Chat only mode is unavailable (`backend.unavailableModes`), and compact and the gauge are hidden (`compactPrompt: null`). History: backends with `readableHistory: false` (Antigravity) get a BojuBot transcript, `sessions/<id>.transcript.jsonl`, appended by `SessionCoordinator` when each turn ends (user text cleaned like Claude history, reply with its @@BOJU lines). Read history only through `hasReadableHistory(session, sessionsDir)` / `loadHistory(session, sessionsDir)`, never `loadSessionMessages()` directly.
@@ -58,6 +59,7 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` �
 | `src/utils/logger.ts`           | File + console logging, estimateTokens                                                         |
 | `src/utils/cliCapabilities.ts`  | Parse `claude --help`/`--version` into flags, permission modes, effort levels                  |
 | `src/utils/effort.ts`           | Effort precedence (`resolveEffort`), level descriptions, indicator text                        |
+| `src/utils/modeGates.ts`        | Per-mode gates on BojuBot's own channels (#406): vault queries, open-note hint, run-command, Chat only new session |
 | `src/utils/streamPreview.ts`    | Live-preview display filter (`previewForDisplay`, `composeStreamingText`)                      |
 | `src/utils/apiError.ts`         | `parseApiError()` / `formatApiError()` for CLI `API Error:` messages (#350)                    |
 | `src/utils/planUsage.ts`        | `extractResultText()` — `result` text from stream-json output (used by `/usage`)               |
@@ -106,7 +108,7 @@ Run all three before opening any PR — all must pass clean:
 ```bash
 npm run build   # TypeScript check + bundle
 npm run lint    # ESLint — zero warnings or errors
-npm test        # 395 unit tests via tsx --test
+npm test        # 431 unit tests via tsx --test
 ```
 Lint and TypeScript violations are `fix:` commits, not `chore:`.
 

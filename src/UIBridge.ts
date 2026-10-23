@@ -2,6 +2,7 @@ import { App, Modal, Notice } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { brandName } from './brand';
 import { canWrite } from './backends/modes';
+import { bridgeActionAllowed } from './utils/modeGates';
 import type { PermissionMode } from './backends/types';
 export { BOJU_PREFIX } from './constants';
 export { BojuBotAction, extractActions } from './utils/actionParser';
@@ -17,8 +18,8 @@ interface UIBridgeInternal {
 
 export interface UIBridgeOptions {
   /** Session's current effective permission mode — gates file-mutating actions
-   *  (rename-file, move-file, delete-file), which run through this side-channel
-   *  rather than Claude Code's own tool permissions and so aren't otherwise
+   *  (rename-file, move-file, delete-file) and run-command, which run through this
+   *  side-channel rather than the CLI's own tool permissions and so aren't otherwise
    *  subject to Read only / Chat only's "no writes" guarantee. */
   permissionMode?: PermissionMode;
   commandAllowlist?: string[];
@@ -129,7 +130,8 @@ export function promptPermissionRequest(app: App, tool: string, reason: string):
 /**
  * Execute a single BojuBot UI action via the Obsidian API.
  * The 6 built-in actions execute immediately (transparency via show-notice).
- * run-command requires the commandId to be in the allowlist, or prompts if confirmUnlistedCommands is true.
+ * run-command requires a mode that can write (Obsidian commands can create or change
+ * notes), then the commandId in the allowlist, or a prompt if confirmUnlistedCommands is true.
  */
 export async function executeAction(app: App, action: BojuBotAction, options: UIBridgeOptions = {}): Promise<void> {
   const {
@@ -270,6 +272,11 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     case 'run-command': {
       const commandId = action.commandId as string;
       if (!commandId) { warn('UIBridge: run-command — missing commandId'); break; }
+      if (!bridgeActionAllowed('run-command', permissionMode)) {
+        warn('UIBridge: run-command — blocked, permission mode has no write access:', permissionMode, commandId);
+        new Notice(`${brandName()}: An Obsidian command was blocked. Chat only and Read only don't run commands, because commands can create or change notes.`, 6000);
+        break;
+      }
 
       const appInternal = app as unknown as UIBridgeInternal;
       const displayName = appInternal.commands.commands[commandId]?.name ?? commandId;
