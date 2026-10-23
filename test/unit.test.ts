@@ -22,7 +22,8 @@ import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
-import { renderOrientation } from '../src/utils/orientation';
+import { renderOrientation, applyModeTags } from '../src/utils/orientation';
+import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, CHAT_ONLY_QUERY_REFUSAL } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
@@ -3500,14 +3501,16 @@ describe('SessionCoordinator Antigravity agents', () => {
     assert.equal(agy.spawns[0].agent, undefined);
   }));
 
-  test('Claude Code sessions never pick an agent or need a new session for a mode change', withSessionsDir((dir) => {
+  test('Claude Code sessions never pick an agent, and only moving into Chat only needs a new session', withSessionsDir((dir) => {
     const { host, claude } = agentHost(dir);
     const c = new SessionCoordinator(host);
     c.startNewSession({ backend: 'claude-code' });
     c.send('hello', 'hello');
     assert.equal(claude.spawns[0].agent, undefined);
     claude.streams[0].onDone('sess-1', true);
-    for (const mode of ['standard', 'readonly', 'restricted', 'full'] as const) assert.equal(c.modeNeedsNewSession(mode), false, mode);
+    for (const mode of ['standard', 'readonly', 'full'] as const) assert.equal(c.modeNeedsNewSession(mode), false, mode);
+    // The earlier turns hold vault information (#406)
+    assert.equal(c.modeNeedsNewSession('restricted'), true);
     assert.equal('agent' in storedSessions(dir)[0], false);
   }));
 });
@@ -5000,5 +5003,275 @@ describe('STATUS_LABELS', () => {
   test('every visible status has a label; idle has none', () => {
     assert.equal(STATUS_LABELS.idle, '');
     for (const s of ['running', 'waiting', 'finished', 'error'] as const) assert.ok(STATUS_LABELS[s].length > 0, s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat only / Read only gates on BojuBot's own channels (#406)
+// ---------------------------------------------------------------------------
+
+const ALL_MODES = ['restricted', 'readonly', 'standard', 'full'] as const;
+
+describe('sharesVaultInfo', () => {
+  test('Chat only shares no vault information', () => {
+    assert.equal(sharesVaultInfo('restricted'), false);
+  });
+  test('every other mode does', () => {
+    assert.equal(sharesVaultInfo('readonly'), true);
+    assert.equal(sharesVaultInfo('standard'), true);
+    assert.equal(sharesVaultInfo('full'), true);
+  });
+});
+
+describe('canRunCommands', () => {
+  test('only modes that can write run Obsidian commands', () => {
+    assert.equal(canRunCommands('restricted'), false);
+    assert.equal(canRunCommands('readonly'), false);
+    assert.equal(canRunCommands('standard'), true);
+    assert.equal(canRunCommands('full'), true);
+  });
+});
+
+describe('queryAllowed / refuseQuery', () => {
+  const vaultTypes = ['file-list', 'backlinks', 'outlinks', 'tags'];
+
+  test('Chat only refuses every vault query type', () => {
+    for (const t of vaultTypes) assert.equal(queryAllowed(t, 'restricted'), false, t);
+  });
+
+  test('help is allowed in every mode (bundled reference text, no vault data)', () => {
+    for (const m of ALL_MODES) assert.equal(queryAllowed('help', m), true, m);
+  });
+
+  test('an unknown query type is refused in Chat only too', () => {
+    assert.equal(queryAllowed('something-new', 'restricted'), false);
+  });
+
+  test('other modes allow vault queries', () => {
+    for (const m of ['readonly', 'standard', 'full'] as const) {
+      for (const t of vaultTypes) assert.equal(queryAllowed(t, m), true, `${m} ${t}`);
+    }
+  });
+
+  test('refuseQuery returns an error result, with no vault data, for show and inject queries in Chat only', () => {
+    for (const mode of ['show', 'inject'] as const) {
+      const q = { query: 'file-list' as const, mode };
+      assert.deepEqual(refuseQuery(q, 'restricted'), { query: q, result: null, error: CHAT_ONLY_QUERY_REFUSAL });
+    }
+  });
+
+  test('the refusal tells the agent vault queries are not available in Chat only', () => {
+    assert.match(CHAT_ONLY_QUERY_REFUSAL, /^Vault queries aren't available in Chat only/);
+  });
+
+  test('refuseQuery returns null when the query may be resolved', () => {
+    assert.equal(refuseQuery({ query: 'backlinks', path: 'a.md', mode: 'inject' }, 'readonly'), null);
+    assert.equal(refuseQuery({ query: 'help', topic: 'ui-bridge', mode: 'inject' }, 'restricted'), null);
+  });
+});
+
+describe('bridgeActionAllowed', () => {
+  test('run-command is refused in Chat only and Read only', () => {
+    assert.equal(bridgeActionAllowed('run-command', 'restricted'), false);
+    assert.equal(bridgeActionAllowed('run-command', 'readonly'), false);
+  });
+
+  test('run-command is allowed in Standard and Full', () => {
+    assert.equal(bridgeActionAllowed('run-command', 'standard'), true);
+    assert.equal(bridgeActionAllowed('run-command', 'full'), true);
+  });
+
+  test('file operations need write access', () => {
+    for (const a of ['rename-file', 'move-file', 'delete-file']) {
+      assert.equal(bridgeActionAllowed(a, 'restricted'), false, a);
+      assert.equal(bridgeActionAllowed(a, 'readonly'), false, a);
+      assert.equal(bridgeActionAllowed(a, 'standard'), true, a);
+    }
+  });
+
+  test('an unknown mode refuses run-command', () => {
+    assert.equal(bridgeActionAllowed('run-command', undefined), false);
+  });
+
+  test('UI-only actions run in every mode', () => {
+    const uiOnly = ['open-file', 'open-file-split', 'open-file-new-tab', 'navigate-heading', 'show-notice', 'focus-search', 'open-settings', 'set-label', 'thanked', 'request-permission'];
+    for (const m of ALL_MODES) {
+      for (const a of uiOnly) assert.equal(bridgeActionAllowed(a, m), true, `${m} ${a}`);
+    }
+  });
+});
+
+describe('needsFreshSessionForChatOnly', () => {
+  test('a conversation saved in another mode starts over', () => {
+    for (const m of ['readonly', 'standard', 'full'] as const) {
+      assert.equal(needsFreshSessionForChatOnly('restricted', true, m), true, m);
+    }
+  });
+
+  test('a session with no messages just switches', () => {
+    for (const m of ALL_MODES) assert.equal(needsFreshSessionForChatOnly('restricted', false, m), false, m);
+  });
+
+  test('a conversation already in Chat only continues', () => {
+    assert.equal(needsFreshSessionForChatOnly('restricted', true, 'restricted'), false);
+  });
+
+  test('switching to any other mode never starts over', () => {
+    for (const m of ['readonly', 'standard', 'full'] as const) {
+      assert.equal(needsFreshSessionForChatOnly(m, true, 'restricted'), false, m);
+      assert.equal(needsFreshSessionForChatOnly(m, true, 'standard'), false, m);
+    }
+  });
+
+  test('the notices point to the Sessions panel', () => {
+    assert.equal(modeChangeNotice('restricted', 'Claude Code'), 'Chat only needs a new Claude Code session. Your previous session is in the Sessions panel.');
+    assert.match(modeChangeNotice('restricted', 'Claude Code', true), /^Chat only needs a new Claude Code session\. It starts with your next message/);
+  });
+});
+
+describe('Chat only and saved session modes (#406)', () => {
+  const stored = (id: string, permissionMode?: 'standard' | 'restricted') => ({
+    id, title: 'S', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    claudeSessionId: `conv-${id}`, ...(permissionMode && { permissionMode }),
+  });
+
+  test('a session saved in Standard reopens in Standard even when the default is Chat only', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir, { getPermissionMode: () => 'restricted' });
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(stored('s1', 'standard'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard');
+    // So picking Chat only for it starts over
+    assert.equal(needsFreshSessionForChatOnly('restricted', !!coordinator.sessionId, coordinator.getEffectivePermissionMode()), true);
+    assert.equal(coordinator.modeNeedsNewSession('restricted'), true);
+  }));
+
+  test('a session saved in Chat only reopens in Chat only and continues', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(stored('s2', 'restricted'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    assert.equal(needsFreshSessionForChatOnly('restricted', !!coordinator.sessionId, coordinator.getEffectivePermissionMode()), false);
+    assert.equal(coordinator.modeNeedsNewSession('restricted'), false);
+    assert.equal(coordinator.modeNeedsNewSession(), false);
+  }));
+
+  test('the new Chat only session saves Chat only as its mode', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir, { getPermissionMode: () => 'restricted' });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    assert.equal(coordinator.setSessionPermissionMode('restricted'), true);
+    const [saved] = storedSessions(dir);
+    assert.equal(saved.permissionMode, 'restricted');
+  }));
+
+  test('a new session started for a mode change saves that mode, whatever the default', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir, { getPermissionMode: () => 'full' });
+    const coordinator = new SessionCoordinator(host);
+    saveSession(dir, stored('old', 'standard'), dir);
+    await coordinator.loadSession(stored('old', 'standard'));
+    // As ClaudeView.startSessionForModeChange() does
+    coordinator.startNewSession({ backend: coordinator.backendId, permissionMode: 'restricted' });
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    assert.equal(storedSessions(dir).find(x => x.id === coordinator.sessionFileId)?.permissionMode, 'restricted');
+    assert.equal(storedSessions(dir).find(x => x.id === 'old')?.permissionMode, 'standard', 'the old session keeps its mode');
+  }));
+});
+
+describe('SessionCoordinator.modeNeedsNewSession on Claude Code (#406)', () => {
+  test('into Chat only with a conversation needs a new session; other moves don\'t', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code', permissionMode: 'standard' });
+    assert.equal(c.modeNeedsNewSession('restricted'), false, 'no conversation yet: just switches');
+    c.send('hello', 'hello');
+    claude.streams[0].onDone('sess-1', true);
+    assert.equal(c.modeNeedsNewSession('restricted'), true);
+    for (const m of ['readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), false, m);
+    assert.equal(c.modeNeedsNewSession(), false, 'its own mode never needs a new session');
+  }));
+
+  test('leaving Chat only on Claude Code continues the conversation (the denial card can still offer Standard)', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code', permissionMode: 'restricted' });
+    c.send('hello', 'hello');
+    claude.streams[0].onDone('sess-1', true);
+    for (const m of ['restricted', 'readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), false, m);
+  }));
+});
+
+describe('applyModeTags', () => {
+  const t = [
+    'always',
+    '{{IF_COMMANDS}}cmd',
+    '{{IF_NO_COMMANDS}}no-cmd',
+    '{{IF_VAULT}}vault',
+    '{{IF_NO_VAULT}}no-vault',
+    '',
+  ].join('\n');
+
+  test('Chat only keeps the no-commands and no-vault lines', () => {
+    assert.equal(applyModeTags(t, 'restricted'), 'always\nno-cmd\nno-vault\n');
+  });
+  test('Read only keeps vault lines but not commands', () => {
+    assert.equal(applyModeTags(t, 'readonly'), 'always\nno-cmd\nvault\n');
+  });
+  test('Standard and Full keep commands and vault lines', () => {
+    assert.equal(applyModeTags(t, 'standard'), 'always\ncmd\nvault\n');
+    assert.equal(applyModeTags(t, 'full'), 'always\ncmd\nvault\n');
+  });
+  test('dropped lines leave at most one blank line', () => {
+    assert.equal(applyModeTags('a\n\n{{IF_VAULT}}x\n\nb', 'restricted'), 'a\n\nb');
+  });
+  test('a template without a trailing newline gets none', () => {
+    assert.equal(applyModeTags('a\n{{IF_VAULT}}x', 'restricted'), 'a');
+  });
+});
+
+describe('renderOrientation per permission mode (#406)', () => {
+  const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
+  const vars = {
+    identityName: 'BojuBot',
+    supportLine: 'https://example.com',
+    cwdDisplay: 'vault root',
+    customCwd: false,
+    backend: CLAUDE_CODE_ORIENTATION,
+  };
+  const render = (permissionMode: 'restricted' | 'readonly' | 'standard' | 'full') =>
+    renderOrientation(template, { ...vars, permissionMode });
+
+  test('no mode leaves a tag behind', () => {
+    for (const m of ALL_MODES) assert.ok(!render(m).includes('{{'), m);
+  });
+
+  test('Chat only: no vault query instructions, no canvas, no run-command', () => {
+    const out = render('restricted');
+    assert.ok(!out.includes('"query":"<type>"'));
+    assert.ok(!out.includes('file-list('));
+    assert.ok(!out.includes('## Canvas'));
+    assert.ok(!out.includes('run-command(commandId)'));
+    assert.ok(!out.includes('obsidian-commands.md'));
+    assert.ok(out.includes("Not available in Chat only: this session has no vault access. Don't emit vault queries; they're refused."));
+    assert.ok(out.includes('run-command is unavailable in this permission mode'));
+  });
+
+  test('Read only: vault queries yes, run-command no', () => {
+    const out = render('readonly');
+    assert.ok(out.includes('file-list('));
+    assert.ok(out.includes('## Canvas'));
+    assert.ok(!out.includes('run-command(commandId)'));
+    assert.ok(!out.includes('obsidian-commands.md'));
+  });
+
+  test('Standard and Full keep every section', () => {
+    for (const m of ['standard', 'full'] as const) {
+      const out = render(m);
+      assert.ok(out.includes('focus-search · run-command(commandId)'), m);
+      assert.ok(out.includes('Read `.obsidian/plugins/bojubot/obsidian-commands.md` before run-command'), m);
+      assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth])'), m);
+      assert.ok(out.includes('## Canvas'), m);
+      assert.ok(!out.includes('Not available in Chat only'), m);
+      assert.ok(!out.includes('run-command is unavailable'), m);
+    }
   });
 });

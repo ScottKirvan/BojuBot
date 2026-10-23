@@ -19,6 +19,7 @@ import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
+import { refuseQuery, sharesVaultInfo, canRunCommands } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
@@ -460,7 +461,7 @@ export class ClaudeView extends ItemView {
         const showQueries = result.pendingQueries.filter(q => q.mode === 'show');
         const injectQueries = result.pendingQueries.filter(q => q.mode === 'inject');
         for (const q of showQueries) {
-          this.renderQueryResultCard(responseGroupEl, resolveQuery(this.app, q));
+          this.renderQueryResultCard(responseGroupEl, this.resolveQueryForSession(q));
         }
         if (injectQueries.length > 0) {
           this.handleVaultInject(injectQueries, responseGroupEl, unlock);
@@ -1016,8 +1017,9 @@ export class ClaudeView extends ItemView {
    * default for new sessions.
    */
   onPermissionModePicked(mode: PermissionMode): void {
-    // The conversation can't continue in this mode (#403): the session keeps
-    // its own mode and a new session starts in the picked one.
+    // The conversation can't continue in this mode — into Chat only from any
+    // other mode (#406), or Antigravity out of Chat only (#403): the session
+    // keeps its own mode and a new session starts in the picked one.
     if (this.coordinator.modeNeedsNewSession(mode)) {
       if (this.coordinator.isBusy) {
         // The next send makes the switch (handleSend).
@@ -1463,6 +1465,8 @@ export class ClaudeView extends ItemView {
   }
 
   injectAllowlistUpdate(newAllowlist: string[]) {
+    // Chat only and Read only refuse run-command, so the allowlist means nothing there (#406)
+    if (!canRunCommands(this.coordinator.getEffectivePermissionMode())) return;
     if (newAllowlist.length === 0) {
       this.coordinator.setPendingSystemMessage(
         '[System: The command allowlist was updated — it is now empty. You can still use run-command for any command; the user will be prompted to approve or deny each attempt.]',
@@ -1571,7 +1575,7 @@ export class ClaudeView extends ItemView {
                 const q = parsed as unknown as VaultQuery;
                 if (q.query === 'help') continue; // reference injections have no replay card
                 replayQueries.push(q);
-                this.renderQueryResultCard(this.messagesEl, resolveQuery(this.app, q));
+                this.renderQueryResultCard(this.messagesEl, this.resolveQueryForSession(q));
               } catch { /* skip malformed query lines */ }
             }
             if (replayQueries.length > 0) {
@@ -1697,9 +1701,13 @@ export class ClaudeView extends ItemView {
     tokenStatsEl.hide();
     this.scrollToBottom();
 
-    // Prepend open file context so Claude knows what note(s) are visible
+    // Prepend open file context so Claude knows what note(s) are visible — never
+    // in Chat only, which gets no vault information from BojuBot (#406)
     let activeFileNote = '';
-    if (!this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext && !this.coordinator.rawSession) {
+    if (
+      !this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext && !this.coordinator.rawSession &&
+      sharesVaultInfo(this.coordinator.getEffectivePermissionMode())
+    ) {
       const leaves = this.app.workspace.getLeavesOfType('markdown');
       const parents = new Set(leaves.map(l => l.parent));
       const isSplit = parents.size > 1;
@@ -2336,9 +2344,14 @@ export class ClaudeView extends ItemView {
     this.scrollToBottom();
   }
 
+  /** Resolve a vault query, or refuse it when the session's mode shares no vault information (#406). */
+  private resolveQueryForSession(q: VaultQuery): VaultQueryResult {
+    return refuseQuery(q, this.coordinator.getEffectivePermissionMode()) ?? resolveQuery(this.app, q);
+  }
+
   /** Auto-fire a --resume turn injecting vault query results, then call unlock when done. */
   private handleVaultInject(queries: VaultQuery[], prevGroupEl: HTMLElement, unlock: () => void) {
-    const results = queries.map(q => resolveQuery(this.app, q));
+    const results = queries.map(q => this.resolveQueryForSession(q));
 
     // Render a compact card for each inject query so the user can see what was queried
     for (const r of results) {

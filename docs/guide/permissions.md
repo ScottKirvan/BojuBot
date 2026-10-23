@@ -6,9 +6,9 @@ BojuBot runs an agent CLI (Claude Code, or [Antigravity](./agents)) as a subproc
 
 | Mode                         | Icon      | What Claude can do                                                                        |
 | ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
-| **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access. Works with attached context and @-mentions |
+| **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access, and BojuBot shares no vault information. Works with attached context and @-mentions |
 | **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied |
-| **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes or shell commands                               |
+| **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes, shell commands, or Obsidian commands           |
 | **Full access**              | 🔴 warning | Everything, including shell commands (Bash, git, etc.)                                    |
 
 **Change the mode any time** by clicking the colored permission icon in the input toolbar — a picker appears above it with all four options. The current mode is highlighted. Use arrow keys + Enter or click to select; Escape or click outside to cancel.
@@ -29,7 +29,7 @@ With **Persist full access between restarts** off (the default), Full access las
 Turn the setting on if you want sessions to keep Full access after a restart.
 
 ::: info On Antigravity
-Each mode allows slightly different things on Antigravity, and switching into or out of Chat only starts a new session there. The picker shows each mode's behavior for the session's agent. See [Permissions on each agent](#permissions-on-each-agent).
+Each mode allows slightly different things on Antigravity, and switching out of Chat only also starts a new session there (switching into it does on [both agents](#chat-only)). The picker shows each mode's behavior for the session's agent. See [Permissions on each agent](#permissions-on-each-agent).
 :::
 
 ::: info Claude Code version detection
@@ -45,6 +45,22 @@ In Standard mode Claude Code accepts file edits automatically and also auto-appr
 Chat only is designed for conversations where you want Claude to reason and suggest, but not touch your vault. Claude can see any context you explicitly hand it — @-mentioned notes, file attachments, clipboard pastes — and can fetch web URLs and search the web. It cannot browse, read, or modify vault files on its own.
 
 None of the automatic session-start context is injected in this mode — the vault folder tree, your context file (`_claude-context.md`), pinned notes, and per-file instructions are all skipped, since any of them could otherwise leak details established in other, non-restricted sessions. Claude is also spawned in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
+
+BojuBot itself also keeps vault information away from Claude in Chat only:
+
+- **No vault queries.** Claude can't ask BojuBot for your file list, backlinks, outgoing links or tags. If it tries, BojuBot refuses and tells it vault queries aren't available in Chat only. (Claude can still ask for BojuBot's own reference pages, which contain nothing from your vault.)
+- **No open-note paths.** BojuBot doesn't tell Claude which note you have open, or which notes are open in a split or in stacked tabs.
+- **No Obsidian commands.** Claude can't run Obsidian commands, and isn't given your command allowlist.
+
+What Claude *can* still do through BojuBot in Chat only: open a note you name, jump to a heading, show a notice, or open Settings or the quick switcher. These only change what's on your screen; nothing is sent back to Claude.
+
+Anything you hand Claude yourself still reaches it: @-mentioned notes, attachments, selections you send, and notes you pick in a skill's form.
+
+**Switching into Chat only starts a new session** if the current one already has messages, on both agents, because the earlier messages may hold vault information. The new session opens in the same tab, on the same agent with the same settings, and is saved in Chat only. BojuBot shows a notice, and your previous session stays in the [Sessions panel](./sessions#sessions-panel), in the mode it had. If a reply is still running, the new session starts when you send your next message. A session with no messages just switches. A session that's already in Chat only stays as it is.
+
+### Read only and Obsidian commands
+
+Read only can't run Obsidian commands through BojuBot either, because commands can create or change notes. Claude isn't given your command allowlist in this mode. Vault queries and open-note paths work as usual.
 
 ---
 
@@ -63,7 +79,7 @@ The four modes mean the same thing on both agents, but each agent CLI enforces t
 | **Standard** | Reads and edits files, web search and web pages. Safe read-only shell commands like `ls` run; other shell commands are blocked. | Reads and edits files, web search. Every shell command is blocked. |
 | **Full access** | Everything. | Everything, in a session that started in Full access. A session switched to Full access later has no browser or MCP tools ([why](#why-antigravity-works-differently)). |
 | **Reading a web page** | Allowed in every mode. | Allowed in Chat only and Full access. In Read only and Standard it's blocked, and the denial card offers full access. |
-| **Changing mode during a session** | Takes effect from your next message. | Takes effect from your next message. Switching into or out of Chat only starts a new session instead. |
+| **Changing mode during a session** | Takes effect from your next message. Switching into Chat only starts a new session instead. | Takes effect from your next message. Switching into or out of Chat only starts a new session instead. |
 | **Denial card** | From Chat only: offers standard access. From Read only or Standard: offers full access. | From Read only or Standard: offers full access. Never shown in Chat only: nothing there asks for permission. |
 
 ### Changing mode on Antigravity

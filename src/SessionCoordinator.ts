@@ -24,6 +24,7 @@ import { log } from './utils/logger';
 import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
 import { resolveEffort } from './utils/effort';
+import { needsFreshSessionForChatOnly } from './utils/modeGates';
 import { composeStreamingText } from './utils/streamPreview';
 import { preserveUserFields } from './utils/sessionList';
 
@@ -219,12 +220,15 @@ export class SessionCoordinator {
 
   /**
    * True when the session's conversation can't continue in `mode` (default:
-   * the effective mode) and switching to it needs a new session — on
-   * Antigravity, moving into or out of Chat only (#403). Never true before
+   * the session's own mode) and switching to it needs a new session: moving
+   * into Chat only from any other mode on any backend (the earlier turns hold
+   * vault information, #406), and on Antigravity also moving out of Chat only
+   * (agy fixes a conversation's tools when it starts, #403). Never true before
    * the first turn: a session with no conversation just switches.
    */
   modeNeedsNewSession(mode: PermissionMode = this.getEffectivePermissionMode()): boolean {
     if (!this._s.sessionId) return false;
+    if (needsFreshSessionForChatOnly(mode, true, this.getEffectivePermissionMode())) return true;
     return this.backend.needsNewConversation?.(this._s.agent, mode) ?? false;
   }
 

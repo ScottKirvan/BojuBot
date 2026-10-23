@@ -169,6 +169,8 @@ Claude can execute Obsidian commands directly. Three are pre-approved by default
 
 You can manage the full list in **Settings → BojuBot → UI Bridge & Commands**.
 
+Commands only run in **Standard** and **Full access**. In Chat only and Read only, BojuBot blocks them (with a notice), because commands can create or change notes.
+
 ### How permission works
 
 | Situation                                     | What happens                                              |
@@ -193,7 +195,7 @@ Claude can open a note directly in your workspace as part of its response — fo
 | Open in a new tab     | Stacked tab — doesn't replace or split anything         |
 | Jump to a heading     | Opens the file and scrolls to a specific heading        |
 
-All of these are immediate — no confirmation needed — and Claude posts a short notice each time, so you always know what changed.
+All of these are immediate — no confirmation needed — and Claude posts a short notice each time, so you always know what changed. They work in every permission mode, including Chat only: they only change what's on your screen and send nothing back to Claude.
 
 ---
 
