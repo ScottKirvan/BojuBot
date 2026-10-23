@@ -495,27 +495,27 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     new Setting(containerEl).setName('Permissions').setHeading();
 
     new Setting(containerEl)
-      .setName('Permission mode')
-      .setDesc('Controls which vault operations Claude is allowed to perform.')
+      .setName('Default permission mode')
+      .setDesc('The mode new sessions start in. Each session keeps its own mode; change an open session\'s mode with the permission button in the chat panel.')
       .addDropdown((drop) =>
         drop
           .addOption('restricted', 'Chat only — web access, no file system')
           .addOption('standard', 'Standard — files + web, read-only shell (recommended)')
           .addOption('readonly', 'Read only — no writes or shell commands')
           .addOption('full', 'Full access — everything including bash')
-          .setValue(this.plugin.getEffectivePermissionMode())
+          .setValue(this.plugin.settings.permissionMode)
           .onChange(async (value) => {
             this.plugin.settings.permissionMode = value as PermissionMode;
             await this.plugin.saveSettings();
-            this.plugin.notifyPermissionChanged();
+            this.plugin.notifyDefaultPermissionChanged();
             this.display();
           })
       );
 
-    if (this.plugin.getEffectivePermissionMode() === 'full') {
+    if (this.plugin.settings.permissionMode === 'full' || this.plugin.getEffectivePermissionMode() === 'full') {
       new Setting(containerEl)
         .setName('Persist full access between restarts')
-        .setDesc('When off, full access resets to standard when Obsidian restarts.')
+        .setDesc('When off, full access lasts until Obsidian restarts: then the default goes back to standard, and sessions left in full access reopen in standard.')
         .addToggle((toggle) =>
           toggle
             .setValue(this.plugin.settings.persistFullAccess)
