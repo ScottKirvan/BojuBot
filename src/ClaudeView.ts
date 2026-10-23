@@ -17,7 +17,7 @@ import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { refuseQuery, sharesVaultInfo, canRunCommands, needsFreshSessionForChatOnly, CHAT_ONLY_NEW_SESSION_NOTICE, CHAT_ONLY_PENDING_NOTICE } from './utils/modeGates';
+import { refuseQuery, sharesVaultInfo, canRunCommands, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_NEW_SESSION_NOTICE, CHAT_ONLY_PENDING_NOTICE, CHAT_ONLY_ATTACHMENT_NOTICE } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
@@ -1378,6 +1378,14 @@ export class ClaudeView extends ItemView {
       return;
     }
 
+    // Chat only never sends file paths (#406): stop here and keep the message and
+    // attachments, so the user can remove them or switch mode.
+    const pendingFiles = [...this.attachmentHandler.getContexts(), ...(this.coordinator.sessionId ? [] : this._customAttachments)];
+    if (blockedAttachments(pendingFiles, this.chatOnlyFreshSessionPending ? 'restricted' : this.coordinator.getEffectivePermissionMode()).length > 0) {
+      new Notice(`${this.plugin.brand.name}: ${CHAT_ONLY_ATTACHMENT_NOTICE}`);
+      return;
+    }
+
     if (this.chatOnlyFreshSessionPending) {
       // Chat only was picked while a turn ran. A new session clears pending
       // attachments; keep the ones meant for this message.
@@ -1397,7 +1405,7 @@ export class ClaudeView extends ItemView {
     // Capture manually-added contexts now (before clearNonPinned after send)
     // and convert to InjectedContext for badge display in the message bubble.
     const liveContextBadges: InjectedContext[] = this.attachmentHandler.getContexts()
-      .filter((c: PendingContext) => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text')
+      .filter((c: PendingContext) => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text' || c.type === 'file')
       .map((c: PendingContext) => {
         if (c.type === 'url') return { type: 'url' as const, url: c.text };
         if (c.type === 'image') return { type: 'image' as const, source: c.source, path: c.text };
