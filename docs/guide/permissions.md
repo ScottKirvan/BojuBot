@@ -1,6 +1,6 @@
 # Permissions
 
-BojuBot runs Claude Code as a subprocess and controls what it's allowed to do via Claude Code's permission flags. The permission mode is set **per session** before any message is sent — it cannot change mid-response.
+BojuBot runs Claude Code as a subprocess and controls what it's allowed to do via Claude Code's permission flags. Every session has **its own permission mode**, saved with the session. It applies from the next message you send; it can't change in the middle of a response.
 
 ## Modes
 
@@ -15,7 +15,18 @@ BojuBot runs Claude Code as a subprocess and controls what it's allowed to do vi
 
 The same picker is available from the Command Palette: **BojuBot: Change permission mode**.
 
-The default for new sessions is set in **Settings → BojuBot → Permission mode**.
+## The mode belongs to the session
+
+- **A new session starts in your default mode** and saves it. The default is set in **Settings → BojuBot → Default permission mode**. Changing the default there doesn't change any session that already exists, including the one open in the panel.
+- **The picker changes the open session only.** The mode you pick is saved with that session, and it also becomes the default for new sessions. Other sessions keep their own modes.
+- **Opening a session never changes what it's allowed to do.** It opens in the mode it was saved with, whatever the picker showed before. Sessions from older versions of BojuBot, which didn't save a mode, open in **Standard** (and that's saved).
+- **Nothing carries over when you switch sessions.** Opening, starting or clearing a session drops anything waiting to be sent with the previous session's next message: attachments in the input area (pinned ones too), a queued **Refresh context**, notes about permission or allowlist changes, and Custom Session setup that hadn't been sent yet.
+
+### Full access and restarts
+
+With **Persist full access between restarts** off (the default), Full access lasts until Obsidian restarts. After a restart the default for new sessions goes back to Standard, and a session that was left in Full access opens in Standard. Within the same run, a session you gave Full access keeps it when you switch away and back.
+
+Turn the setting on if you want sessions to keep Full access after a restart.
 
 ::: info On Antigravity
 Sessions on the Antigravity CLI map these modes differently: Standard denies **all** shell commands, Read only uses Antigravity's plan mode, and Chat only isn't available. The picker shows each mode's behavior for the session's agent. See [Choosing an Agent](./agents#permissions-on-antigravity).
@@ -46,10 +57,12 @@ The upgrade option in the denial card depends on the current mode:
 - **Chat only** → offers **Allow standard access for this session**
 - **Standard / Read only** → offers **Allow full access for this session**
 
-The session override is cleared when you start a new session or when you change the permission mode via the picker or settings.
+Allowing upgrades the session the card was shown in, and only that one: the new mode is saved with the session, so it's still there when you come back to it (see [Full access and restarts](#full-access-and-restarts)). Other sessions, and new ones, aren't affected. You can lower the mode again at any time with the picker. A card left over from a session that's no longer open does nothing.
+
+The same applies when Claude asks for a permission during a turn and you grant it.
 
 ::: warning
 Permission granularity is at the **tool level**, not the command level. "Allow full access" unlocks all shell commands for the rest of the session — there is no way to approve `git status` while still blocking `rm`. This is a constraint of how Claude Code works in streaming mode.
 
-If you need Bash access regularly, set Permission mode to **Full access** in settings rather than upgrading per-session each time.
+If you need Bash access regularly, set the default permission mode to **Full access** in settings rather than upgrading each session.
 :::

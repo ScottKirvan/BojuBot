@@ -17,10 +17,11 @@ export const PERMISSION_MODES: ModeOption[] = [
   { mode: 'full', icon: 'triangle-alert', colorClass: 'bojubot-perm-full', label: 'Full access', description: 'unrestricted, including bash' },
 ];
 
+/** The picker changes the open session's mode (saved with it) and makes it the default for new sessions. */
 function applyPermission(plugin: BojuBotPlugin, mode: PermissionMode): void {
   plugin.settings.permissionMode = mode;
   void plugin.saveSettings();
-  plugin.notifyPermissionChanged();
+  plugin.notifyPermissionPicked(mode);
 }
 
 /** Modes the active backend can't enforce, each with the reason shown in place of its description. */

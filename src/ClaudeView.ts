@@ -173,6 +173,8 @@ export class ClaudeView extends ItemView {
       getConfigDir: () => this.app.vault.configDir,
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
+      keepsFullAccess: (id) => this.plugin.keepsFullAccess(id),
+      noteFullAccess: (id) => this.plugin.noteFullAccess(id),
       getModel: (id) => this.plugin.getDefaultModel(id),
       getEffort: () => this.plugin.settings.defaultEffort ?? '',
       getSessionsDir: () => this.getSessionsDir(),
@@ -823,17 +825,41 @@ export class ClaudeView extends ItemView {
     return has(caps, '--effort') ? caps.effortLevels : [];
   }
 
-  onSettingsChanged(): void {
-    this.coordinator.setPermissionOverride(null);
+  /**
+   * The toolbar picker (or its Ctrl+P twin) chose a mode: it applies to the open
+   * session only, and is saved with it. The plugin has already made it the
+   * default for new sessions.
+   */
+  onPermissionModePicked(mode: PermissionMode): void {
+    const before = this.coordinator.getEffectivePermissionMode();
+    const changed = this.coordinator.setSessionPermissionMode(mode) && before !== mode;
     this.updatePermissionIcon();
-    if (this.coordinator.sessionId) {
-      const perm = this.coordinator.backend.orientation.permissions[this.plugin.settings.permissionMode];
+    if (changed && this.coordinator.sessionId) {
+      const perm = this.coordinator.backend.orientation.permissions[this.coordinator.getEffectivePermissionMode()];
       this.coordinator.setPendingSystemMessage(
         `[System: Permission mode changed to ${perm.summary}. ` +
         `You can now: ${perm.can}. ` +
         `You cannot: ${perm.cannot}.]`,
       );
     }
+  }
+
+  /** The default for new sessions changed in settings. The open session keeps its own
+   *  mode; the icon only follows the default while no session is open. */
+  onDefaultPermissionModeChanged(): void {
+    this.updatePermissionIcon();
+  }
+
+  /** Anything held for the open session's next message: attachments (pinned too),
+   *  unsent Custom Session setup and queued system notes. Dropped whenever a
+   *  different session opens or the session is cleared, so none of it reaches
+   *  another session. */
+  private dropPendingSessionState(): void {
+    this.attachmentHandler.reset();
+    this._customAttachments = [];
+    this._customInitialInstructions = '';
+    this._customSuppressVaultContext = false;
+    this.coordinator.clearPendingSystemMessage();
   }
 
   auditMemoryFile(): void {
@@ -1052,6 +1078,7 @@ export class ClaudeView extends ItemView {
   }
 
   clearCurrentSession() {
+    this.dropPendingSessionState();
     this.messagesEl.empty();
     this.appendMessage('system', 'Session cleared');
     this.updateSessionStatus();
@@ -1207,6 +1234,7 @@ export class ClaudeView extends ItemView {
   }
 
   private async loadSession(session: StoredSession) {
+    this.dropPendingSessionState();
     this.currentUserLabel = session.userLabel ?? 'User';
     this.currentAssistantLabel = session.assistantLabel ?? this.plugin.brand.name;
 
@@ -1221,6 +1249,7 @@ export class ClaudeView extends ItemView {
     this.updateExportBtn();
     this.updateSessionStatus();
     this.updateModelIndicator();
+    this.updatePermissionIcon();
 
     if (canResume) {
       const messages = loadHistory(session, this.getSessionsDir());
@@ -1826,10 +1855,16 @@ export class ClaudeView extends ItemView {
   }
 
   private handlePermissionRequest(request: { tool: string; reason: string }, unlock: () => void) {
+    // The request belongs to the session open now; the answer must never reach another one.
+    const requestSessionId = this.coordinator.sessionFileId;
     void promptPermissionRequest(this.app, request.tool, request.reason).then(granted => {
       unlock();
+      if (this.coordinator.sessionFileId !== requestSessionId) {
+        log('Permission request answered after its session closed — ignored');
+        return;
+      }
       if (granted) {
-        this.coordinator.setPermissionOverride('full');
+        this.coordinator.setSessionPermissionMode('full', requestSessionId);
         this.updatePermissionIcon();
         this.inputEl.value = `[Permission granted] Full access is now enabled. Please retry the blocked ${request.tool} operation and complete the task.`;
       } else {
@@ -1861,12 +1896,17 @@ export class ClaudeView extends ItemView {
         cls: 'mod-cta',
         text: upgradeLabel,
       });
+      // The card upgrades the session it was shown in, and only that one.
+      const cardSessionId = this.coordinator.sessionFileId;
       upgradeBtn.addEventListener('click', () => {
-        this.coordinator.setPermissionOverride(upgradeTarget);
+        if (!this.coordinator.setSessionPermissionMode(upgradeTarget, cardSessionId)) {
+          new Notice('This card belongs to a session that is no longer open.');
+          card.remove();
+          return;
+        }
         this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
-        log(`Session permission override set to ${upgradeTarget}`);
         const toolList = [...new Set(denials.map(d => d.tool))].join(', ');
         this.inputEl.value = upgradeMsg(toolList);
         void this.handleSend();
