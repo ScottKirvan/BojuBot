@@ -1,10 +1,12 @@
-import { ItemView, sanitizeHTMLToDom, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App } from 'obsidian';
+import { ItemView, Keymap, sanitizeHTMLToDom, WorkspaceLeaf, MarkdownRenderer, Notice, setIcon, TFile, Modal, App, ViewStateResult } from 'obsidian';
 import spriteUrl from '../assets/media/BojuBotSprite_800x800.png';
 import logoUrl from '../assets/media/logo.png';
 import sponsorImageUrl from '../assets/media/sk_watercolor_300_circle.png';
 import signatureUrl from '../assets/media/signature.png';
 
-import { AppInternal } from './obsidianInternal';
+import { AppInternal, LeafInternal } from './obsidianInternal';
+import { ChatPanelState, parseChatPanelState } from './utils/chatPanels';
+import { IDLE_STATUS, SessionStatus, StatusEvent, StatusState, displayStatus, nextStatus } from './utils/sessionStatus';
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
 import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
@@ -17,17 +19,21 @@ import type { PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
+import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { ClaudeModel } from './settings';
 import { BACKEND_IDS } from './backends';
+import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
+import { repairLinks } from './utils/linkRepair';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
+import { historyKeyAction } from './utils/inputHistory';
 import { isRegularUser, sponsorMilestoneToShow } from './utils/sponsorGate';
 import { pickThanksMessage, thanksCardAllowed, ThanksLink, ThanksMessages } from './utils/thanks';
 import thanksData from './thanks.json';
@@ -37,13 +43,12 @@ import {
   InjectedContextType,
   saveSession,
   loadAllSessions,
-  resolveSessionsDir,
   hasReadableHistory,
   loadHistory,
   sessionBackend,
-  estimateSessionTokens,
 } from './utils/sessionStorage';
-import { SessionListModal } from './modals/SessionListModal';
+import { StopReplyModal } from './modals/StopReplyModal';
+import { relativeTime } from './utils/sessionList';
 import { renderAgentIcon } from './agentIcon';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
 import { ContextGenerationModal } from './ContextGenerationModal';
@@ -52,6 +57,9 @@ import { TokenGauge } from './TokenGauge';
 import { AttachmentHandler, PendingContext } from './AttachmentHandler';
 
 export const VIEW_TYPE_CLAUDE = 'bojubot-chat';
+
+/** How long "Stop it and switch" waits for the reply's process to end before giving up. */
+const STOP_REPLY_TIMEOUT_MS = 10_000;
 
 // Maps from lowercase tool name to display values.
 // Claude Code sends PascalCase names (Read, Write, Bash…) so we normalise to lowercase for lookup.
@@ -133,6 +141,9 @@ export class ClaudeView extends ItemView {
   plugin: BojuBotPlugin;
   private coordinator: SessionCoordinator;
   private _activeTurnEls: ActiveTurnElements | null = null;
+  /** True while a reply is being stopped so the panel can switch session: the
+   *  stopped turn must not start a follow-up turn (vault inject, permission retry). */
+  private _stoppingForSwitch = false;
   private inputEl: HTMLTextAreaElement;
   private messagesEl: HTMLElement;
   private sendBtn: HTMLButtonElement;
@@ -160,6 +171,9 @@ export class ClaudeView extends ItemView {
   private _customAttachments: PendingContext[] = [];
   private _customInitialInstructions = '';
   private _customSuppressVaultContext = false;
+  /** A mode picked while a reply ran that this session's conversation can't
+   *  continue in: the next send starts a new session in it. */
+  private pendingNewSessionMode: PermissionMode | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
@@ -173,6 +187,8 @@ export class ClaudeView extends ItemView {
       getConfigDir: () => this.app.vault.configDir,
       getEnv: () => this.plugin.shellEnv,
       getPermissionMode: () => this.plugin.settings.permissionMode,
+      keepsFullAccess: (id) => this.plugin.keepsFullAccess(id),
+      noteFullAccess: (id) => this.plugin.noteFullAccess(id),
       getModel: (id) => this.plugin.getDefaultModel(id),
       getEffort: () => this.plugin.settings.defaultEffort ?? '',
       getSessionsDir: () => this.getSessionsDir(),
@@ -221,21 +237,25 @@ export class ClaudeView extends ItemView {
     });
 
     this.coordinator.on('session:new', () => {
+      this.pendingNewSessionMode = null;
       if (!this.messagesEl) return;
       this.tokenGauge.reset();
       this.currentUserLabel = 'User';
       this.currentAssistantLabel = this.plugin.brand.name;
       this.attachmentHandler.reset();
       // Custom session state is set before this event fires — don't clear it here
+      this.applyStatus({ type: 'reset' });
       this.messagesEl.empty();
       this.renderWelcomeScreen();
       this.updateExportBtn();
       this.updateSessionStatus();
       this.updateModelIndicator();
+      this.onPanelSessionChanged();
     });
 
     this.coordinator.on('session:updated', () => {
       this.updateSessionStatus();
+      this.onPanelSessionChanged();
     });
 
     // ── Turn streaming ───────────────────────────────────────────────────────
@@ -341,7 +361,10 @@ export class ClaudeView extends ItemView {
       this.appendMessage('system', `stderr: ${err.trim()}`);
     });
 
+    this.coordinator.on('turn:start', () => this.applyStatus({ type: 'turn-start' }));
+
     this.coordinator.on('turn:error', (err) => {
+      this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: true });
       if (!this._activeTurnEls) return;
       const { statusEl, assistantEl, unlock } = this._activeTurnEls;
       this.cancelTextFrame(this._activeTurnEls);
@@ -349,6 +372,7 @@ export class ClaudeView extends ItemView {
       statusEl.remove();
       assistantEl.setText(`Process error: ${err}`);
       unlock();
+      this.plugin.refreshSessionsViews();
     });
 
     this.coordinator.on('permission:denied', (denials, hasPendingRequest) => {
@@ -357,7 +381,10 @@ export class ClaudeView extends ItemView {
     });
 
     this.coordinator.on('turn:done', (result) => {
-      if (!this._activeTurnEls) return;
+      if (!this._activeTurnEls) {
+        this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this) });
+        return;
+      }
       const {
         assistantEl, statusEl, toolEventsEl, responseGroupEl,
         toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError, thanked,
@@ -397,9 +424,10 @@ export class ClaudeView extends ItemView {
       } else if (this.isAuthError(accumulated)) {
         this.renderAuthError(assistantEl);
       } else {
-        assistantEl.dataset.markdown = accumulated;
+        const repaired = this.repairLinks(accumulated);
+        assistantEl.dataset.markdown = repaired;
         assistantEl.empty();
-        void MarkdownRenderer.render(this.app, this.addHardLineBreaks(accumulated), assistantEl, '', this);
+        void MarkdownRenderer.render(this.app, this.addHardLineBreaks(repaired), assistantEl, '', this);
         this.wireInternalLinks(assistantEl);
       }
       if (result.pendingQueries.length > 0) {
@@ -409,12 +437,31 @@ export class ClaudeView extends ItemView {
 
       this.scrollToBottom();
       this.updateSessionStatus();
+      // The turn moved the session's last-active time
+      this.plugin.refreshSessionsViews();
+
+      // Live status (#399): a vault-query follow-up keeps the session replying;
+      // a permission request waits for the user before the turn counts as ended.
+      const continues = !this._stoppingForSwitch && !isInjectTurn && result.pendingQueries.some(q => q.mode === 'inject');
+      // Granting a request means full access, which some conversations can't
+      // take (Antigravity Chat only, #403): no request card for those.
+      const permissionRequest = this.coordinator.modeNeedsNewSession('full') ? null : result.pendingPermissionRequest;
+      if (!continues) {
+        if (!this._stoppingForSwitch && permissionRequest) this.applyStatus({ type: 'wait-start' });
+        this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: !!apiError || this.isAuthError(accumulated) });
+      }
+
+      // Stopped so the panel can switch session: no follow-up turn in this one.
+      if (this._stoppingForSwitch) {
+        unlock();
+        return;
+      }
 
       if (!isInjectTurn) {
         const showQueries = result.pendingQueries.filter(q => q.mode === 'show');
         const injectQueries = result.pendingQueries.filter(q => q.mode === 'inject');
         for (const q of showQueries) {
-          this.renderQueryResultCard(responseGroupEl, resolveQuery(this.app, q));
+          this.renderQueryResultCard(responseGroupEl, this.resolveQueryForSession(q));
         }
         if (injectQueries.length > 0) {
           this.handleVaultInject(injectQueries, responseGroupEl, unlock);
@@ -422,8 +469,8 @@ export class ClaudeView extends ItemView {
         }
       }
 
-      if (result.pendingPermissionRequest) {
-        this.handlePermissionRequest(result.pendingPermissionRequest, unlock);
+      if (permissionRequest) {
+        this.handlePermissionRequest(permissionRequest, unlock);
         return;
       }
 
@@ -515,23 +562,156 @@ export class ClaudeView extends ItemView {
   }
 
   getViewType(): string { return VIEW_TYPE_CLAUDE; }
-  getDisplayText(): string { return this.plugin.brand.name; }
+  /** The tab title: the session's name. */
+  getDisplayText(): string { return this.coordinator?.sessionTitle || this.plugin.brand.name; }
   getIcon(): string { return this.plugin.brand.icon; }
+
+  // ── Panel state (#399) ─────────────────────────────────────────────────────
+  // Each chat panel remembers its session in the workspace layout, so tabs come
+  // back with their own sessions after a restart. Obsidian opens the view, then
+  // hands it the saved state: the first session is chosen once both are in.
+
+  /** The initial session has been chosen (or the setup card is showing instead). */
+  private initialized = false;
+  /** View state received before the initial session was chosen. */
+  private pendingState: ChatPanelState | null = null;
+  /** Fallback in case no view state ever arrives. */
+  private initTimer: number | null = null;
+  private setupShown = false;
+
+  getState(): Record<string, unknown> {
+    const state = super.getState();
+    const id = this.coordinator.sessionFileId ?? this.pendingState?.sessionFileId;
+    if (id) state.sessionFileId = id;
+    return state;
+  }
+
+  async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    await super.setState(state, result);
+    const st = parseChatPanelState(state);
+    if (!this.initialized) {
+      this.pendingState = st;
+      await this.runInitialSession();
+      return;
+    }
+    // Already showing something: a state change asks for another session
+    if (st.sessionFileId && st.sessionFileId !== this.coordinator.sessionFileId && !this.plugin.leafForSession(st.sessionFileId, this.leaf)) {
+      const session = this.findSession(st.sessionFileId);
+      if (session) this.loadSessionHere(session);
+    }
+  }
+
+  private findSession(id: string): StoredSession | undefined {
+    return loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir).find(s => s.id === id);
+  }
+
+  /** Choose the panel's first session: the one its saved state names, a blank
+   *  panel, or (Resume last session) the last one used, unless another panel
+   *  already has it open. */
+  private async runInitialSession(): Promise<void> {
+    if (this.initialized || this.setupShown || !this.messagesEl) return;
+    this.initialized = true;
+    if (this.initTimer !== null) { window.clearTimeout(this.initTimer); this.initTimer = null; }
+    const st = this.pendingState ?? {};
+    this.pendingState = null;
+
+    let target: StoredSession | undefined;
+    if (st.sessionFileId) {
+      target = this.findSession(st.sessionFileId);
+    } else if (!st.blank && this.plugin.settings.resumeLastSession) {
+      const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir);
+      const lastId = this.plugin.settings.lastActiveSessionId;
+      target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
+    }
+    if (target && !this.plugin.leafForSession(target.id, this.leaf)) {
+      try {
+        await this.loadSession(target);
+      } catch (e) {
+        log('Failed to load session, starting new:', e);
+        this.applyNewSession();
+      }
+    }
+
+    // Show welcome screen if no session was loaded
+    if (this.messagesEl.childElementCount === 0) this.renderWelcomeScreen();
+  }
+
+  // ── Live status (#399) ─────────────────────────────────────────────────────
+
+  private status: StatusState = IDLE_STATUS;
+
+  /** What this panel's session is doing: replying, waiting for the user, an unseen reply or error. */
+  get sessionStatus(): SessionStatus {
+    return displayStatus(this.status);
+  }
+
+  private applyStatus(event: StatusEvent): void {
+    const prev = displayStatus(this.status);
+    this.status = nextStatus(this.status, event);
+    const next = displayStatus(this.status);
+    if (prev === next) return;
+    this.renderTabStatus(next);
+    this.plugin.onChatStatusChanged(this, prev, next);
+  }
+
+  /** The panel is on screen: a finished reply or error counts as seen. */
+  markViewed(): void {
+    if (this.plugin.isChatVisible(this)) this.applyStatus({ type: 'viewed' });
+  }
+
+  onResize(): void {
+    this.markViewed();
+  }
+
+  /** Status dot on the tab (styled from the attribute; see styles.css). */
+  private renderTabStatus(status: SessionStatus): void {
+    const header = (this.leaf as unknown as LeafInternal).tabHeaderEl;
+    if (!header) return;
+    if (status === 'idle') header.removeAttribute('data-bojubot-status');
+    else header.setAttribute('data-bojubot-status', status);
+  }
+
+  /** Redraw the model and effort indicators (a global default changed). */
+  refreshIndicators(): void {
+    this.updateModelIndicator();
+  }
+
+  /** Make sure the first session has been chosen, from `state` if it hasn't.
+   *  Called by the plugin right after opening a panel, before using it. */
+  async ensureInitialized(state: ChatPanelState): Promise<void> {
+    if (this.initialized) return;
+    this.pendingState = this.pendingState ?? state;
+    await this.runInitialSession();
+  }
+
+  /** True when loading another session here loses nothing: an untouched new
+   *  session, nothing running, nothing typed. */
+  isReusable(): boolean {
+    return this.initialized && !this.setupShown && !this.coordinator.sessionId && !this.coordinator.isBusy && !this.inputEl?.value.trim();
+  }
+
+  /** No conversation yet in this panel. */
+  get isPristine(): boolean {
+    return !this.coordinator.sessionId;
+  }
 
   async onOpen() {
     const root = this.containerEl.children[1] as HTMLElement;
     root.empty();
     root.addClass('bojubot-view');
+    // Using a panel makes it the one commands act on
+    this.registerDomEvent(root, 'focusin', () => this.plugin.markChatActive(this.leaf));
 
     const toolbar = root.createDiv({ cls: 'bojubot-toolbar' });
     this.sessionStatusEl = toolbar.createSpan({ cls: 'bojubot-session-status', text: 'New session' });
-    this.sessionStatusEl.addEventListener('click', () => void this.showSessionHistory());
-    this.sessionStatusEl.title = 'Click to see session history';
+    this.sessionStatusEl.addEventListener('click', () => void this.plugin.activateSessionsView());
+    this.sessionStatusEl.title = 'Click to show the sessions panel';
 
     const newSessionBtn = toolbar.createEl('button', { cls: 'bojubot-icon-btn' });
     setIcon(newSessionBtn, 'message-square-plus');
-    newSessionBtn.title = 'New session (Shift+click to configure)';
+    newSessionBtn.title = 'New session (Shift+click to configure, Ctrl/Cmd+click for a new tab)';
     newSessionBtn.addEventListener('click', (evt) => {
+      const newTab = Keymap.isModEvent(evt) !== false;
       if (evt.shiftKey) {
         new CustomSessionModal(
           this.app,
@@ -546,15 +726,20 @@ export class ClaudeView extends ItemView {
               models: this.plugin.getModels(id),
               defaultModel: this.plugin.getDefaultModel(id),
               effortLevels: this.supportedEffortLevels(id),
-              unavailableModes: backend.unavailableModes,
-              modeDescriptions: backend.modeDescriptions,
+              unavailableModes: backend.unavailableModes(this.plugin.getCapabilities(id)),
+              modeDescriptions: backend.modeDescriptions(this.plugin.getCapabilities(id)),
             };
           }),
           this.plugin.settings.backend,
           this.plugin.settings.permissionMode,
           this.plugin.settings.defaultEffort ?? '',
-          (opts) => this.startNewSession(opts),
+          (opts) => {
+            if (newTab) void this.plugin.newSession({ custom: opts, forceNewTab: true, near: this.leaf });
+            else this.startNewSession(opts);
+          },
         ).open();
+      } else if (newTab) {
+        void this.plugin.newSession({ forceNewTab: true, near: this.leaf });
       } else {
         this.startNewSession();
       }
@@ -632,7 +817,7 @@ export class ClaudeView extends ItemView {
 
     this.permissionIconEl = inputToolbar.createEl('button', { cls: 'bojubot-icon-btn bojubot-input-toolbar-btn bojubot-permission-icon' });
     this.permissionIconEl.addEventListener('click', () => {
-      openPermissionPopover(this.plugin, this.permissionIconEl, this.getEffectivePermissionMode());
+      openPermissionPopover(this.plugin, this, this.permissionIconEl, this.getEffectivePermissionMode());
     });
     this.updatePermissionIcon();
 
@@ -689,26 +874,30 @@ export class ClaudeView extends ItemView {
         return;
       }
 
-      if (e.key === 'ArrowUp' && !e.shiftKey) {
-        const { selectionStart, value } = this.inputEl;
-        const onFirstLine = !value.substring(0, selectionStart).includes('\n');
-        if (onFirstLine && this.inputHistory.length > 0) {
-          e.preventDefault();
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey) {
+        // Recall history only at the very start (↑) / very end (↓); otherwise let the
+        // browser move the cursor so wrapped and multi-line text navigate row by row (#401).
+        const { selectionStart, selectionEnd, value } = this.inputEl;
+        const action = historyKeyAction(e.key, {
+          length: value.length,
+          selectionStart,
+          selectionEnd,
+          browsing: this.historyIndex !== -1,
+          hasHistory: this.inputHistory.length > 0,
+          unedited: this.historyIndex !== -1 && value === this.inputHistory[this.inputHistory.length - 1 - this.historyIndex],
+        });
+        if (action === 'move') return;
+        e.preventDefault();
+
+        if (e.key === 'ArrowUp') {
           if (this.historyIndex === -1) this.inputDraft = value;
           const next = Math.min(this.historyIndex + 1, this.inputHistory.length - 1);
           this.historyIndex = next;
           this.inputEl.value = this.inputHistory[this.inputHistory.length - 1 - next];
           this.inputEl.setSelectionRange(0, 0);
+          return;
         }
-        return;
-      }
 
-      if (e.key === 'ArrowDown' && !e.shiftKey) {
-        if (this.historyIndex === -1) return;
-        const { value } = this.inputEl;
-        const onLastLine = !value.substring(this.inputEl.selectionEnd).includes('\n');
-        if (!onLastLine) return;
-        e.preventDefault();
         if (this.historyIndex === 0) {
           this.historyIndex = -1;
           this.inputEl.value = this.inputDraft;
@@ -744,30 +933,24 @@ export class ClaudeView extends ItemView {
 
     // If the default agent's binary is missing, show setup guide and stop here
     if (!this.plugin.getBinaryPath(this.plugin.settings.backend)) {
+      this.setupShown = true;
       this.renderSetupPanel();
       return;
     }
+    this.setupShown = false;
 
-    if (this.plugin.settings.resumeLastSession) {
-      const vaultRoot = this.plugin.getVaultRoot();
-      const sessions = loadAllSessions(vaultRoot, this.getSessionsDir(), this.app.vault.configDir);
-      if (sessions.length > 0) {
-        const lastId = this.plugin.settings.lastActiveSessionId;
-        const target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
-        try {
-          await this.loadSession(target);
-        } catch (e) {
-          log('Failed to load session, starting new:', e);
-          this.startNewSession();
-        }
-      }
+    // Reopened in place (Check again, Done after signing in): show the same session again
+    if (this.initialized) {
+      this.initialized = false;
+      this.pendingState = this.coordinator.sessionFileId ? { sessionFileId: this.coordinator.sessionFileId } : null;
     }
+    // The saved view state normally arrives right after this (setState); this is the fallback
+    this.initTimer = window.setTimeout(() => { this.initTimer = null; void this.runInitialSession(); }, 200);
 
-    // Show welcome screen if no session was loaded
-    if (this.messagesEl.childElementCount === 0) this.renderWelcomeScreen();
-
-    // Show context file setup modal if the configured file doesn't exist and user hasn't skipped
+    // Show context file setup modal if the configured file doesn't exist and user hasn't skipped.
+    // Once per batch of panels: not again for each restored tab.
     if (
+      !this.plugin.otherChatViewOpen(this) &&
       !this.plugin.settings.skipContextFilePrompt &&
       !this.app.vault.getFileByPath(this.plugin.settings.contextFilePath)
     ) {
@@ -784,7 +967,12 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  async onClose() { /* nothing to clean up yet */ }
+  async onClose() {
+    if (this.initTimer !== null) window.clearTimeout(this.initTimer);
+    // Closing the tab ends its reply: nothing would be left to show or save it
+    if (this.coordinator.isBusy) this.coordinator.cancel();
+    this.plugin.refreshSessionsViews();
+  }
 
   getEffectivePermissionMode(): PermissionMode {
     return this.coordinator.getEffectivePermissionMode();
@@ -823,11 +1011,31 @@ export class ClaudeView extends ItemView {
     return has(caps, '--effort') ? caps.effortLevels : [];
   }
 
-  onSettingsChanged(): void {
-    this.coordinator.setPermissionOverride(null);
+  /**
+   * The toolbar picker (or its Ctrl+P twin) chose a mode: it applies to the open
+   * session only, and is saved with it. The plugin has already made it the
+   * default for new sessions.
+   */
+  onPermissionModePicked(mode: PermissionMode): void {
+    // The conversation can't continue in this mode — into Chat only from any
+    // other mode (#406), or Antigravity out of Chat only (#403): the session
+    // keeps its own mode and a new session starts in the picked one.
+    if (this.coordinator.modeNeedsNewSession(mode)) {
+      if (this.coordinator.isBusy) {
+        // The next send makes the switch (handleSend).
+        this.pendingNewSessionMode = mode;
+        new Notice(modeChangeNotice(mode, this.coordinator.backend.displayName, true), 8000);
+      } else {
+        this.startSessionForModeChange(mode);
+      }
+      return;
+    }
+    this.pendingNewSessionMode = null;
+    const before = this.coordinator.getEffectivePermissionMode();
+    const changed = this.coordinator.setSessionPermissionMode(mode) && before !== mode;
     this.updatePermissionIcon();
-    if (this.coordinator.sessionId) {
-      const perm = this.coordinator.backend.orientation.permissions[this.plugin.settings.permissionMode];
+    if (changed && this.coordinator.sessionId) {
+      const perm = this.coordinator.backend.orientation.permissions[this.coordinator.getEffectivePermissionMode()];
       this.coordinator.setPendingSystemMessage(
         `[System: Permission mode changed to ${perm.summary}. ` +
         `You can now: ${perm.can}. ` +
@@ -836,8 +1044,74 @@ export class ClaudeView extends ItemView {
     }
   }
 
+  /** The default for new sessions changed (settings, or a picker in another
+   *  panel). The open session keeps its own mode; the icon only follows the
+   *  default while no session is open. */
+  onDefaultPermissionModeChanged(): void {
+    this.updatePermissionIcon();
+  }
+
+  /** Anything held for the open session's next message: attachments (pinned too),
+   *  unsent Custom Session setup, a pending mode change and queued system notes.
+   *  Dropped whenever a different session opens or the session is cleared, so
+   *  none of it reaches another session. */
+  private dropPendingSessionState(): void {
+    this.attachmentHandler.reset();
+    this._customAttachments = [];
+    this._customInitialInstructions = '';
+    this._customSuppressVaultContext = false;
+    this.pendingNewSessionMode = null;
+    this.coordinator.clearPendingSystemMessage();
+  }
+
+  /**
+   * Run `change` — anything that changes the panel's session — but if a reply is
+   * still running, ask first (#398). "Stop it and switch" stops the process,
+   * waits for its turn to end and save to the session it belongs to, then runs
+   * `change`; "Keep waiting" does nothing. When nothing is running, `change`
+   * runs straight away.
+   */
+  private guardSessionChange(change: () => void | Promise<void>): void {
+    if (!this.coordinator.isBusy) {
+      void change();
+      return;
+    }
+    new StopReplyModal(this.app, (stop) => {
+      if (stop) void this.stopReplyThen(change);
+    }).open();
+  }
+
+  private async stopReplyThen(change: () => void | Promise<void>): Promise<void> {
+    this._stoppingForSwitch = true;
+    let timer: number | undefined;
+    let stopped: boolean;
+    try {
+      stopped = await Promise.race([
+        this.coordinator.stop().then(() => true),
+        new Promise<boolean>((resolve) => { timer = window.setTimeout(() => resolve(false), STOP_REPLY_TIMEOUT_MS); }),
+      ]);
+    } finally {
+      window.clearTimeout(timer);
+      this._stoppingForSwitch = false;
+    }
+    if (!stopped) {
+      new Notice(`${this.plugin.brand.name}: the reply couldn't be stopped, so the session wasn't switched.`);
+      return;
+    }
+    await change();
+  }
+
   auditMemoryFile(): void {
-    this.startNewSession();
+    if (this.coordinator.isBusy) {
+      // Keep this reply running; audit in a new tab
+      void this.plugin.openChatTab({ blank: true }, this.leaf).then(view => view?.auditMemoryFile());
+      return;
+    }
+    this.guardSessionChange(() => this.startAuditSession());
+  }
+
+  private startAuditSession(): void {
+    this.applyNewSession();
     const path = this.plugin.settings.contextFilePath;
     this.inputEl.value =
       `Please audit the memory file at \`${path}\` for security. ` +
@@ -877,12 +1151,62 @@ export class ClaudeView extends ItemView {
         this.permissionIconEl.addClass('bojubot-perm-standard');
     }
     // The session's agent may behave differently from Claude Code's wording above
-    const description = this.coordinator.backend.modeDescriptions[mode];
+    const description = this.coordinator.backend.modeDescriptions(this.plugin.getCapabilities(this.coordinator.backendId))[mode];
     const label = PERMISSION_MODES.find(m => m.mode === mode)?.label;
     if (description && label) this.permissionIconEl.title = `Permissions: ${label} — ${description}. Click to change.`;
   }
 
+  /** Start a new session in the panel. While a reply is running here it keeps
+   *  running, and the new session opens in a new tab instead (#399). */
   startNewSession(custom?: CustomSessionOptions) {
+    if (this.coordinator.isBusy) {
+      void this.plugin.newSession({ custom, forceNewTab: true, near: this.leaf });
+      return;
+    }
+    this.guardSessionChange(() => this.applyNewSession(custom));
+  }
+
+  /** Open a stored session: here when this panel is free, otherwise in the tab
+   *  that already has it or a new tab (the plugin decides, #399). */
+  openSession(session: StoredSession) {
+    void this.plugin.openSession(session, { from: this });
+  }
+
+  /** Load a session into this panel (asks first if a reply is still running). */
+  loadSessionHere(session: StoredSession) {
+    this.guardSessionChange(() => this.loadSession(session));
+  }
+
+  /**
+   * `mode` can't continue this session's conversation (coordinator
+   * `modeNeedsNewSession()`): start a new session in this tab on the same agent
+   * with the same settings, saved in `mode`, and say why. The old session keeps
+   * its own mode and stays in the Sessions panel. `announce` false: the user was
+   * already told when the mode was picked (a reply was running).
+   */
+  private startSessionForModeChange(mode: PermissionMode, announce = true): void {
+    const c = this.coordinator;
+    const agent = c.backend.displayName;
+    this._customAttachments = [];
+    this._customInitialInstructions = '';
+    this._customSuppressVaultContext = c.suppressVaultContext;
+    c.startNewSession({
+      backend: c.backendId,
+      cwd: c.sessionCwd,
+      suppressVaultContext: c.suppressVaultContext,
+      permissionMode: mode,
+      model: c.sessionModel,
+      effort: c.sessionEffort,
+      rawSession: c.rawSession,
+    });
+    this.updatePermissionIcon();
+    const message = modeChangeNotice(mode, agent);
+    if (announce) new Notice(message, 8000);
+    this.appendMessage('system', message);
+    log('ClaudeView: new session for permission mode', mode);
+  }
+
+  private applyNewSession(custom?: CustomSessionOptions) {
     this._customAttachments = custom?.customAttachments ?? [];
     this._customInitialInstructions = custom?.initialInstructions ?? '';
     this._customSuppressVaultContext = custom?.suppressVaultContext ?? false;
@@ -900,41 +1224,15 @@ export class ClaudeView extends ItemView {
     this.updatePermissionIcon();
   }
 
-  async showSessionHistory() {
-    const vaultRoot = this.plugin.getVaultRoot();
-    const sessionsDir = this.getSessionsDir();
-    const sessions = loadAllSessions(vaultRoot, sessionsDir, this.app.vault.configDir);
-
-    const sessionTokens = new Map<string, number>();
-    for (const session of sessions) {
-      if (!hasReadableHistory(session, sessionsDir)) continue;
-      const messages = loadHistory(session, sessionsDir);
-      if (messages.length > 0) sessionTokens.set(session.id, estimateSessionTokens(messages));
-    }
-    const contextTokens = await this.estimateFreshContextTokens();
-
-    new SessionListModal(this.app, vaultRoot, sessions, (session) => {
-      void this.loadSession(session);
-    }, () => {
-      this.startNewSession();
-    }, () => {
-      this.inputEl?.focus();
-    }, this.coordinator.sessionFileId, (session) => {
-      this.coordinator.renameActiveSession(session.id, session.title);
-    }, (session) => {
-      void this.exportSessionToVault(session);
-    }, sessionsDir, sessionTokens, contextTokens).open();
-  }
-
   /**
    * Estimated size of the context that would be injected if a brand-new session
    * started right now (orientation, vault tree, context file, etc.) — used to show
    * "+context" alongside each session's own message-history token count in the
-   * Session Manager. This is a current-settings estimate, not a record of what was
+   * Sessions panel's tooltips. This is a current-settings estimate, not a record of what was
    * actually injected historically — sessions only get this once, at creation, and
    * settings may have changed since. Best-effort: returns 0 if context can't be built.
    */
-  private async estimateFreshContextTokens(): Promise<number> {
+  async estimateFreshContextTokens(): Promise<number> {
     try {
       const effectiveMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
@@ -1022,8 +1320,8 @@ export class ClaudeView extends ItemView {
     }).open();
   }
 
-  /** Export any session (by StoredSession) from the history modal. */
-  private exportSessionToVault(session: StoredSession): void {
+  /** Export any session (by StoredSession), e.g. from the Sessions panel. */
+  exportSessionToVault(session: StoredSession): void {
     const messages = loadHistory(session, this.getSessionsDir());
     if (messages.length === 0) { new Notice('No messages found for this session'); return; }
     const date = new Date(session.updatedAt).toISOString().slice(0, 10);
@@ -1052,6 +1350,11 @@ export class ClaudeView extends ItemView {
   }
 
   clearCurrentSession() {
+    this.guardSessionChange(() => this.applyClearSession());
+  }
+
+  private applyClearSession() {
+    this.dropPendingSessionState();
     this.messagesEl.empty();
     this.appendMessage('system', 'Session cleared');
     this.updateSessionStatus();
@@ -1129,6 +1432,7 @@ export class ClaudeView extends ItemView {
           await this.plugin.saveSettings();
         }
       },
+      onAwaitUser: (waiting: boolean) => this.applyStatus({ type: waiting ? 'wait-start' : 'wait-end' }),
       onThanked: () => {
         if (this._activeTurnEls) this._activeTurnEls.thanked = true;
       },
@@ -1161,6 +1465,8 @@ export class ClaudeView extends ItemView {
   }
 
   injectAllowlistUpdate(newAllowlist: string[]) {
+    // Chat only and Read only refuse run-command, so the allowlist means nothing there (#406)
+    if (!canRunCommands(this.coordinator.getEffectivePermissionMode())) return;
     if (newAllowlist.length === 0) {
       this.coordinator.setPendingSystemMessage(
         '[System: The command allowlist was updated — it is now empty. You can still use run-command for any command; the user will be prompted to approve or deny each attempt.]',
@@ -1206,7 +1512,24 @@ export class ClaudeView extends ItemView {
     this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
   }
 
-  private async loadSession(session: StoredSession) {
+  /** The session file ID open in this panel, if any. */
+  get sessionFileId(): string | undefined {
+    return this.coordinator.sessionFileId;
+  }
+
+  /** True while a turn is running in this panel. */
+  get isBusy(): boolean {
+    return this.coordinator.isBusy;
+  }
+
+  /** A session was renamed elsewhere (the Sessions panel). */
+  onSessionRenamed(sessionFileId: string, title: string): void {
+    this.coordinator.renameActiveSession(sessionFileId, title);
+  }
+
+  async loadSession(session: StoredSession) {
+    this.applyStatus({ type: 'reset' });
+    this.dropPendingSessionState();
     this.currentUserLabel = session.userLabel ?? 'User';
     this.currentAssistantLabel = session.assistantLabel ?? this.plugin.brand.name;
 
@@ -1221,6 +1544,7 @@ export class ClaudeView extends ItemView {
     this.updateExportBtn();
     this.updateSessionStatus();
     this.updateModelIndicator();
+    this.updatePermissionIcon();
 
     if (canResume) {
       const messages = loadHistory(session, this.getSessionsDir());
@@ -1237,7 +1561,7 @@ export class ClaudeView extends ItemView {
             }
           } else {
             const el = this.appendMessage('assistant', '');
-            const clean = this.cleanContent(msg.content);
+            const clean = this.repairLinks(this.cleanContent(msg.content));
             el.dataset.markdown = clean;
             await MarkdownRenderer.render(this.app, this.addHardLineBreaks(clean), el, '', this);
             this.wireInternalLinks(el);
@@ -1251,7 +1575,7 @@ export class ClaudeView extends ItemView {
                 const q = parsed as unknown as VaultQuery;
                 if (q.query === 'help') continue; // reference injections have no replay card
                 replayQueries.push(q);
-                this.renderQueryResultCard(this.messagesEl, resolveQuery(this.app, q));
+                this.renderQueryResultCard(this.messagesEl, this.resolveQueryForSession(q));
               } catch { /* skip malformed query lines */ }
             }
             if (replayQueries.length > 0) {
@@ -1274,6 +1598,15 @@ export class ClaudeView extends ItemView {
     } else {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }
+    this.onPanelSessionChanged();
+  }
+
+  /** The panel's session changed: retitle its tab, remember it in the saved
+   *  layout, and redraw the Sessions panel. */
+  private onPanelSessionChanged(): void {
+    (this.leaf as unknown as LeafInternal).updateHeader?.();
+    this.app.workspace.requestSaveLayout();
+    this.plugin.refreshSessionsViews();
   }
 
   private updateSessionStatus() {
@@ -1312,6 +1645,29 @@ export class ClaudeView extends ItemView {
       return;
     }
 
+    // A mode was picked while a reply was running that this conversation can't
+    // continue in, or the session was opened in such a mode: start the new
+    // session now. Starting one drops pending attachments; keep the ones meant
+    // for this message.
+    const newSessionMode = this.pendingNewSessionMode
+      ?? (this.coordinator.modeNeedsNewSession() ? this.coordinator.getEffectivePermissionMode() : null);
+
+    // Chat only reads nothing, so it sends no files, notes or selections (#406):
+    // stop here and keep the message and attachments, so the user can remove
+    // them or switch mode.
+    const pendingFiles = [...this.attachmentHandler.getContexts(), ...(this.coordinator.sessionId ? [] : this._customAttachments)];
+    if (blockedAttachments(pendingFiles, newSessionMode ?? this.coordinator.getEffectivePermissionMode()).length > 0) {
+      new Notice(`${this.plugin.brand.name}: ${CHAT_ONLY_ATTACHMENT_NOTICE}`);
+      return;
+    }
+
+    if (newSessionMode) {
+      const announced = this.pendingNewSessionMode !== null;
+      const attachments = [...this.attachmentHandler.getContexts()];
+      this.startSessionForModeChange(newSessionMode, !announced);
+      attachments.forEach(c => this.attachmentHandler.add(c));
+    }
+
     const unlock = () => this.setSendState(false);
     const isNewSession = !this.coordinator.sessionId;
     log('handleSend — session:', this.coordinator.sessionId ?? 'new', '— prompt:', prompt.substring(0, 60));
@@ -1324,7 +1680,7 @@ export class ClaudeView extends ItemView {
     // Capture manually-added contexts now (before clearNonPinned after send)
     // and convert to InjectedContext for badge display in the message bubble.
     const liveContextBadges: InjectedContext[] = this.attachmentHandler.getContexts()
-      .filter((c: PendingContext) => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text')
+      .filter((c: PendingContext) => c.type === 'url' || c.type === 'image' || c.type === 'pdf' || !c.type || c.type === 'text' || c.type === 'file')
       .map((c: PendingContext) => {
         if (c.type === 'url') return { type: 'url' as const, url: c.text };
         if (c.type === 'image') return { type: 'image' as const, source: c.source, path: c.text };
@@ -1355,9 +1711,13 @@ export class ClaudeView extends ItemView {
     tokenStatsEl.hide();
     this.scrollToBottom();
 
-    // Prepend open file context so Claude knows what note(s) are visible
+    // Prepend open file context so Claude knows what note(s) are visible — never
+    // in Chat only, which gets no vault information from BojuBot (#406)
     let activeFileNote = '';
-    if (!this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext && !this.coordinator.rawSession) {
+    if (
+      !this.plugin.settings.minimalMode && !this.coordinator.suppressVaultContext && !this.coordinator.rawSession &&
+      sharesVaultInfo(this.coordinator.getEffectivePermissionMode())
+    ) {
       const leaves = this.app.workspace.getLeavesOfType('markdown');
       const parents = new Set(leaves.map(l => l.parent));
       const isSplit = parents.size > 1;
@@ -1575,12 +1935,12 @@ export class ClaudeView extends ItemView {
         const item = list.createDiv({ cls: 'bojubot-welcome-recent-item' });
         renderAgentIcon(item, sessionBackend(session), 'bojubot-welcome-recent-agent');
         item.createSpan({ cls: 'bojubot-welcome-recent-title', text: session.userLabel || session.title });
-        item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeDate(session.updatedAt) });
-        item.addEventListener('click', () => void this.loadSession(session));
+        item.createSpan({ cls: 'bojubot-welcome-recent-date', text: relativeTime(session.updatedAt, Date.now()) });
+        item.addEventListener('click', () => this.openSession(session));
       });
       if (sessions.length > 3) {
         const more = recent.createSpan({ cls: 'bojubot-welcome-recent-more', text: 'More…' });
-        more.addEventListener('click', () => void this.showSessionHistory());
+        more.addEventListener('click', () => void this.plugin.activateSessionsView());
       }
     }
 
@@ -1826,10 +2186,17 @@ export class ClaudeView extends ItemView {
   }
 
   private handlePermissionRequest(request: { tool: string; reason: string }, unlock: () => void) {
+    // The request belongs to the session open now; the answer must never reach another one.
+    const requestSessionId = this.coordinator.sessionFileId;
     void promptPermissionRequest(this.app, request.tool, request.reason).then(granted => {
+      this.applyStatus({ type: 'wait-end' });
       unlock();
+      if (this.coordinator.sessionFileId !== requestSessionId) {
+        log('Permission request answered after its session closed — ignored');
+        return;
+      }
       if (granted) {
-        this.coordinator.setPermissionOverride('full');
+        this.coordinator.setSessionPermissionMode('full', requestSessionId);
         this.updatePermissionIcon();
         this.inputEl.value = `[Permission granted] Full access is now enabled. Please retry the blocked ${request.tool} operation and complete the task.`;
       } else {
@@ -1850,23 +2217,33 @@ export class ClaudeView extends ItemView {
     }
 
     const currentMode = this.coordinator.getEffectivePermissionMode();
-    if (currentMode !== 'full') {
-      const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    // No upgrade offer when this conversation can't continue in the wider
+    // mode (Antigravity Chat only, #403): switching modes starts a new session.
+    if (currentMode !== 'full' && !this.coordinator.modeNeedsNewSession(upgradeTarget)) {
       const upgradeLabel = currentMode === 'restricted' ? 'Allow standard access for this session' : 'Allow full access for this session';
       const upgradeMsg = currentMode === 'restricted'
         ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`
         : (toolList: string) => `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
+      // The card offers a choice: the session is waiting for the user until it's answered
+      this.applyStatus({ type: 'denial-shown' });
       const btnRow = card.createDiv({ cls: 'bojubot-permission-btn-row' });
       const upgradeBtn = btnRow.createEl('button', {
         cls: 'mod-cta',
         text: upgradeLabel,
       });
+      // The card upgrades the session it was shown in, and only that one.
+      const cardSessionId = this.coordinator.sessionFileId;
       upgradeBtn.addEventListener('click', () => {
-        this.coordinator.setPermissionOverride(upgradeTarget);
+        if (!this.coordinator.setSessionPermissionMode(upgradeTarget, cardSessionId)) {
+          new Notice('This card belongs to a session that is no longer open.');
+          card.remove();
+          return;
+        }
         this.updatePermissionIcon();
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
-        log(`Session permission override set to ${upgradeTarget}`);
+        this.applyStatus({ type: 'denial-resolved' });
         const toolList = [...new Set(denials.map(d => d.tool))].join(', ');
         this.inputEl.value = upgradeMsg(toolList);
         void this.handleSend();
@@ -1884,7 +2261,10 @@ export class ClaudeView extends ItemView {
         cls: 'bojubot-permission-dismiss',
         text: 'Dismiss',
       });
-      dismissBtn.addEventListener('click', () => card.remove());
+      dismissBtn.addEventListener('click', () => {
+        card.remove();
+        this.applyStatus({ type: 'denial-resolved' });
+      });
     }
     this.scrollToBottom();
   }
@@ -1974,9 +2354,14 @@ export class ClaudeView extends ItemView {
     this.scrollToBottom();
   }
 
+  /** Resolve a vault query, or refuse it when the session's mode shares no vault information (#406). */
+  private resolveQueryForSession(q: VaultQuery): VaultQueryResult {
+    return refuseQuery(q, this.coordinator.getEffectivePermissionMode()) ?? resolveQuery(this.app, q);
+  }
+
   /** Auto-fire a --resume turn injecting vault query results, then call unlock when done. */
   private handleVaultInject(queries: VaultQuery[], prevGroupEl: HTMLElement, unlock: () => void) {
-    const results = queries.map(q => resolveQuery(this.app, q));
+    const results = queries.map(q => this.resolveQueryForSession(q));
 
     // Render a compact card for each inject query so the user can see what was queried
     for (const r of results) {
@@ -2020,6 +2405,15 @@ export class ClaudeView extends ItemView {
     return extractActions(content).clean;
   }
 
+  /** Repair links an agent wrote in a form Obsidian can't follow (#400) —
+   *  display only; stored transcripts and CLI history keep the original. */
+  private repairLinks(markdown: string): string {
+    return repairLinks(markdown, {
+      vaultRoot: this.plugin.getVaultRoot(),
+      noteExists: (linkpath) => this.app.metadataCache.getFirstLinkpathDest(linkpath, '') !== null,
+    });
+  }
+
   /** Convert single newlines to hard line breaks (two trailing spaces) outside
    *  fenced code blocks, so CommonMark renders them as visible line breaks.
    *  Lines already ending with two spaces are left untouched. */
@@ -2049,8 +2443,7 @@ export class ClaudeView extends ItemView {
 
   /** Resolved sessions directory, honoring the user's sessionStoragePath setting. */
   private getSessionsDir(): string {
-    const vaultRoot = this.plugin.getVaultRoot();
-    return resolveSessionsDir(vaultRoot, this.plugin.settings.sessionStoragePath, this.app.vault.configDir);
+    return this.plugin.getSessionsDir();
   }
 
   /**
@@ -2363,7 +2756,8 @@ export class ClaudeView extends ItemView {
       void this.plugin.saveSettings().then(() => {
         // Same as a model switch: every turn passes --effort alongside --resume
         this.coordinator.switchSessionEffort(level);
-        this.updateModelIndicator();
+        // The global default changed: other panels that follow it show the new level
+        this.plugin.refreshChatIndicators();
         if (this.coordinator.sessionId) {
           this.appendMessage('system', `Effort set to ${level || 'default'} — takes effect on your next message.`);
         }
@@ -2391,7 +2785,8 @@ export class ClaudeView extends ItemView {
       void this.plugin.saveSettings().then(() => {
         // The session continues — every turn passes --model alongside --resume
         this.coordinator.switchSessionModel(model.id);
-        this.updateModelIndicator();
+        // The global default changed: other panels that follow it show the new model
+        this.plugin.refreshChatIndicators();
         if (this.coordinator.sessionId) {
           this.appendMessage('system', `Switched to ${model.displayName} — takes effect on your next message.`);
         }
@@ -2431,9 +2826,9 @@ export class ClaudeView extends ItemView {
       },
       {
         category: 'Session',
-        name: 'Show history',
-        description: 'Browse and resume past sessions',
-        action: () => void this.showSessionHistory(),
+        name: 'Show sessions',
+        description: 'Browse and resume past sessions in the sessions panel',
+        action: () => void this.plugin.activateSessionsView(),
       },
       {
         category: 'Session',
@@ -2598,17 +2993,4 @@ class AttachUrlModal extends Modal {
     window.setTimeout(() => input.focus(), 50);
   }
   onClose() { this.contentEl.empty(); }
-}
-
-function relativeDate(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

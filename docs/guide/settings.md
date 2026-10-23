@@ -35,8 +35,8 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 
 | Setting                                  | Default   | Description                                                                                                                                                                                                                     |
 | ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Permission mode**                      | Standard  | Controls what vault operations Claude can perform: **Chat only** (web only, no file system), **Standard** (files + web, plus read-only shell commands Claude Code classifies as safe; other shell commands are denied), **Read only** (read + web, no writes), **Full access** (everything including Bash). See [Permissions](./permissions). |
-| **Persist full access between restarts** | Off       | Only shown while the active mode is Full access. When off, Full access resets to Standard on every Obsidian restart, so an elevated mode never silently survives a reboot.                                                    |
+| **Default permission mode**              | Standard  | The mode new sessions start in: **Chat only** (web only, no file system), **Standard** (files + web, plus read-only shell commands Claude Code classifies as safe; other shell commands are denied), **Read only** (read + web, no writes), **Full access** (everything including Bash). Each session saves its own mode, so changing this doesn't affect existing sessions or the open one. See [Permissions](./permissions). |
+| **Persist full access between restarts** | Off       | Only shown while the default or the open session is in Full access. When off, Full access lasts until Obsidian restarts: then the default goes back to Standard and sessions left in Full access reopen in Standard, so an elevated mode never silently survives a reboot. |
 | **Show context file setup prompt**       | On        | Show the setup dialog on launch when no context file is found (see [Context System](./context-system#getting-started)). Disable if you prefer to create the file manually.                                                    |
 
 ## UI Bridge & Commands
@@ -44,7 +44,7 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 | Setting                           | Default                                              | Description                                                                                                                                                        |
 | ---------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **UI bridge**                     | On                                                     | Master switch for Claude's ability to trigger Obsidian UI actions at all — opening files, navigating, running commands, and the other actions on the [Chat Panel](./chat-panel) page. Turn off to make BojuBot purely conversational. |
-| **Command Allowlist**             | `switcher:open`, `daily-notes`, `editor:open-search`  | Obsidian commands Claude can run directly. Search and check commands in the browser below this setting to enable them.                                            |
+| **Command Allowlist**             | `switcher:open`, `daily-notes`, `editor:open-search`  | Obsidian commands Claude can run directly, in Standard and Full access only (Chat only and Read only never run commands). Search and check commands in the browser below this setting to enable them.                                            |
 | **Prompt for unlisted commands**  | On                                                    | When Claude tries a command not in the allowlist, show a confirmation modal. Allow + "Don't ask again" adds to allowlist. Deny + "Don't ask again" adds to denylist. |
 | **Denied commands**               | *(hidden until used)*                                 | Shows count of permanently denied commands with a **Clear denylist** button. To re-enable a specific command, add it to the allowlist via the command browser.    |
 
@@ -142,5 +142,5 @@ You can change this in **Settings → BojuBot → Session storage path**:
 | `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely.                                         |
 
 ::: warning Sessions are not migrated
-Changing this setting affects **new sessions only**. Existing sessions remain in their original location and will not appear in the session manager until you change the path back. If you want to move existing sessions, copy the `.json` files manually to the new path before restarting BojuBot.
+Changing this setting affects **new sessions only**. Existing sessions remain in their original location and will not appear in the Sessions panel until you change the path back. If you want to move existing sessions, copy the `.json` files manually to the new path before restarting BojuBot.
 :::

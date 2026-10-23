@@ -20,7 +20,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | Category    | Command           | What it does                             |
 | ----------- | ----------------- | ---------------------------------------- |
 | **Session** | New session       | Start a fresh conversation               |
-| **Session** | Show history      | Browse and resume past sessions          |
+| **Session** | Show sessions     | Browse and resume past sessions in the [Sessions panel](./sessions#sessions-panel) |
 | **Session** | Export session    | Save the current session to your vault   |
 | **Session** | Switch model      | Change model; the session continues     |
 | **Session** | Switch effort     | Change effort level (`/effort`); shown only when your Claude Code CLI supports it |

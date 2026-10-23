@@ -8,23 +8,26 @@ Obsidian namespaces every plugin command as `<plugin-id>:<command-id>`. BojuBot'
 
 ## Panel & Navigation
 
+With several chat panels open, commands that act on a chat panel use the one you used last. See [Several sessions at once](./sessions#several-sessions-at-once).
+
 | Command                           | ID                      | Description                                                                            |
 | ---------------------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
-| **BojuBot: Open agent panel**     | `open-agent`            | Opens or focuses the chat panel. Also available via the ribbon icon.                    |
-| **BojuBot: Toggle panel**         | `toggle-panel`          | Quickly hide or show the chat panel without closing it.                                 |
-| **BojuBot: Show session history** | `show-session-history`  | Show all saved sessions and resume a previous conversation.                             |
+| **BojuBot: Open agent panel**     | `open-agent`            | Opens or focuses the chat panel (the one you used last, when several are open). Also available via the ribbon icon. |
+| **BojuBot: Open new chat tab**    | `new-chat-tab`          | Open another chat panel with a new session, next to the current one. See [Several sessions at once](./sessions#several-sessions-at-once). |
+| **BojuBot: Toggle panel**         | `toggle-panel`          | Quickly hide or show the chat panel without closing it (collapses or expands its sidebar). |
+| **BojuBot: Show sessions panel** | `show-session-history`  | Open or reveal the [Sessions panel](./sessions#sessions-panel): all saved sessions, to resume, rename, pin or delete. |
 | **BojuBot: Focus chat input**     | `focus-input`           | Open the BojuBot panel and place the cursor in the chat input. Good for hotkey binding.  |
 
 ## Session Management
 
 | Command                             | ID                        | Description                                                                              |
 | ------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
-| **BojuBot: New session**            | `new-session`             | Start a fresh conversation. The current session is saved automatically.                 |
+| **BojuBot: New session**            | `new-session`             | Start a fresh conversation. The current session is saved automatically. If a reply is still running, it keeps running and the new session opens in a new tab. |
 | **BojuBot: Clear current session**  | `clear-session`           | Clear all messages from the current session. Context is re-injected on the next message. |
 | **BojuBot: Switch model**           | `switch-model`            | Open the model picker. The current session continues with the new model — see [Model Indicator](./chat-panel#model-indicator). |
 | **BojuBot: Switch effort**          | `switch-effort`           | Open the effort picker (Default / low / medium / high / …). Takes effect on the next message — see [Effort](./chat-panel#effort). Only listed when your Claude Code CLI supports effort levels. |
 | **BojuBot: Show plan usage**        | `show-plan-usage`         | Show your Claude plan's usage (current session and week) in the chat panel — see [Plan usage](./chat-panel#plan-usage). Doesn't use any of your limits and isn't part of the conversation. |
-| **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to switch the active permission mode (Chat only / Read only / Standard / Full access). Takes effect on the next message. |
+| **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to change the open session's permission mode (Chat only / Read only / Standard / Full access); it's saved with the session and becomes the default for new ones. Takes effect on the next message. |
 
 ## Context & Memory
 

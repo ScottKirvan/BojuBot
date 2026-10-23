@@ -25,3 +25,15 @@ export function resolveSpawnCwd(mode: PermissionMode, sessionCwd: string | undef
 export function canWrite(permissionMode?: PermissionMode): boolean {
   return permissionMode === 'standard' || permissionMode === 'full';
 }
+
+/**
+ * What the user is told when a permission mode change starts a new session
+ * (the conversation can't continue in the new mode). `pending`: the change was
+ * made while a reply was running, so the new session starts with the next message.
+ */
+export function modeChangeNotice(newMode: PermissionMode, agentName: string, pending = false): string {
+  const what = newMode === 'restricted' ? 'Chat only' : 'Leaving Chat only';
+  return pending
+    ? `${what} needs a new ${agentName} session. It starts with your next message; this session stays in the Sessions panel.`
+    : `${what} needs a new ${agentName} session. Your previous session is in the Sessions panel.`;
+}

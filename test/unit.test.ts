@@ -17,14 +17,15 @@ import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, ChatMessage } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, loadSessionFile, updateStoredSession, ChatMessage, StoredSession } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
-import { canWrite, resolveSpawnCwd } from '../src/backends/modes';
+import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
-import { renderOrientation } from '../src/utils/orientation';
+import { renderOrientation, applyModeTags } from '../src/utils/orientation';
+import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
-import type { AgentBackend, BackendId, StreamCallbacks, TurnOptions } from '../src/backends/types';
+import type { AgentBackend, BackendId, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
 import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands, RENAMED_COMMANDS } from '../src/utils/commandsReference';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
@@ -32,19 +33,25 @@ import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildIn
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
 import { reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION } from '../src/backends/antigravity';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
+import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
 import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from '../src/utils/apiError';
-import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES } from '../src/utils/cliCapabilities';
+import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
+import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
+import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
+import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
+import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
+import { IDLE_STATUS, StatusEvent, nextStatus, displayStatus, statusNotice, STATUS_LABELS } from '../src/utils/sessionStatus';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1805,15 +1812,15 @@ describe('SessionCoordinator session-level overrides (Custom Session)', () => {
     }
   });
 
-  test('runtime setPermissionOverride (denial-card upgrade) wins over the session-level override', () => {
+  test('setSessionPermissionMode (denial-card upgrade) replaces the session-level mode', () => {
     const sessionsDir = mkdtempSync(join(tmpdir(), 'bojubot-coord-test-'));
     try {
       const coordinator = new SessionCoordinator(makeTestHost(sessionsDir));
       coordinator.startNewSession({ permissionMode: 'readonly', rawSession: false });
       assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
 
-      coordinator.setPermissionOverride('full');
-      assert.equal(coordinator.getEffectivePermissionMode(), 'full', 'runtime override always wins');
+      assert.equal(coordinator.setSessionPermissionMode('full'), true);
+      assert.equal(coordinator.getEffectivePermissionMode(), 'full');
     } finally {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     }
@@ -2309,6 +2316,20 @@ const AGY_HELP_1_4_0 = [
   '  --model                         Model for the current CLI session',
 ].join('\n');
 
+const AGY_HELP_1_4_4 = [
+  'Usage of agy.exe:',
+  '  --add-dir                       Add a directory to the workspace (repeatable) (default [])',
+  '  --agent                         Agent for the current CLI session',
+  '  --conversation                  Resume a previous conversation by ID',
+  '  --dangerously-skip-permissions  Auto-approve all tool permission requests without prompting',
+  '  --effort                        Reasoning effort for the current CLI session (low|medium|high|xhigh|max)',
+  '  --mode                          Set the agent execution mode for this session (accept-edits, auto, plan)',
+  '  --model                         Model for the current CLI session',
+].join('\n');
+
+/** agy 1.4.4 capabilities after the probe installed BojuBot's agent definitions. */
+const AGY_CAPS_AGENTS = { ...parseCliCapabilities(AGY_HELP_1_4_4, '1.4.4\n'), agentDefinitions: true };
+
 const AGY_READ = [
   { event: 'init', conversation_id: 'conv-read', init: { model: 'gemini-3.8-flash-low', tools: ['view_file'], permission_mode: 'request-review' } },
   { event: 'step_update', step_update: { conversation_id: 'conv-read', step_index: 0, state: 'DONE', step_type: 'user_input' } },
@@ -2774,6 +2795,250 @@ describe('SessionCoordinator backend binding', () => {
   }));
 });
 
+// ---------------------------------------------------------------------------
+// Session-owned state (#405): permission mode lives in the session, and nothing
+// pending in one session reaches another.
+// ---------------------------------------------------------------------------
+
+function storedSession(id: string, extra: Partial<StoredSession> = {}): StoredSession {
+  const now = new Date().toISOString();
+  return { id, title: id, createdAt: now, updatedAt: now, claudeSessionId: `conv-${id}`, ...extra };
+}
+
+function readSessionFile(dir: string, id: string): StoredSession {
+  return JSON.parse(readFileSync(join(dir, `${id}.json`), 'utf8')) as StoredSession;
+}
+
+describe('SessionCoordinator session-owned permission mode', () => {
+  test('a new session saves the mode it starts in and keeps it when the default changes', withSessionsDir((dir) => {
+    let defaultMode: 'readonly' | 'full' = 'readonly';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly');
+
+    defaultMode = 'full';
+    assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+    coordinator.send('hi', 'hi');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly', 'still saved after the first turn');
+  }));
+
+  test('a Custom Session saves its chosen mode', withSessionsDir((dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    coordinator.startNewSession({ permissionMode: 'restricted' });
+    assert.equal(storedSessions(dir)[0].permissionMode, 'restricted');
+  }));
+
+  test('a session with no saved mode opens as Standard, whatever the default, and that is saved', withSessionsDir(async (dir) => {
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => 'full' });
+    saveSession(dir, storedSession('legacy', { userLabel: 'Scott' }), dir);
+    const coordinator = new SessionCoordinator(host);
+    const loaded: SessionLoadedPayload[] = [];
+    coordinator.on('session:loaded', (p) => loaded.push(p));
+    await coordinator.loadSession(storedSession('legacy', { userLabel: 'Scott' }));
+
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard');
+    assert.equal(loaded[0].session.permissionMode, 'standard');
+    const saved = readSessionFile(dir, 'legacy');
+    assert.equal(saved.permissionMode, 'standard');
+    assert.equal(saved.userLabel, 'Scott', 'other fields kept');
+    coordinator.send('next');
+    assert.equal(claude.spawns[0].permissionMode, 'standard');
+  }));
+
+  test('a saved mode is used as is, and opening the session writes nothing', withSessionsDir(async (dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir, { getPermissionMode: () => 'full' }).host);
+    await coordinator.loadSession(storedSession('chat', { permissionMode: 'restricted' }));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    assert.equal(existsSync(join(dir, 'chat.json')), false);
+  }));
+
+  test('setSessionPermissionMode saves the mode in the session file and keeps its other fields', withSessionsDir(async (dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    saveSession(dir, storedSession('a', { permissionMode: 'standard', userLabel: 'Scott', sortOrder: -3 }), dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+
+    assert.equal(coordinator.setSessionPermissionMode('readonly'), true);
+    const saved = readSessionFile(dir, 'a');
+    assert.equal(saved.permissionMode, 'readonly');
+    assert.equal(saved.userLabel, 'Scott');
+    assert.equal(saved.sortOrder, -3);
+    coordinator.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+  }));
+
+  test('an upgrade in one session never reaches the next one opened', withSessionsDir(async (dir) => {
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => 'full' });
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'restricted' }), dir);
+    const coordinator = new SessionCoordinator(host);
+
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    coordinator.setSessionPermissionMode('full'); // denial card: Allow
+    await coordinator.loadSession(readSessionFile(dir, 'b'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    coordinator.send('needs files');
+    assert.equal(claude.spawns[0].permissionMode, 'restricted');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'restricted');
+
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'full', 'session A keeps its own upgrade');
+  }));
+
+  test('a request made in another session changes nothing', withSessionsDir(async (dir) => {
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'readonly' }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    const cardSession = coordinator.sessionFileId;
+    await coordinator.loadSession(readSessionFile(dir, 'b'));
+
+    assert.equal(coordinator.setSessionPermissionMode('full', cardSession), false);
+    assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'readonly');
+    assert.equal(readSessionFile(dir, 'a').permissionMode, 'standard');
+  }));
+
+  test('with no session open, setSessionPermissionMode does nothing', withSessionsDir((dir) => {
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    assert.equal(coordinator.setSessionPermissionMode('full'), false);
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard', 'host default while nothing is open');
+  }));
+
+  test('the first turn with no session open saves the mode it ran in', withSessionsDir((dir) => {
+    let defaultMode: 'readonly' | 'full' = 'readonly';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.send('hello', 'hello');
+    defaultMode = 'full';
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly');
+    assert.equal(coordinator.getEffectivePermissionMode(), 'readonly');
+  }));
+
+  test('a queued system note is dropped when another session opens or a new one starts', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(storedSession('a', { permissionMode: 'standard' }));
+    coordinator.setPendingSystemMessage('[System: Session context refreshed at user request.] vault tree…');
+    await coordinator.loadSession(storedSession('b', { permissionMode: 'standard' }));
+    assert.equal(coordinator.getPendingSystemMessage(), null);
+
+    coordinator.setPendingSystemMessage('[System: Permission mode changed to Full access.]');
+    coordinator.startNewSession();
+    assert.equal(coordinator.getPendingSystemMessage(), null);
+  }));
+
+  test('a Full access session reopens in Standard when Full access may not be kept, and that is saved', withSessionsDir(async (dir) => {
+    const asked: string[] = [];
+    const { host, claude } = twoBackendHost(dir, { keepsFullAccess: (id) => { asked.push(id); return false; } });
+    saveSession(dir, storedSession('f', { permissionMode: 'full' }), dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(readSessionFile(dir, 'f'));
+    assert.deepEqual(asked, ['f']);
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard');
+    assert.equal(readSessionFile(dir, 'f').permissionMode, 'standard');
+    coordinator.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'standard');
+  }));
+
+  test('a Full access session keeps it when the host allows', withSessionsDir(async (dir) => {
+    saveSession(dir, storedSession('f', { permissionMode: 'full' }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir, { keepsFullAccess: () => true }).host);
+    await coordinator.loadSession(readSessionFile(dir, 'f'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'full');
+  }));
+
+  test('the host is told about every session put in Full access', withSessionsDir(async (dir) => {
+    const noted: string[] = [];
+    const coordinator = new SessionCoordinator(twoBackendHost(dir, { noteFullAccess: (id) => noted.push(id) }).host);
+    coordinator.startNewSession({ permissionMode: 'full' });
+    const started = coordinator.sessionFileId!;
+    await coordinator.loadSession(storedSession('a', { permissionMode: 'standard' }));
+    coordinator.setSessionPermissionMode('readonly');
+    coordinator.setSessionPermissionMode('full');
+    assert.deepEqual(noted, [started, 'a']);
+  }));
+
+  test('two chat tabs keep their own modes: a change in one never reaches the other (#399)', withSessionsDir(async (dir) => {
+    let defaultMode: 'standard' | 'full' = 'standard';
+    const { host, claude } = twoBackendHost(dir, { getPermissionMode: () => defaultMode });
+    saveSession(dir, storedSession('a', { permissionMode: 'standard' }), dir);
+    saveSession(dir, storedSession('b', { permissionMode: 'readonly' }), dir);
+    const tabA = new SessionCoordinator(host);
+    const tabB = new SessionCoordinator(host);
+    await tabA.loadSession(readSessionFile(dir, 'a'));
+    await tabB.loadSession(readSessionFile(dir, 'b'));
+
+    // Tab A's picker: A's session changes, and the default moves with it
+    tabA.setSessionPermissionMode('full');
+    defaultMode = 'full';
+    assert.equal(tabB.getEffectivePermissionMode(), 'readonly');
+    tabB.send('x');
+    assert.equal(claude.spawns[0].permissionMode, 'readonly');
+    assert.equal(readSessionFile(dir, 'b').permissionMode, 'readonly');
+    // A card in tab B can't name tab A's session
+    assert.equal(tabB.setSessionPermissionMode('standard', tabA.sessionFileId), false);
+    assert.equal(tabA.getEffectivePermissionMode(), 'full');
+  }));
+
+  test('changing the mode leaves the session\'s last-active time alone', withSessionsDir(async (dir) => {
+    const updatedAt = '2026-01-01T00:00:00.000Z';
+    saveSession(dir, storedSession('a', { permissionMode: 'standard', updatedAt }), dir);
+    const coordinator = new SessionCoordinator(twoBackendHost(dir).host);
+    await coordinator.loadSession(readSessionFile(dir, 'a'));
+    coordinator.setSessionPermissionMode('readonly');
+    assert.equal(readSessionFile(dir, 'a').updatedAt, updatedAt);
+  }));
+
+  test('a mode changed while a turn runs is kept when that turn saves the session', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('hello', 'hello');
+    coordinator.setSessionPermissionMode('readonly');
+    claude.streams[0].onDone('conv-1', true);
+    assert.equal(storedSessions(dir)[0].permissionMode, 'readonly');
+  }));
+});
+
+describe('modeChangeNotice', () => {
+  test('names the move and the agent, and points to the Sessions panel', () => {
+    assert.equal(modeChangeNotice('restricted', 'Claude Code'),
+      'Chat only needs a new Claude Code session. Your previous session is in the Sessions panel.');
+    assert.equal(modeChangeNotice('standard', 'Antigravity'),
+      'Leaving Chat only needs a new Antigravity session. Your previous session is in the Sessions panel.');
+  });
+
+  test('pending: the new session starts with the next message', () => {
+    assert.equal(modeChangeNotice('restricted', 'Antigravity', true),
+      'Chat only needs a new Antigravity session. It starts with your next message; this session stays in the Sessions panel.');
+  });
+});
+
+describe('updateStoredSession', () => {
+  test('merges the patch into the session file and keeps the id', withSessionsDir((dir) => {
+    saveSession(dir, storedSession('s', { userLabel: 'Scott' }), dir);
+    assert.equal(updateStoredSession(dir, 's', { permissionMode: 'readonly', id: 'other' }), true);
+    const saved = readSessionFile(dir, 's');
+    assert.equal(saved.permissionMode, 'readonly');
+    assert.equal(saved.userLabel, 'Scott');
+    assert.equal(saved.id, 's');
+  }));
+
+  test('returns false and writes nothing when the file is missing or unreadable', withSessionsDir((dir) => {
+    assert.equal(updateStoredSession(dir, 'missing', { permissionMode: 'full' }), false);
+    assert.equal(existsSync(join(dir, 'missing.json')), false);
+    writeFileSync(join(dir, 'bad.json'), '{ not json');
+    assert.equal(updateStoredSession(dir, 'bad', { permissionMode: 'full' }), false);
+    assert.equal(readFileSync(join(dir, 'bad.json'), 'utf8'), '{ not json');
+  }));
+});
+
 describe('backend registry helpers', () => {
   test('isBackendId accepts registered IDs only', () => {
     assert.equal(isBackendId('claude-code'), true);
@@ -2785,9 +3050,11 @@ describe('backend registry helpers', () => {
     for (const id of BACKEND_IDS) assert.equal(getBackend(id).id, id);
   });
 
-  test('Chat only is unavailable on Antigravity, everything is available on Claude Code', () => {
-    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes), []);
-    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes), ['restricted']);
+  test('Chat only is unavailable on Antigravity without its agent definitions, everything is available on Claude Code', () => {
+    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes(UNKNOWN_CAPABILITIES)), []);
+    assert.deepEqual(Object.keys(claudeCodeBackend.unavailableModes(AGY_CAPS_AGENTS)), []);
+    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes(UNKNOWN_CAPABILITIES)), ['restricted']);
+    assert.deepEqual(Object.keys(antigravityBackend.unavailableModes(AGY_CAPS_AGENTS)), []);
     assert.equal(claudeCodeBackend.listModels, null);
   });
 });
@@ -2887,6 +3154,364 @@ describe('appendTranscript / loadTranscript', () => {
     deleteSession(dir, 's', undefined, dir);
     assert.equal(existsSync(transcriptPath(dir, 's')), false);
     assert.deepEqual(loadAllSessions(dir, dir, '.obsidian'), []);
+  }));
+});
+
+describe('agy agents: spawn args', () => {
+  const base = ['--input-format', 'stream-json', '--output-format', 'stream-json'];
+
+  test('a new conversation passes its agent before today\'s mode flags', () => {
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', capabilities: AGY_CAPS_AGENTS }), [...base, '--agent', 'bojubot', '--mode', 'accept-edits']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'readonly' }), [...base, '--agent', 'bojubot', '--mode', 'plan']);
+    assert.deepEqual(
+      buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'standard', model: 'gemini-3.8-flash-high', effort: 'high', capabilities: AGY_CAPS_AGENTS }),
+      [...base, '--agent', 'bojubot', '--mode', 'accept-edits', '--model', 'gemini-3.8-flash-high', '--effort', 'high'],
+    );
+  });
+
+  test('a resumed conversation keeps today\'s mode flags and sends no --agent (agy keeps the one it started with)', () => {
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', resumeSessionId: 'c1', permissionMode: 'full' }), [...base, '--dangerously-skip-permissions', '--conversation', 'c1']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', resumeSessionId: 'c1', permissionMode: 'readonly' }), [...base, '--mode', 'plan', '--conversation', 'c1']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', resumeSessionId: 'c1', permissionMode: 'standard' }), [...base, '--mode', 'accept-edits', '--conversation', 'c1']);
+  });
+
+  test('Chat only runs bojubot-chat with prompts off, on its first turn and after', () => {
+    assert.deepEqual(buildAgySpawnArgs({ agent: AGY_CHAT_AGENT, permissionMode: 'restricted' }), [...base, '--agent', 'bojubot-chat', '--dangerously-skip-permissions']);
+    assert.deepEqual(buildAgySpawnArgs({ agent: AGY_CHAT_AGENT, permissionMode: 'restricted', resumeSessionId: 'c2' }), [...base, '--dangerously-skip-permissions', '--conversation', 'c2']);
+  });
+
+  test('no agent: exactly today\'s args, Chat only failing closed to plan mode', () => {
+    for (const mode of ['standard', 'readonly', 'restricted', 'full'] as const) {
+      assert.deepEqual(buildAgySpawnArgs({ permissionMode: mode, capabilities: AGY_CAPS_AGENTS }), [...base, ...agyPermissionArgs(mode)], mode);
+    }
+    assert.deepEqual(buildAgySpawnArgs({ permissionMode: 'restricted' }), [...base, '--mode', 'plan']);
+  });
+});
+
+describe('agyConversationAgent / agyNeedsNewConversation', () => {
+  test('Standard and Read only start as bojubot, Chat only as bojubot-chat, Full access with no agent', () => {
+    assert.equal(agyConversationAgent('standard', AGY_CAPS_AGENTS), 'bojubot');
+    assert.equal(agyConversationAgent('readonly', AGY_CAPS_AGENTS), 'bojubot');
+    assert.equal(agyConversationAgent('restricted', AGY_CAPS_AGENTS), 'bojubot-chat');
+    assert.equal(agyConversationAgent('full', AGY_CAPS_AGENTS), undefined);
+  });
+
+  test('no agent unless agy lists --agent and the definitions were written', () => {
+    const listedOnly = parseCliCapabilities(AGY_HELP_1_4_4, '1.4.4\n');
+    const writtenButUnlisted = { ...parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n'), agentDefinitions: true };
+    for (const caps of [UNKNOWN_CAPABILITIES, listedOnly, writtenButUnlisted]) {
+      assert.equal(agyAgentsAvailable(caps), false);
+      for (const mode of ['standard', 'readonly', 'restricted', 'full'] as const) assert.equal(agyConversationAgent(mode, caps), undefined, mode);
+    }
+  });
+
+  test('only moving into or out of Chat only needs a new conversation', () => {
+    for (const agent of ['bojubot', undefined]) {
+      assert.equal(agyNeedsNewConversation(agent, 'standard'), false);
+      assert.equal(agyNeedsNewConversation(agent, 'readonly'), false);
+      assert.equal(agyNeedsNewConversation(agent, 'full'), false);
+      assert.equal(agyNeedsNewConversation(agent, 'restricted'), true);
+    }
+    assert.equal(agyNeedsNewConversation('bojubot-chat', 'restricted'), false);
+    for (const mode of ['standard', 'readonly', 'full'] as const) assert.equal(agyNeedsNewConversation('bojubot-chat', mode), true, mode);
+  });
+});
+
+describe('agyAgentDefinition', () => {
+  const frontmatter = (text: string) => text.split('\n---\n')[0];
+  const body = (text: string) => text.slice(text.indexOf('\n---\n') + 5);
+
+  test('two agents: bojubot for Standard, Read only and Full; bojubot-chat for Chat only', () => {
+    assert.deepEqual([...AGY_AGENTS], ['bojubot', 'bojubot-chat']);
+    assert.equal(AGY_MAIN_AGENT, 'bojubot');
+  });
+
+  test('bojubot lists every registry tool, shell and write tools included; bojubot-chat only the web tools', () => {
+    assert.equal(AGY_REGISTRY_TOOLS.length, 26);
+    assert.deepEqual(AGY_AGENT_TOOLS.bojubot, AGY_REGISTRY_TOOLS);
+    for (const t of ['run_command', 'write_to_file', 'replace_file_content', 'view_file', 'search_web', 'read_url_content']) assert.ok(AGY_REGISTRY_TOOLS.includes(t), t);
+    // Tools agy refuses in a definition (it then won't start the session)
+    for (const t of ['command_status', 'send_command_input', 'call_mcp_tool', 'browser_subagent', 'sed_file']) assert.ok(!AGY_REGISTRY_TOOLS.includes(t), t);
+    assert.deepEqual([...AGY_AGENT_TOOLS['bojubot-chat']], ['search_web', 'read_url_content']);
+  });
+
+  test('bojubot-chat frontmatter, exactly', () => {
+    assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
+      '---',
+      'name: bojubot-chat',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v1), which rewrites this file when it changes."',
+      'tools:',
+      '  - search_web',
+      '  - read_url_content',
+      'mainAgent: true',
+      'subagent: false',
+      'commandExecutionPolicy: "off"',
+    ].join('\n'));
+  });
+
+  test('bojubot frontmatter: every tool listed, main agent only, agy\'s default command policy', () => {
+    const fm = frontmatter(agyAgentDefinition(AGY_MAIN_AGENT));
+    assert.ok(fm.startsWith('---\nname: bojubot\ndescription: "BojuBot Standard, Read only and Full access modes. '));
+    assert.equal(fm.match(/^ {2}- /gm)?.length, 26);
+    assert.ok(fm.endsWith('\nmainAgent: true\nsubagent: false'));
+    assert.ok(!fm.includes('commandExecutionPolicy'));
+  });
+
+  test('ruleset in both: bare vault-relative wikilinks, no file:// or backticks', () => {
+    for (const name of AGY_AGENTS) {
+      const b = body(agyAgentDefinition(name));
+      assert.match(b, /## Links\n/, name);
+      assert.match(b, /bare wikilinks: \[\[folder\/note\]\]/, name);
+      assert.match(b, /Never write file:\/\/ URIs/, name);
+      assert.match(b, /Never put backticks around a link/, name);
+      assert.ok(agyAgentDefinition(name).endsWith('\n'), name);
+    }
+  });
+
+  test('bojubot ruleset is mode-neutral: file tools over shell, UI Bridge file ops, request-permission after a denial', () => {
+    const b = body(agyAgentDefinition(AGY_MAIN_AGENT));
+    assert.match(b, /Follow the latest permission note you were given\. When a tool call is denied, don't retry it/);
+    assert.match(b, /- List a folder: list_dir, not dir, ls or Get-ChildItem\./);
+    assert.match(b, /- Read a file: view_file, not cat, type or Get-Content\./);
+    assert.match(b, /- Search inside files: grep_search, not grep, findstr or Select-String\./);
+    assert.match(b, /- Create or change a file: write_to_file/);
+    assert.match(b, /Use the UI Bridge actions rename-file, move-file and delete-file/);
+    assert.match(b, /If a shell command is denied, say which command you need and why/);
+    assert.ok(b.includes('\n@@BOJU {"action":"request-permission","tool":"run_command","reason":"<why>"}\n'));
+    for (const word of ['Standard mode', 'Read only mode', 'Full access mode']) assert.ok(!b.includes(word), word);
+  });
+
+  test('bojubot-chat ruleset: web only, no file tools, no permission requests', () => {
+    const b = body(agyAgentDefinition(AGY_CHAT_AGENT));
+    assert.match(b, /You have web tools only: search_web and read_url_content\. You can't read, list, search or change files, and you have no shell\./);
+    assert.match(b, /which starts a new session/);
+    for (const word of ['view_file', 'run_command', 'request-permission', 'rename-file']) assert.ok(!b.includes(word), word);
+  });
+});
+
+describe('syncAgyAgentDefinitions', () => {
+  const withDir = (fn: (dir: string) => void) => () => {
+    const root = mkdtempSync(join(tmpdir(), 'bojubot-agy-agents-'));
+    try { fn(join(root, 'agents')); } finally { rmSync(root, { recursive: true, force: true }); }
+  };
+
+  test('global folder is ~/.gemini/config/agents', () => {
+    assert.equal(agyAgentsDir(join('C:', 'Users', 'u')), join('C:', 'Users', 'u', '.gemini', 'config', 'agents'));
+    assert.equal(agyAgentPath(join('x', 'agents'), AGY_CHAT_AGENT), join('x', 'agents', 'bojubot-chat.md'));
+  });
+
+  test('creates the folder and both definitions, then leaves unchanged files alone', withDir((dir) => {
+    assert.deepEqual(syncAgyAgentDefinitions(dir), ['bojubot', 'bojubot-chat']);
+    for (const name of AGY_AGENTS) assert.equal(readFileSync(agyAgentPath(dir, name), 'utf8'), agyAgentDefinition(name));
+    assert.deepEqual(syncAgyAgentDefinitions(dir), []);
+  }));
+
+  test('rewrites only a definition whose content changed', withDir((dir) => {
+    syncAgyAgentDefinitions(dir);
+    writeFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'edited by hand', 'utf8');
+    assert.deepEqual(syncAgyAgentDefinitions(dir), ['bojubot-chat']);
+    assert.equal(readFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'utf8'), agyAgentDefinition(AGY_CHAT_AGENT));
+  }));
+
+  test('never touches other files in the folder', withDir((dir) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'my-agent.md'), 'mine', 'utf8');
+    writeFileSync(join(dir, 'bojubot-full.md'), 'not ours to manage', 'utf8');
+    syncAgyAgentDefinitions(dir);
+    assert.equal(readFileSync(join(dir, 'my-agent.md'), 'utf8'), 'mine');
+    assert.equal(readFileSync(join(dir, 'bojubot-full.md'), 'utf8'), 'not ours to manage');
+  }));
+
+  test('throws when the folder can\'t be written', withDir((dir) => {
+    mkdirSync(join(dir, '..'), { recursive: true });
+    writeFileSync(dir, 'a file where the folder should be', 'utf8');
+    assert.throws(() => syncAgyAgentDefinitions(dir));
+  }));
+});
+
+describe('withAgyAgentDefinitions', () => {
+  const listed = parseCliCapabilities(AGY_HELP_1_4_4, '1.4.4\n');
+  const unlisted = parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n');
+
+  test('installs and marks the definitions when agy lists --agent', () => {
+    let calls = 0;
+    const caps = withAgyAgentDefinitions(listed, () => { calls++; return []; });
+    assert.equal(calls, 1);
+    assert.equal(caps.agentDefinitions, true);
+    assert.equal(caps.version, '1.4.4');
+    assert.equal(agyAgentsAvailable(caps), true);
+  });
+
+  test('writes nothing when agy does not list --agent', () => {
+    let calls = 0;
+    assert.equal(withAgyAgentDefinitions(unlisted, () => { calls++; }), unlisted);
+    assert.equal(withAgyAgentDefinitions(UNKNOWN_CAPABILITIES, () => { calls++; }), UNKNOWN_CAPABILITIES);
+    assert.equal(calls, 0);
+  });
+
+  test('a failed write leaves the capabilities unmarked: no agent, Chat only unavailable', () => {
+    const caps = withAgyAgentDefinitions(listed, () => { throw new Error('EACCES'); });
+    assert.equal(caps.agentDefinitions, undefined);
+    assert.equal(agyConversationAgent('standard', caps), undefined);
+    assert.ok(agyUnavailableModes(caps).restricted);
+  });
+});
+
+describe('agy agent rejection fallback', () => {
+  const REGISTRY_ERROR = 'failed to construct executor: failed to resolve components: unknown component: tool "sed_file" not found in registry';
+
+  test('recognizes agy\'s errors for an agent it cannot start', () => {
+    assert.equal(isAgyAgentRejection(REGISTRY_ERROR), true);
+    assert.equal(isAgyAgentRejection('unknown agent "bojubot" (available: other)'), true);
+    assert.equal(isAgyAgentRejection('quota exhausted'), false);
+    assert.equal(agyApiError('error: unknown agent "bojubot-chat" (available: x)').errorCode, 'agy_agent_rejected');
+    const display = formatApiError(agyApiError('unknown agent "bojubot-chat" (available: x)'), 'win32');
+    assert.equal(display.title, "Antigravity couldn't start this mode's agent");
+  });
+
+  test('after a rejection, new conversations start with no agent and Chat only is unavailable again', async () => {
+    resetAgyAgentRejection();
+    try {
+      assert.equal(agyAgentsAvailable(AGY_CAPS_AGENTS), true);
+      const r = await runAgy([], { stderr: ['error: unknown agent "bojubot" (available: none)\n'] });
+      assert.equal(r.apiErrors[0].errorCode, 'agy_agent_rejected');
+      assert.equal(agyAgentsAvailable(AGY_CAPS_AGENTS), false);
+      assert.equal(agyConversationAgent('standard', AGY_CAPS_AGENTS), undefined);
+      assert.ok(agyUnavailableModes(AGY_CAPS_AGENTS).restricted);
+    } finally {
+      resetAgyAgentRejection();
+    }
+  });
+
+  test('a rejected first turn binds no conversation, so the next turn starts a fresh one', async () => {
+    resetAgyAgentRejection();
+    try {
+      const r = await runAgy([
+        { event: 'init', conversation_id: 'conv-bad', init: {} },
+        { event: 'result', result: { conversation_id: 'conv-bad', status: 'ERROR', error: REGISTRY_ERROR } },
+      ]);
+      assert.equal(r.sessionId, undefined);
+      assert.equal(r.apiErrors[0].errorCode, 'agy_agent_rejected');
+    } finally {
+      resetAgyAgentRejection();
+    }
+  });
+});
+
+describe('SessionCoordinator Antigravity agents', () => {
+  const agentHost = (dir: string, mode: PermissionMode = 'standard', caps: CliCapabilities = AGY_CAPS_AGENTS) => {
+    let current = mode;
+    const env = twoBackendHost(dir, {
+      getDefaultBackend: () => 'antigravity',
+      getPermissionMode: () => current,
+      getCliCapabilities: (id: BackendId) => (id === 'antigravity' ? caps : UNKNOWN_CAPABILITIES),
+    });
+    return { ...env, setMode: (m: PermissionMode) => { current = m; } };
+  };
+
+  test('the first turn picks the agent, the session records it, later turns resume with it', withSessionsDir((dir) => {
+    const { host, agy } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    c.send('hello', 'hello');
+    assert.equal(agy.spawns[0].agent, 'bojubot');
+    agy.streams[0].onDone('conv-1', true);
+    assert.equal(c.conversationAgent, 'bojubot');
+    assert.equal(storedSessions(dir)[0].agent, 'bojubot');
+    c.send('again');
+    assert.equal(agy.spawns[1].agent, 'bojubot');
+    assert.equal(agy.spawns[1].resumeSessionId, 'conv-1');
+  }));
+
+  test('a session started in Full access has no agent; one started in Chat only runs bojubot-chat', withSessionsDir((dir) => {
+    const full = agentHost(dir, 'full');
+    const c = new SessionCoordinator(full.host);
+    c.startNewSession();
+    c.send('hi', 'hi');
+    assert.equal(full.agy.spawns[0].agent, undefined);
+    full.agy.streams[0].onDone('conv-f', true);
+    assert.equal('agent' in storedSessions(dir)[0], false);
+
+    const dir2 = mkdtempSync(join(tmpdir(), 'bojubot-backend-test-'));
+    try {
+      const chat = agentHost(dir2, 'restricted');
+      const c2 = new SessionCoordinator(chat.host);
+      c2.startNewSession();
+      c2.send('hi', 'hi');
+      assert.equal(chat.agy.spawns[0].agent, 'bojubot-chat');
+    } finally { rmSync(dir2, { recursive: true, force: true }); }
+  }));
+
+  test('an upgrade to Full access mid-session keeps the conversation\'s bojubot agent', withSessionsDir((dir) => {
+    const { host, agy } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    c.send('hello', 'hello');
+    agy.streams[0].onDone('conv-1', true);
+    assert.equal(c.setSessionPermissionMode('full'), true);
+    assert.equal(c.modeNeedsNewSession(), false);
+    c.send('retry');
+    assert.equal(agy.spawns[1].agent, 'bojubot');
+    assert.equal(agy.spawns[1].permissionMode, 'full');
+  }));
+
+  test('moving into or out of Chat only needs a new session once the conversation has started', withSessionsDir((dir) => {
+    const { host, agy, setMode } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    assert.equal(c.modeNeedsNewSession('restricted'), false, 'no conversation yet: just switches');
+    c.send('hello', 'hello');
+    agy.streams[0].onDone('conv-1', true);
+    assert.equal(c.modeNeedsNewSession('readonly'), false);
+    assert.equal(c.modeNeedsNewSession('full'), false);
+    assert.equal(c.modeNeedsNewSession('restricted'), true);
+    // The default for new sessions moving never moves this session (#405)
+    setMode('restricted');
+    assert.equal(c.getEffectivePermissionMode(), 'standard');
+    assert.equal(c.modeNeedsNewSession(), false);
+  }));
+
+  test('a loaded session keeps the agent it started with', withSessionsDir(async (dir) => {
+    const { host } = agentHost(dir, 'standard');
+    const c = new SessionCoordinator(host);
+    await c.loadSession({ id: 's1', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-c', backend: 'antigravity', agent: 'bojubot-chat', permissionMode: 'restricted' });
+    assert.equal(c.conversationAgent, 'bojubot-chat');
+    assert.equal(c.modeNeedsNewSession(), false);
+    assert.equal(c.modeNeedsNewSession('standard'), true);
+  }));
+
+  test('a Chat only agent session with no saved mode opens in Chat only, not Standard', withSessionsDir(async (dir) => {
+    const { host } = agentHost(dir, 'full');
+    const c = new SessionCoordinator(host);
+    await c.loadSession({ id: 's1', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-c', backend: 'antigravity', agent: 'bojubot-chat' });
+    assert.equal(c.getEffectivePermissionMode(), 'restricted');
+    assert.equal(c.modeNeedsNewSession(), false);
+    assert.equal(storedSessions(dir)[0].permissionMode, 'restricted');
+
+    const c2 = new SessionCoordinator(host);
+    await c2.loadSession({ id: 's2', title: 't', createdAt: '', updatedAt: '', claudeSessionId: 'conv-d', backend: 'antigravity', agent: 'bojubot' });
+    assert.equal(c2.getEffectivePermissionMode(), 'standard');
+  }));
+
+  test('no definitions: no agent, and Chat only never asks for a new session it can\'t have', withSessionsDir((dir) => {
+    const { host, agy } = agentHost(dir, 'standard', AGY_CAPS);
+    const c = new SessionCoordinator(host);
+    c.startNewSession();
+    c.send('hello', 'hello');
+    assert.equal(agy.spawns[0].agent, undefined);
+  }));
+
+  test('Claude Code sessions never pick an agent, and only moving into Chat only needs a new session', withSessionsDir((dir) => {
+    const { host, claude } = agentHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code' });
+    c.send('hello', 'hello');
+    assert.equal(claude.spawns[0].agent, undefined);
+    claude.streams[0].onDone('sess-1', true);
+    for (const mode of ['standard', 'readonly', 'full'] as const) assert.equal(c.modeNeedsNewSession(mode), false, mode);
+    // The earlier turns hold vault information (#406)
+    assert.equal(c.modeNeedsNewSession('restricted'), true);
+    assert.equal('agent' in storedSessions(dir)[0], false);
   }));
 });
 
@@ -3038,14 +3663,21 @@ describe('contextGenStatusForTool', () => {
 
 describe('backend permission wording', () => {
   test('Claude Code keeps the stock picker wording', () => {
-    assert.deepEqual(claudeCodeBackend.modeDescriptions, {});
+    assert.deepEqual(claudeCodeBackend.modeDescriptions(UNKNOWN_CAPABILITIES), {});
   });
   test('Antigravity says Standard has no shell commands, and describes every mode it offers', () => {
-    assert.match(antigravityBackend.modeDescriptions.standard ?? '', /no shell/);
-    for (const mode of ['standard', 'readonly', 'full'] as const) {
-      assert.ok(antigravityBackend.modeDescriptions[mode], mode);
-      assert.equal(antigravityBackend.unavailableModes[mode], undefined, mode);
+    for (const caps of [UNKNOWN_CAPABILITIES, AGY_CAPS_AGENTS]) {
+      const descriptions = antigravityBackend.modeDescriptions(caps);
+      assert.match(descriptions.standard ?? '', /no shell/);
+      for (const mode of ['standard', 'readonly', 'full'] as const) {
+        assert.ok(descriptions[mode], mode);
+        assert.equal(antigravityBackend.unavailableModes(caps)[mode], undefined, mode);
+      }
     }
+  });
+  test('Chat only is described only once it is offered', () => {
+    assert.equal(agyModeDescriptions(UNKNOWN_CAPABILITIES).restricted, undefined);
+    assert.equal(agyModeDescriptions(AGY_CAPS_AGENTS).restricted, 'web only, no file access; switching starts a new session');
   });
 });
 
@@ -3606,6 +4238,1063 @@ describe('renamed commands', () => {
       assert.match(oldId, /^bojubot:/);
       assert.match(newId, /^bojubot:/);
       assert.ok(EXCLUDED_FROM_REFERENCE.has(oldId), oldId);
+    }
+  });
+});
+
+// ── historyKeyAction (#401) ──────────────────────────────────────────────────
+
+describe('historyKeyAction', () => {
+  const base: HistoryKeyState = { length: 0, selectionStart: 0, selectionEnd: 0, browsing: false, hasHistory: true };
+  const at = (length: number, cursor: number, extra: Partial<HistoryKeyState> = {}): HistoryKeyState =>
+    ({ ...base, length, selectionStart: cursor, selectionEnd: cursor, ...extra });
+
+  test('↑ in an empty input recalls history', () => {
+    assert.equal(historyKeyAction('ArrowUp', base), 'step');
+  });
+
+  test('browsing an unedited entry: both keys step wherever the cursor is (direction changes need one press)', () => {
+    const browsing = { browsing: true, unedited: true };
+    assert.equal(historyKeyAction('ArrowUp', at(20, 20, browsing)), 'step', 'after ↓ the cursor is at the end');
+    assert.equal(historyKeyAction('ArrowDown', at(20, 0, browsing)), 'step', 'after ↑ the cursor is at the start');
+    assert.equal(historyKeyAction('ArrowUp', { ...at(20, 3, browsing), selectionEnd: 9 }), 'step', 'even with a selection');
+  });
+
+  test('browsing an edited entry: back to the cursor rule', () => {
+    const edited = { browsing: true, unedited: false };
+    assert.equal(historyKeyAction('ArrowUp', at(20, 20, edited)), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(20, 0, edited)), 'move');
+    assert.equal(historyKeyAction('ArrowUp', at(20, 0, edited)), 'step');
+  });
+
+  test('↑ with no history moves the cursor, even when empty', () => {
+    assert.equal(historyKeyAction('ArrowUp', { ...base, hasHistory: false }), 'move');
+    assert.equal(historyKeyAction('ArrowUp', at(10, 0, { hasHistory: false })), 'move');
+  });
+
+  test('↑ with the cursor at the very start of a draft recalls history', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(12, 0)), 'step');
+  });
+
+  test('↑ mid-text moves the cursor', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(12, 5)), 'move');
+    assert.equal(historyKeyAction('ArrowUp', at(12, 12)), 'move');
+  });
+
+  test('↑ anywhere past the start of wrapped single-line text moves the cursor', () => {
+    // A 300-character paragraph with no line breaks, cursor on the last wrapped row.
+    assert.equal(historyKeyAction('ArrowUp', at(300, 280)), 'move');
+    // Cursor on the first row but not at the start — the browser takes it to the start.
+    assert.equal(historyKeyAction('ArrowUp', at(300, 3)), 'move');
+  });
+
+  test('↑ with a selection moves the cursor, even one that starts at 0', () => {
+    assert.equal(historyKeyAction('ArrowUp', { ...base, length: 12, selectionStart: 0, selectionEnd: 4 }), 'move');
+    assert.equal(historyKeyAction('ArrowUp', { ...base, length: 12, selectionStart: 0, selectionEnd: 12 }), 'move');
+  });
+
+  test('↑ while browsing keeps stepping when the cursor is at the start', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(20, 0, { browsing: true })), 'step');
+  });
+
+  test('↑ while browsing a multi-row entry moves the cursor when not at the start', () => {
+    assert.equal(historyKeyAction('ArrowUp', at(200, 150, { browsing: true })), 'move');
+  });
+
+  test('↓ when not browsing always moves the cursor', () => {
+    assert.equal(historyKeyAction('ArrowDown', base), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(12, 12)), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(12, 0)), 'move');
+  });
+
+  test('↓ while browsing steps forward with the cursor at the very end', () => {
+    assert.equal(historyKeyAction('ArrowDown', at(20, 20, { browsing: true })), 'step');
+    assert.equal(historyKeyAction('ArrowDown', at(0, 0, { browsing: true })), 'step');
+  });
+
+  test('↓ while browsing moves the cursor when not at the end', () => {
+    assert.equal(historyKeyAction('ArrowDown', at(20, 0, { browsing: true })), 'move');
+    assert.equal(historyKeyAction('ArrowDown', at(300, 40, { browsing: true })), 'move');
+  });
+
+  test('↓ while browsing with a selection reaching the end moves the cursor', () => {
+    assert.equal(historyKeyAction('ArrowDown', { ...base, length: 20, selectionStart: 5, selectionEnd: 20, browsing: true }), 'move');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// repairLinks — link-repair guard (#400)
+// ---------------------------------------------------------------------------
+
+const WIN_CTX: LinkRepairContext = {
+  vaultRoot: 'E:\\vault',
+  noteExists: (p) => ['Note', 'docs/Setup', 'Setup.md'].includes(p),
+};
+const POSIX_CTX: LinkRepairContext = { vaultRoot: '/home/u/vault/', noteExists: () => true };
+
+describe('repairLinks — backticked wikilinks', () => {
+  test('unwraps a backticked wikilink when the note exists', () => {
+    assert.equal(repairLinks('See `[[Note]]` for details.', WIN_CTX), 'See [[Note]] for details.');
+  });
+  test('keeps alias and heading when unwrapping; lookup uses the bare path', () => {
+    assert.equal(repairLinks('`[[docs/Setup#Install|Setup]]`', WIN_CTX), '[[docs/Setup#Install|Setup]]');
+  });
+  test('leaves a syntax example as code when the note does not exist', () => {
+    assert.equal(repairLinks('Write `[[Note name]]` to link.', WIN_CTX), 'Write `[[Note name]]` to link.');
+  });
+  test('leaves code that only contains a wikilink among other text', () => {
+    assert.equal(repairLinks('`see [[Note]]`', WIN_CTX), '`see [[Note]]`');
+  });
+  test('leaves backticked embeds and heading-only links', () => {
+    assert.equal(repairLinks('`![[Note]]` and `[[#Heading]]`', WIN_CTX), '`![[Note]]` and `[[#Heading]]`');
+  });
+  test('does not unwrap inside fenced code blocks', () => {
+    const md = 'Example:\n```md\n`[[Note]]`\n```\nAfter `[[Note]]`';
+    assert.equal(repairLinks(md, WIN_CTX), 'Example:\n```md\n`[[Note]]`\n```\nAfter [[Note]]');
+  });
+  test('does not unwrap inside an unclosed fence', () => {
+    const md = '~~~\n`[[Note]]`\n';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+});
+
+describe('repairLinks — file:// links', () => {
+  test('converts a Markdown link into the vault to a wikilink with alias', () => {
+    assert.equal(
+      repairLinks('[Preface](file:///E:/vault/docs/00.01-preface.md)', WIN_CTX),
+      '[[docs/00.01-preface|Preface]]',
+    );
+  });
+  test('handles lowercase drive letters and backslashes', () => {
+    assert.equal(repairLinks('[Guide](file:///e:\\Vault\\docs\\guide.md)', WIN_CTX), '[[docs/guide|Guide]]');
+  });
+  test('decodes URL-encoded spaces', () => {
+    assert.equal(repairLinks('[My note](file:///E:/vault/My%20Notes/My%20note.md)', WIN_CTX), '[[My Notes/My note]]');
+  });
+  test('handles an angle-bracketed destination and a link title', () => {
+    assert.equal(repairLinks('[A](<file:///E:/vault/a b.md>) [B](file:///E:/vault/b.md "t")', WIN_CTX), '[[a b|A]] [[b|B]]');
+  });
+  test('drops the alias when it just repeats the file name', () => {
+    assert.equal(repairLinks('[setup.md](file:///E:/vault/docs/setup.md)', WIN_CTX), '[[docs/setup]]');
+  });
+  test('keeps the extension of non-Markdown files', () => {
+    assert.equal(repairLinks('[Plan](file:///E:/vault/plan.pdf)', WIN_CTX), '[[plan.pdf|Plan]]');
+  });
+  test('keeps a heading fragment and drops editor line anchors', () => {
+    assert.equal(
+      repairLinks('[A](file:///E:/vault/a.md#Intro) [B](file:///E:/vault/b.md#L12-L20)', WIN_CTX),
+      '[[a#Intro|A]] [[b|B]]',
+    );
+  });
+  test('leaves file:// links outside the vault alone', () => {
+    const md = '[Other](file:///E:/elsewhere/x.md) [Sibling](file:///E:/vault2/x.md) [D](file:///D:/vault/x.md)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('leaves UNC hosts and the vault root itself alone', () => {
+    const md = '[S](file://server/share/vault/x.md) [Root](file:///E:/vault/)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('leaves file:// images alone', () => {
+    const md = '![pic](file:///E:/vault/img.png)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('works with a POSIX vault root', () => {
+    assert.equal(repairLinks('[N](file:///home/u/vault/n.md)', POSIX_CTX), '[[n|N]]');
+    const outside = '[N](file:///home/u/other/n.md)';
+    assert.equal(repairLinks(outside, POSIX_CTX), outside);
+  });
+  test('POSIX paths are case-sensitive', () => {
+    const md = '[N](file:///home/U/vault/n.md)';
+    assert.equal(repairLinks(md, POSIX_CTX), md);
+  });
+  test('converts bare file:// URLs and autolinks, keeping trailing punctuation', () => {
+    assert.equal(
+      repairLinks('Open file:///E:/vault/docs/setup.md. Or <file:///E:/vault/a%20b.md>', WIN_CTX),
+      'Open [[docs/setup]]. Or [[a b]]',
+    );
+  });
+  test('leaves bare file:// URLs outside the vault alone', () => {
+    const md = 'See file:///C:/Windows/x.txt';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('does not change file:// URLs inside inline code or fenced code', () => {
+    const md = '`file:///E:/vault/a.md`\n```\n[A](file:///E:/vault/a.md)\nfile:///E:/vault/a.md\n```';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+});
+
+describe('repairLinks — backticked link text', () => {
+  test('removes backticks around a Markdown link label', () => {
+    assert.equal(repairLinks('[`Setup`](guides/setup.md)', WIN_CTX), '[Setup](guides/setup.md)');
+  });
+  test('combines with the file:// repair', () => {
+    assert.equal(repairLinks('[`Setup`](file:///E:/vault/guides/setup.md)', WIN_CTX), '[[guides/setup|Setup]]');
+  });
+  test('leaves partial code in a label and other inline code alone', () => {
+    const md = '[run `npm test`](docs/test.md) and `code`';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+});
+
+describe('repairLinks — untouched text', () => {
+  test('returns text without links unchanged', () => {
+    const md = 'Plain *text* with `code`, ``double `tick` code``, and [a link](https://x.y).';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('leaves valid wikilinks and relative Markdown links alone', () => {
+    const md = '[[Note]] and [Setup](guides/setup.md)';
+    assert.equal(repairLinks(md, WIN_CTX), md);
+  });
+  test('an unmatched backtick does not swallow later repairs', () => {
+    assert.equal(repairLinks('a ` b `[[Note]]`', WIN_CTX), 'a ` b `[[Note]]`');
+    assert.equal(repairLinks('a `` b `[[Note]]`', WIN_CTX), 'a `` b [[Note]]');
+  });
+});
+
+describe('vaultTarget', () => {
+  test('maps an in-vault URI to a vault-relative path', () => {
+    assert.deepEqual(vaultTarget('file:///E:/vault/docs/x.md', 'E:\\vault'), { path: 'docs/x', subpath: '' });
+  });
+  test('accepts file://E:/ (two slashes) and localhost', () => {
+    assert.deepEqual(vaultTarget('file://E:/vault/x.md', 'E:/vault'), { path: 'x', subpath: '' });
+    assert.deepEqual(vaultTarget('file://localhost/E:/vault/x.md', 'E:/vault'), { path: 'x', subpath: '' });
+  });
+  test('returns null for malformed encoding, wikilink-unsafe names and an empty root', () => {
+    assert.equal(vaultTarget('file:///E:/vault/100%.md', 'E:/vault'), null);
+    assert.equal(vaultTarget('file:///E:/vault/a[1].md', 'E:/vault'), null);
+    assert.equal(vaultTarget('file:///E:/vault/x.md', ''), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SessionCoordinator: switching session while a reply is running (#398)
+// ---------------------------------------------------------------------------
+
+describe('SessionCoordinator switching session mid-turn', () => {
+  /** A backend that hands each turn's mock process and stream callbacks to the test. */
+  function controllableHost(dir: string, base: AgentBackend = claudeCodeBackend) {
+    const procs: ReturnType<typeof mockProc>[] = [];
+    const streams: StreamCallbacks[] = [];
+    const spawns: TurnOptions[] = [];
+    const backend: AgentBackend = {
+      ...base,
+      spawnTurn: (opts) => { spawns.push(opts); const p = mockProc(); procs.push(p); return p; },
+      parseStream: (_proc, cb) => { streams.push(cb); },
+    };
+    const host = makeTestHost(dir, {
+      getBackend: () => backend,
+      getBinaryPath: () => 'C:\\cli.exe',
+      getDefaultBackend: () => base.id,
+    });
+    return { host, procs, streams, spawns };
+  }
+
+  const stored = (dir: string, id: string) => storedSessions(dir).find(s => s.id === id);
+
+  const sessionB = {
+    id: 'session-b', title: 'Session B', createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z', claudeSessionId: 'conv-b',
+  };
+
+  test('a first turn that ends after the panel switched binds the session it started on', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const fileA = coordinator.sessionFileId!;
+    coordinator.send('Summarise my notes', 'Summarise my notes');
+
+    saveSession(dir, sessionB, dir);
+    await coordinator.loadSession(sessionB);
+
+    const updates: unknown[] = [];
+    const started: string[] = [];
+    coordinator.on('session:updated', (u) => updates.push(u));
+    coordinator.on('session:started', (id) => started.push(id));
+    streams[0].onDone('conv-a', false);
+
+    assert.equal(stored(dir, fileA)?.claudeSessionId, 'conv-a');
+    assert.equal(stored(dir, fileA)?.title, 'Summarise my notes');
+    assert.equal(stored(dir, 'session-b')?.claudeSessionId, 'conv-b', 'the session switched to is untouched');
+    assert.equal(stored(dir, 'session-b')?.updatedAt, sessionB.updatedAt);
+    assert.equal(coordinator.sessionId, 'conv-b', 'the panel stays on the session it switched to');
+    assert.equal(coordinator.sessionFileId, 'session-b');
+    assert.equal(coordinator.sessionTitle, 'Session B');
+    assert.deepEqual(updates, [], 'no header update for a session no longer in the panel');
+    assert.deepEqual(started, ['conv-a'], 'the session still counts as started');
+  }));
+
+  test('a continuing turn that ends after the switch saves to its own session, not the loaded one', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    const sessionA = { ...sessionB, id: 'session-a', title: 'Session A', claudeSessionId: 'conv-a' };
+    saveSession(dir, sessionA, dir);
+    saveSession(dir, sessionB, dir);
+    await coordinator.loadSession(sessionA);
+    coordinator.send('more');
+    await coordinator.loadSession(sessionB);
+    streams[0].onDone('conv-a', true);
+
+    assert.notEqual(stored(dir, 'session-a')?.updatedAt, sessionA.updatedAt, 'session A was saved');
+    assert.equal(stored(dir, 'session-a')?.title, 'Session A');
+    assert.equal(stored(dir, 'session-b')?.updatedAt, sessionB.updatedAt, 'session B was not saved');
+    assert.equal(stored(dir, 'session-b')?.claudeSessionId, 'conv-b');
+    assert.equal(coordinator.sessionId, 'conv-b');
+  }));
+
+  test('an Antigravity turn writes its transcript to the session it started on', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir, antigravityBackend);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession({ backend: 'antigravity' });
+    const fileA = coordinator.sessionFileId!;
+    coordinator.send('hello', 'hello');
+    await coordinator.loadSession({ ...sessionB, backend: 'antigravity' });
+    streams[0].onText('Hi there.');
+    streams[0].onDone('agy-a', true);
+
+    assert.deepEqual(loadTranscript(dir, fileA).map(m => m.content), ['hello', 'Hi there.']);
+    assert.equal(existsSync(transcriptPath(dir, 'session-b')), false);
+  }));
+
+  test('the next turn after a switch resumes the loaded session, not the old one', withSessionsDir(async (dir) => {
+    const { host, streams, spawns } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('first', 'first');
+    await coordinator.loadSession(sessionB);
+    streams[0].onDone('conv-a', true);
+
+    coordinator.send('next');
+    assert.equal(spawns[0].resumeSessionId, undefined);
+    assert.equal(spawns[1].resumeSessionId, 'conv-b');
+  }));
+
+  test('stop() resolves straight away when nothing is running', withSessionsDir(async (dir) => {
+    const coordinator = new SessionCoordinator(controllableHost(dir).host);
+    coordinator.startNewSession();
+    await coordinator.stop();
+    assert.equal(coordinator.isBusy, false);
+  }));
+
+  test('stop() resolves only after the turn has ended, saved and emitted turn:done', withSessionsDir(async (dir) => {
+    const { host, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const fileA = coordinator.sessionFileId!;
+    coordinator.send('long question', 'long question');
+
+    const order: string[] = [];
+    coordinator.on('turn:done', (r) => order.push(`done:${r.clean}`));
+    const stopping = coordinator.stop().then(() => { order.push('stopped'); });
+
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, [], 'still waiting while the process runs');
+    assert.equal(coordinator.isBusy, true);
+
+    streams[0].onText('Partial ans');
+    streams[0].onDone('conv-a', false); // the killed process closes
+    await stopping;
+    assert.deepEqual(order, ['done:false', 'stopped']);
+    assert.equal(coordinator.isBusy, false);
+    assert.equal(stored(dir, fileA)?.claudeSessionId, 'conv-a', 'the stopped turn is saved to its session');
+  }));
+
+  test('stop() also resolves when the process fails instead of closing', withSessionsDir(async (dir) => {
+    const { host, procs } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const errors: string[] = [];
+    coordinator.on('turn:error', (e) => errors.push(e));
+    coordinator.send('q');
+    const stopping = coordinator.stop();
+    procs[0].emit('error', new Error('spawn failed'));
+    await stopping;
+    assert.deepEqual(errors, ['spawn failed']);
+    assert.equal(coordinator.isBusy, false);
+  }));
+
+  test('a close that follows a process error is ignored', withSessionsDir((dir) => {
+    const { host, procs, streams } = controllableHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    const fileA = coordinator.sessionFileId!;
+    const done: unknown[] = [];
+    coordinator.on('turn:done', (r) => done.push(r));
+    coordinator.on('turn:error', () => { /* expected */ });
+    coordinator.send('q', 'q');
+    procs[0].emit('error', new Error('boom'));
+    streams[0].onDone('conv-late', false);
+    assert.deepEqual(done, []);
+    assert.equal(stored(dir, fileA)?.claudeSessionId, '');
+  }));
+
+  test('a new session does not follow a default-backend change while its first turn runs', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    coordinator.send('hello', 'hello');
+    assert.equal(coordinator.followDefaultBackend('antigravity'), false);
+    assert.equal(coordinator.backendId, 'claude-code');
+  }));
+});
+
+// ---------------------------------------------------------------------------
+// Sessions panel (#399)
+// ---------------------------------------------------------------------------
+
+describe('sessionDateGroup', () => {
+  // Local time, so "today" means the same local calendar day as `now`
+  const now = new Date(2026, 9, 21, 15, 0, 0).getTime();
+
+  test('earlier the same local day is today', () => {
+    assert.equal(sessionDateGroup(new Date(2026, 9, 21, 0, 0, 1).toISOString(), now), 'today');
+    assert.equal(sessionDateGroup(new Date(2026, 9, 21, 14, 59).toISOString(), now), 'today');
+  });
+
+  test('yesterday evening is this week, not today', () => {
+    assert.equal(sessionDateGroup(new Date(2026, 9, 20, 23, 59).toISOString(), now), 'week');
+  });
+
+  test('within the last 7 days is this week; older than that is older', () => {
+    assert.equal(sessionDateGroup(new Date(2026, 9, 15, 16, 0).toISOString(), now), 'week');
+    assert.equal(sessionDateGroup(new Date(2026, 9, 14, 14, 0).toISOString(), now), 'older');
+  });
+
+  test('an unparseable date is older', () => {
+    assert.equal(sessionDateGroup('not a date', now), 'older');
+  });
+});
+
+describe('groupSessions', () => {
+  const now = new Date(2026, 9, 21, 15, 0, 0).getTime();
+  const today = new Date(2026, 9, 21, 9, 0).toISOString();
+  const week = new Date(2026, 9, 18, 9, 0).toISOString();
+  const old = new Date(2026, 8, 1, 9, 0).toISOString();
+
+  test('groups in Pinned / Today / This week / Older order, keeping input order inside each', () => {
+    const sessions = [
+      { id: 'a', updatedAt: old },
+      { id: 'b', updatedAt: today },
+      { id: 'c', updatedAt: week, pinned: true },
+      { id: 'd', updatedAt: today },
+      { id: 'e', updatedAt: week },
+    ];
+    const groups = groupSessions(sessions, now);
+    assert.deepEqual(groups.map(g => [g.label, g.sessions.map(s => s.id)]), [
+      ['Pinned', ['c']],
+      ['Today', ['b', 'd']],
+      ['This week', ['e']],
+      ['Older', ['a']],
+    ]);
+  });
+
+  test('empty groups are left out', () => {
+    const groups = groupSessions([{ id: 'x', updatedAt: old }], now);
+    assert.deepEqual(groups.map(g => g.key), ['older']);
+  });
+
+  test('no sessions → no groups', () => {
+    assert.deepEqual(groupSessions([], now), []);
+  });
+
+  test('sessionGroupKey matches the group a session is listed under', () => {
+    assert.equal(sessionGroupKey({ updatedAt: old, pinned: true }, now), 'pinned');
+    assert.equal(sessionGroupKey({ updatedAt: today }, now), 'today');
+  });
+});
+
+describe('relativeTime', () => {
+  const now = Date.parse('2026-10-21T15:00:00Z');
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  test('minutes, hours and days', () => {
+    assert.equal(relativeTime(ago(20_000), now), 'just now');
+    assert.equal(relativeTime(ago(5 * 60_000), now), '5m ago');
+    assert.equal(relativeTime(ago(3 * 3_600_000), now), '3h ago');
+    assert.equal(relativeTime(ago(30 * 3_600_000), now), 'yesterday');
+    assert.equal(relativeTime(ago(4 * 86_400_000), now), '4d ago');
+  });
+
+  test('a week or more shows a short date', () => {
+    const text = relativeTime(ago(30 * 86_400_000), now);
+    assert.ok(!text.endsWith('ago') && text.length > 0, text);
+  });
+
+  test('an unparseable date gives empty text', () => {
+    assert.equal(relativeTime('nope', now), '');
+  });
+});
+
+describe('filterSessions', () => {
+  const sessions = [{ title: 'Vault cleanup' }, { title: 'Draft essay' }, { title: 'cleanup notes' }];
+
+  test('case-insensitive title match', () => {
+    assert.deepEqual(filterSessions(sessions, 'CLEANUP').map(s => s.title), ['Vault cleanup', 'cleanup notes']);
+  });
+
+  test('an empty or blank query keeps everything', () => {
+    assert.equal(filterSessions(sessions, '   '), sessions);
+  });
+
+  test('no match → empty list', () => {
+    assert.deepEqual(filterSessions(sessions, 'zzz'), []);
+  });
+});
+
+describe('moveSession', () => {
+  const list = ['a', 'b', 'c', 'd'].map(id => ({ id }));
+  const ids = (l: { id: string }[]) => l.map(s => s.id).join('');
+
+  test('moves before or after the target', () => {
+    assert.equal(ids(moveSession(list, 'a', 'c', true)), 'bacd');
+    assert.equal(ids(moveSession(list, 'a', 'c', false)), 'bcad');
+    assert.equal(ids(moveSession(list, 'd', 'a', true)), 'dabc');
+    assert.equal(ids(moveSession(list, 'd', 'b', false)), 'abdc');
+  });
+
+  test('does not change the input array', () => {
+    moveSession(list, 'a', 'd', false);
+    assert.equal(ids(list), 'abcd');
+  });
+
+  test('same ID or a missing ID → unchanged', () => {
+    assert.equal(moveSession(list, 'a', 'a', true), list);
+    assert.equal(moveSession(list, 'x', 'a', true), list);
+    assert.equal(moveSession(list, 'a', 'x', true), list);
+  });
+});
+
+describe('agentModelLabel', () => {
+  test('agent and model, or "default model" when the CLI picks', () => {
+    assert.equal(agentModelLabel('Claude Code', 'Sonnet 5.5'), 'Claude Code · Sonnet 5.5');
+    assert.equal(agentModelLabel('Antigravity', undefined), 'Antigravity · default model');
+    assert.equal(agentModelLabel('Antigravity', ''), 'Antigravity · default model');
+  });
+});
+
+describe('sessionTooltip', () => {
+  test('local session with tokens and the new-session context estimate', () => {
+    assert.equal(
+      sessionTooltip({ title: 'Plan', lastActive: 'yesterday 9:00', state: 'local', tokens: 2100, contextTokens: 4000 }),
+      'Plan\nLast active yesterday 9:00\nAbout 2.1k tokens of saved history (+4.0k context a new session would start with)',
+    );
+  });
+
+  test('no context estimate → no "+context"', () => {
+    const text = sessionTooltip({ title: 'Plan', lastActive: 'x', state: 'local', tokens: 500, contextTokens: 0 });
+    assert.equal(text, 'Plan\nLast active x\nAbout 500 tokens of saved history');
+  });
+
+  test('remote and new sessions say so and show no token count', () => {
+    assert.equal(sessionTooltip({ title: 'T', lastActive: 'x', state: 'remote' }), "T\nLast active x\nRemote: this session's history isn't on this machine");
+    assert.equal(sessionTooltip({ title: 'T', lastActive: 'x', state: 'new' }), 'T\nLast active x\nNew: no messages yet');
+  });
+});
+
+describe('preserveUserFields', () => {
+  const base = { id: 's1', title: 'T', createdAt: 'c', updatedAt: 'u2', claudeSessionId: 'cs' };
+
+  test('carries drag order, pin and labels from the record on disk', () => {
+    const merged = preserveUserFields(base, { ...base, updatedAt: 'u1', sortOrder: 3, pinned: true, userLabel: 'Scott', assistantLabel: 'Boju' });
+    assert.deepEqual(merged, { ...base, sortOrder: 3, pinned: true, userLabel: 'Scott', assistantLabel: 'Boju' });
+  });
+
+  test('fields already set on the new record win; nothing else is copied', () => {
+    const merged = preserveUserFields({ ...base, sortOrder: 0 }, { ...base, title: 'Old', cwd: '/x', sortOrder: 9 });
+    assert.deepEqual(merged, { ...base, sortOrder: 0 });
+  });
+
+  test('no record on disk → the new record unchanged', () => {
+    assert.equal(preserveUserFields(base, undefined), base);
+  });
+});
+
+describe('loadSessionFile', () => {
+  test('reads one session by file ID; missing or malformed → undefined', () => {
+    const dir = join(tmpDir, 'load-session-file');
+    saveSession(tmpDir, { id: 'one', title: 'One', createdAt: 'c', updatedAt: 'u', claudeSessionId: '', pinned: true }, dir);
+    assert.equal(loadSessionFile(dir, 'one')?.pinned, true);
+    assert.equal(loadSessionFile(dir, 'two'), undefined);
+    writeFileSync(join(dir, 'bad.json'), '{ nope');
+    assert.equal(loadSessionFile(dir, 'bad'), undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat tabs (#399)
+// ---------------------------------------------------------------------------
+
+describe('pickTargetPanel', () => {
+  test('the panel used most recently', () => {
+    assert.equal(pickTargetPanel([
+      { panel: 'a', lastActive: 100 },
+      { panel: 'b', lastActive: 300 },
+      { panel: 'c', lastActive: 200 },
+    ]), 'b');
+  });
+
+  test('panels never used count as oldest; ties go to the first listed', () => {
+    assert.equal(pickTargetPanel([{ panel: 'a', lastActive: 0 }, { panel: 'b', lastActive: 0 }]), 'a');
+    assert.equal(pickTargetPanel([{ panel: 'a', lastActive: 0 }, { panel: 'b', lastActive: 5 }]), 'b');
+    assert.equal(pickTargetPanel([{ panel: 'a', lastActive: 5 }, { panel: 'b', lastActive: 5 }]), 'a');
+  });
+
+  test('no panels → undefined', () => {
+    assert.equal(pickTargetPanel([]), undefined);
+  });
+});
+
+describe('panelForSession', () => {
+  const panels = [
+    { panel: 'a', lastActive: 0, sessionFileId: 's1' },
+    { panel: 'b', lastActive: 0, sessionFileId: 's2' },
+    { panel: 'c', lastActive: 0 },
+  ];
+
+  test('finds the panel showing the session', () => {
+    assert.equal(panelForSession(panels, 's2'), 'b');
+  });
+
+  test('ignores the excluded panel and panels without a session', () => {
+    assert.equal(panelForSession(panels, 's1', 'a'), undefined);
+    assert.equal(panelForSession(panels, 'nope'), undefined);
+  });
+});
+
+describe('planOpenSession', () => {
+  test('a session already open is revealed where it is, even with a free panel or a forced new tab', () => {
+    assert.deepEqual(planOpenSession({ openIn: 'x', preferred: 'y', preferredReusable: true }), { kind: 'reveal', panel: 'x' });
+    assert.deepEqual(planOpenSession({ openIn: 'x', preferred: 'y', preferredReusable: true, forceNewTab: true }), { kind: 'reveal', panel: 'x' });
+  });
+
+  test('loads into a free preferred panel', () => {
+    assert.deepEqual(planOpenSession({ preferred: 'y', preferredReusable: true }), { kind: 'load', panel: 'y' });
+  });
+
+  test('a busy or used preferred panel keeps its session: new tab', () => {
+    assert.deepEqual(planOpenSession({ preferred: 'y', preferredReusable: false }), { kind: 'new-tab' });
+  });
+
+  test('forced new tab, or no panel at all → new tab', () => {
+    assert.deepEqual(planOpenSession({ preferred: 'y', preferredReusable: true, forceNewTab: true }), { kind: 'new-tab' });
+    assert.deepEqual(planOpenSession({ preferredReusable: false }), { kind: 'new-tab' });
+  });
+});
+
+describe('planNewSession', () => {
+  test('a running reply keeps running: new tab', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: true, pristine: false }), { kind: 'new-tab' });
+  });
+
+  test('no panel, or a forced new tab → new tab', () => {
+    assert.deepEqual(planNewSession({ busy: false, pristine: false }), { kind: 'new-tab' });
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: true, forceNewTab: true }), { kind: 'new-tab' });
+  });
+
+  test('an untouched new session is reused as it is', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: true }), { kind: 'reuse', panel: 't' });
+  });
+
+  test('custom settings always start a fresh session, even in an untouched panel', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: true, custom: true }), { kind: 'start', panel: 't' });
+  });
+
+  test('a panel with a conversation starts a new session in place', () => {
+    assert.deepEqual(planNewSession({ target: 't', busy: false, pristine: false }), { kind: 'start', panel: 't' });
+  });
+});
+
+describe('parseChatPanelState', () => {
+  test('keeps a session ID and the blank flag', () => {
+    assert.deepEqual(parseChatPanelState({ sessionFileId: 'abc', blank: true }), { sessionFileId: 'abc', blank: true });
+  });
+
+  test('ignores wrong types, empty IDs and unknown keys', () => {
+    assert.deepEqual(parseChatPanelState({ sessionFileId: 5, blank: 'yes', other: 1 }), {});
+    assert.deepEqual(parseChatPanelState({ sessionFileId: '' }), {});
+  });
+
+  test('missing or non-object state → empty', () => {
+    assert.deepEqual(parseChatPanelState(undefined), {});
+    assert.deepEqual(parseChatPanelState(null), {});
+    assert.deepEqual(parseChatPanelState('x'), {});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live session status (#399)
+// ---------------------------------------------------------------------------
+
+describe('nextStatus / displayStatus', () => {
+  const run = (...events: StatusEvent[]) => events.reduce(nextStatus, IDLE_STATUS);
+
+  test('a turn shows as replying', () => {
+    assert.equal(displayStatus(run({ type: 'turn-start' })), 'running');
+  });
+
+  test('a reply seen as it arrives leaves nothing to flag', () => {
+    assert.equal(displayStatus(run({ type: 'turn-start' }, { type: 'turn-end', visible: true })), 'idle');
+  });
+
+  test('a reply that arrives out of sight is finished until viewed', () => {
+    const s = run({ type: 'turn-start' }, { type: 'turn-end', visible: false });
+    assert.equal(displayStatus(s), 'finished');
+    assert.equal(displayStatus(nextStatus(s, { type: 'viewed' })), 'idle');
+  });
+
+  test('an error out of sight stays until viewed; a seen error clears', () => {
+    const s = run({ type: 'turn-start' }, { type: 'turn-end', visible: false, error: true });
+    assert.equal(displayStatus(s), 'error');
+    assert.equal(displayStatus(nextStatus(s, { type: 'viewed' })), 'idle');
+    assert.equal(displayStatus(run({ type: 'turn-start' }, { type: 'turn-end', visible: true, error: true })), 'idle');
+  });
+
+  test('viewing a running session changes nothing', () => {
+    assert.equal(displayStatus(run({ type: 'turn-start' }, { type: 'viewed' })), 'running');
+  });
+
+  test('a dialog waiting for the user wins over everything until it closes', () => {
+    const s = run({ type: 'turn-start' }, { type: 'wait-start' });
+    assert.equal(displayStatus(s), 'waiting');
+    assert.equal(displayStatus(nextStatus(s, { type: 'wait-end' })), 'running');
+  });
+
+  test('a permission request after the turn ends: waiting, then idle once answered', () => {
+    const s = run({ type: 'turn-start' }, { type: 'wait-start' }, { type: 'turn-end', visible: false });
+    assert.equal(displayStatus(s), 'waiting');
+    assert.equal(displayStatus(nextStatus(s, { type: 'wait-end' })), 'finished');
+  });
+
+  test('nested dialogs count: waiting until the last one closes; never below zero', () => {
+    const s = run({ type: 'wait-start' }, { type: 'wait-start' }, { type: 'wait-end' });
+    assert.equal(displayStatus(s), 'waiting');
+    const done = run({ type: 'wait-end' }, { type: 'wait-end' });
+    assert.equal(done.waiting, 0);
+  });
+
+  test('a denial card waits until answered, dismissed, or the next turn starts', () => {
+    const shown = run({ type: 'turn-start' }, { type: 'denial-shown' }, { type: 'turn-end', visible: true });
+    assert.equal(displayStatus(shown), 'waiting');
+    assert.equal(displayStatus(nextStatus(shown, { type: 'denial-resolved' })), 'idle');
+    assert.equal(displayStatus(nextStatus(shown, { type: 'turn-start' })), 'running');
+  });
+
+  test('switching session clears an unseen reply and a denial card', () => {
+    const s = run({ type: 'turn-start' }, { type: 'denial-shown' }, { type: 'turn-end', visible: false }, { type: 'reset' });
+    assert.equal(displayStatus(s), 'idle');
+  });
+});
+
+describe('statusNotice', () => {
+  test('a session out of sight that needs the user, finishes or fails', () => {
+    assert.equal(statusNotice('running', 'waiting', false, 'Vault cleanup'), 'Vault cleanup is waiting for you');
+    assert.equal(statusNotice('running', 'finished', false, 'Draft'), 'Draft finished');
+    assert.equal(statusNotice('running', 'error', false, 'Draft'), 'Draft stopped with an error');
+  });
+
+  test('nothing for a visible session, an unchanged status, or replying / idle', () => {
+    assert.equal(statusNotice('running', 'finished', true, 'Draft'), null);
+    assert.equal(statusNotice('waiting', 'waiting', false, 'Draft'), null);
+    assert.equal(statusNotice('idle', 'running', false, 'Draft'), null);
+    assert.equal(statusNotice('finished', 'idle', false, 'Draft'), null);
+  });
+});
+
+describe('STATUS_LABELS', () => {
+  test('every visible status has a label; idle has none', () => {
+    assert.equal(STATUS_LABELS.idle, '');
+    for (const s of ['running', 'waiting', 'finished', 'error'] as const) assert.ok(STATUS_LABELS[s].length > 0, s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat only / Read only gates on BojuBot's own channels (#406)
+// ---------------------------------------------------------------------------
+
+const ALL_MODES = ['restricted', 'readonly', 'standard', 'full'] as const;
+
+describe('sharesVaultInfo', () => {
+  test('Chat only shares no vault information', () => {
+    assert.equal(sharesVaultInfo('restricted'), false);
+  });
+  test('every other mode does', () => {
+    assert.equal(sharesVaultInfo('readonly'), true);
+    assert.equal(sharesVaultInfo('standard'), true);
+    assert.equal(sharesVaultInfo('full'), true);
+  });
+});
+
+describe('canRunCommands', () => {
+  test('only modes that can write run Obsidian commands', () => {
+    assert.equal(canRunCommands('restricted'), false);
+    assert.equal(canRunCommands('readonly'), false);
+    assert.equal(canRunCommands('standard'), true);
+    assert.equal(canRunCommands('full'), true);
+  });
+});
+
+describe('queryAllowed / refuseQuery', () => {
+  const vaultTypes = ['file-list', 'backlinks', 'outlinks', 'tags'];
+
+  test('Chat only refuses every vault query type', () => {
+    for (const t of vaultTypes) assert.equal(queryAllowed(t, 'restricted'), false, t);
+  });
+
+  test('help is allowed in every mode (bundled reference text, no vault data)', () => {
+    for (const m of ALL_MODES) assert.equal(queryAllowed('help', m), true, m);
+  });
+
+  test('an unknown query type is refused in Chat only too', () => {
+    assert.equal(queryAllowed('something-new', 'restricted'), false);
+  });
+
+  test('other modes allow vault queries', () => {
+    for (const m of ['readonly', 'standard', 'full'] as const) {
+      for (const t of vaultTypes) assert.equal(queryAllowed(t, m), true, `${m} ${t}`);
+    }
+  });
+
+  test('refuseQuery returns an error result, with no vault data, for show and inject queries in Chat only', () => {
+    for (const mode of ['show', 'inject'] as const) {
+      const q = { query: 'file-list' as const, mode };
+      assert.deepEqual(refuseQuery(q, 'restricted'), { query: q, result: null, error: CHAT_ONLY_QUERY_REFUSAL });
+    }
+  });
+
+  test('the refusal tells the agent vault queries are not available in Chat only', () => {
+    assert.match(CHAT_ONLY_QUERY_REFUSAL, /^Vault queries aren't available in Chat only/);
+  });
+
+  test('refuseQuery returns null when the query may be resolved', () => {
+    assert.equal(refuseQuery({ query: 'backlinks', path: 'a.md', mode: 'inject' }, 'readonly'), null);
+    assert.equal(refuseQuery({ query: 'help', topic: 'ui-bridge', mode: 'inject' }, 'restricted'), null);
+  });
+});
+
+describe('blockedAttachments', () => {
+  const all = [
+    { type: 'image', text: 'E:/vault/.obsidian/plugins/bojubot/tmp/a.png' },
+    { type: 'pdf', text: 'C:/Users/me/doc.pdf' },
+    { type: 'file', text: 'report.docx' },
+    { type: 'text', text: 'pasted text' },
+    { type: 'url', text: 'https://example.com' },
+    { text: 'note or selection content' },
+  ];
+  test('Chat only blocks every attachment except links: files of any type, notes, selections', () => {
+    assert.deepEqual(blockedAttachments(all, 'restricted').map(a => a.type ?? 'untyped'), ['image', 'pdf', 'file', 'text', 'untyped']);
+  });
+  test('Chat only still sends links', () => {
+    assert.deepEqual(blockedAttachments([{ type: 'url', text: 'https://example.com' }], 'restricted'), []);
+  });
+  test('other modes block nothing', () => {
+    for (const mode of ['standard', 'readonly', 'full'] as const) assert.deepEqual(blockedAttachments(all, mode), [], mode);
+  });
+  test('no attachments: nothing blocked', () => {
+    assert.deepEqual(blockedAttachments([], 'restricted'), []);
+  });
+});
+
+describe('bridgeActionAllowed', () => {
+  test('run-command is refused in Chat only and Read only', () => {
+    assert.equal(bridgeActionAllowed('run-command', 'restricted'), false);
+    assert.equal(bridgeActionAllowed('run-command', 'readonly'), false);
+  });
+
+  test('run-command is allowed in Standard and Full', () => {
+    assert.equal(bridgeActionAllowed('run-command', 'standard'), true);
+    assert.equal(bridgeActionAllowed('run-command', 'full'), true);
+  });
+
+  test('file operations need write access', () => {
+    for (const a of ['rename-file', 'move-file', 'delete-file']) {
+      assert.equal(bridgeActionAllowed(a, 'restricted'), false, a);
+      assert.equal(bridgeActionAllowed(a, 'readonly'), false, a);
+      assert.equal(bridgeActionAllowed(a, 'standard'), true, a);
+    }
+  });
+
+  test('an unknown mode refuses run-command', () => {
+    assert.equal(bridgeActionAllowed('run-command', undefined), false);
+  });
+
+  test('UI-only actions run in every mode', () => {
+    const uiOnly = ['open-file', 'open-file-split', 'open-file-new-tab', 'navigate-heading', 'show-notice', 'focus-search', 'open-settings', 'set-label', 'thanked', 'request-permission'];
+    for (const m of ALL_MODES) {
+      for (const a of uiOnly) assert.equal(bridgeActionAllowed(a, m), true, `${m} ${a}`);
+    }
+  });
+});
+
+describe('needsFreshSessionForChatOnly', () => {
+  test('a conversation saved in another mode starts over', () => {
+    for (const m of ['readonly', 'standard', 'full'] as const) {
+      assert.equal(needsFreshSessionForChatOnly('restricted', true, m), true, m);
+    }
+  });
+
+  test('a session with no messages just switches', () => {
+    for (const m of ALL_MODES) assert.equal(needsFreshSessionForChatOnly('restricted', false, m), false, m);
+  });
+
+  test('a conversation already in Chat only continues', () => {
+    assert.equal(needsFreshSessionForChatOnly('restricted', true, 'restricted'), false);
+  });
+
+  test('switching to any other mode never starts over', () => {
+    for (const m of ['readonly', 'standard', 'full'] as const) {
+      assert.equal(needsFreshSessionForChatOnly(m, true, 'restricted'), false, m);
+      assert.equal(needsFreshSessionForChatOnly(m, true, 'standard'), false, m);
+    }
+  });
+
+  test('the notices point to the Sessions panel', () => {
+    assert.equal(modeChangeNotice('restricted', 'Claude Code'), 'Chat only needs a new Claude Code session. Your previous session is in the Sessions panel.');
+    assert.match(modeChangeNotice('restricted', 'Claude Code', true), /^Chat only needs a new Claude Code session\. It starts with your next message/);
+  });
+});
+
+describe('Chat only and saved session modes (#406)', () => {
+  const stored = (id: string, permissionMode?: 'standard' | 'restricted') => ({
+    id, title: 'S', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    claudeSessionId: `conv-${id}`, ...(permissionMode && { permissionMode }),
+  });
+
+  test('a session saved in Standard reopens in Standard even when the default is Chat only', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir, { getPermissionMode: () => 'restricted' });
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(stored('s1', 'standard'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'standard');
+    // So picking Chat only for it starts over
+    assert.equal(needsFreshSessionForChatOnly('restricted', !!coordinator.sessionId, coordinator.getEffectivePermissionMode()), true);
+    assert.equal(coordinator.modeNeedsNewSession('restricted'), true);
+  }));
+
+  test('a session saved in Chat only reopens in Chat only and continues', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(stored('s2', 'restricted'));
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    assert.equal(needsFreshSessionForChatOnly('restricted', !!coordinator.sessionId, coordinator.getEffectivePermissionMode()), false);
+    assert.equal(coordinator.modeNeedsNewSession('restricted'), false);
+    assert.equal(coordinator.modeNeedsNewSession(), false);
+  }));
+
+  test('the new Chat only session saves Chat only as its mode', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir, { getPermissionMode: () => 'restricted' });
+    const coordinator = new SessionCoordinator(host);
+    coordinator.startNewSession();
+    assert.equal(coordinator.setSessionPermissionMode('restricted'), true);
+    const [saved] = storedSessions(dir);
+    assert.equal(saved.permissionMode, 'restricted');
+  }));
+
+  test('a new session started for a mode change saves that mode, whatever the default', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir, { getPermissionMode: () => 'full' });
+    const coordinator = new SessionCoordinator(host);
+    saveSession(dir, stored('old', 'standard'), dir);
+    await coordinator.loadSession(stored('old', 'standard'));
+    // As ClaudeView.startSessionForModeChange() does
+    coordinator.startNewSession({ backend: coordinator.backendId, permissionMode: 'restricted' });
+    assert.equal(coordinator.getEffectivePermissionMode(), 'restricted');
+    assert.equal(storedSessions(dir).find(x => x.id === coordinator.sessionFileId)?.permissionMode, 'restricted');
+    assert.equal(storedSessions(dir).find(x => x.id === 'old')?.permissionMode, 'standard', 'the old session keeps its mode');
+  }));
+});
+
+describe('SessionCoordinator.modeNeedsNewSession on Claude Code (#406)', () => {
+  test('into Chat only with a conversation needs a new session; other moves don\'t', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code', permissionMode: 'standard' });
+    assert.equal(c.modeNeedsNewSession('restricted'), false, 'no conversation yet: just switches');
+    c.send('hello', 'hello');
+    claude.streams[0].onDone('sess-1', true);
+    assert.equal(c.modeNeedsNewSession('restricted'), true);
+    for (const m of ['readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), false, m);
+    assert.equal(c.modeNeedsNewSession(), false, 'its own mode never needs a new session');
+  }));
+
+  test('leaving Chat only on Claude Code continues the conversation (the denial card can still offer Standard)', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code', permissionMode: 'restricted' });
+    c.send('hello', 'hello');
+    claude.streams[0].onDone('sess-1', true);
+    for (const m of ['restricted', 'readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), false, m);
+  }));
+});
+
+describe('applyModeTags', () => {
+  const t = [
+    'always',
+    '{{IF_COMMANDS}}cmd',
+    '{{IF_NO_COMMANDS}}no-cmd',
+    '{{IF_VAULT}}vault',
+    '{{IF_NO_VAULT}}no-vault',
+    '',
+  ].join('\n');
+
+  test('Chat only keeps the no-commands and no-vault lines', () => {
+    assert.equal(applyModeTags(t, 'restricted'), 'always\nno-cmd\nno-vault\n');
+  });
+  test('Read only keeps vault lines but not commands', () => {
+    assert.equal(applyModeTags(t, 'readonly'), 'always\nno-cmd\nvault\n');
+  });
+  test('Standard and Full keep commands and vault lines', () => {
+    assert.equal(applyModeTags(t, 'standard'), 'always\ncmd\nvault\n');
+    assert.equal(applyModeTags(t, 'full'), 'always\ncmd\nvault\n');
+  });
+  test('dropped lines leave at most one blank line', () => {
+    assert.equal(applyModeTags('a\n\n{{IF_VAULT}}x\n\nb', 'restricted'), 'a\n\nb');
+  });
+  test('a template without a trailing newline gets none', () => {
+    assert.equal(applyModeTags('a\n{{IF_VAULT}}x', 'restricted'), 'a');
+  });
+});
+
+describe('renderOrientation per permission mode (#406)', () => {
+  const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
+  const vars = {
+    identityName: 'BojuBot',
+    supportLine: 'https://example.com',
+    cwdDisplay: 'vault root',
+    customCwd: false,
+    backend: CLAUDE_CODE_ORIENTATION,
+  };
+  const render = (permissionMode: 'restricted' | 'readonly' | 'standard' | 'full') =>
+    renderOrientation(template, { ...vars, permissionMode });
+
+  test('no mode leaves a tag behind', () => {
+    for (const m of ALL_MODES) assert.ok(!render(m).includes('{{'), m);
+  });
+
+  test('Chat only: no vault query instructions, no canvas, no run-command', () => {
+    const out = render('restricted');
+    assert.ok(!out.includes('"query":"<type>"'));
+    assert.ok(!out.includes('file-list('));
+    assert.ok(!out.includes('## Canvas'));
+    assert.ok(!out.includes('run-command(commandId)'));
+    assert.ok(!out.includes('obsidian-commands.md'));
+    assert.ok(out.includes("Not available in Chat only: this session has no vault access. Don't emit vault queries; they're refused."));
+    assert.ok(out.includes('run-command is unavailable in this permission mode'));
+  });
+
+  test('Read only: vault queries yes, run-command no', () => {
+    const out = render('readonly');
+    assert.ok(out.includes('file-list('));
+    assert.ok(out.includes('## Canvas'));
+    assert.ok(!out.includes('run-command(commandId)'));
+    assert.ok(!out.includes('obsidian-commands.md'));
+  });
+
+  test('Standard and Full keep every section', () => {
+    for (const m of ['standard', 'full'] as const) {
+      const out = render(m);
+      assert.ok(out.includes('focus-search · run-command(commandId)'), m);
+      assert.ok(out.includes('Read `.obsidian/plugins/bojubot/obsidian-commands.md` before run-command'), m);
+      assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth])'), m);
+      assert.ok(out.includes('## Canvas'), m);
+      assert.ok(!out.includes('Not available in Chat only'), m);
+      assert.ok(!out.includes('run-command is unavailable'), m);
     }
   });
 });

@@ -1,6 +1,6 @@
 # Chat Panel
 
-The chat panel opens as a sidebar. Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. 
+The chat panel opens as a sidebar. You can open several, as tabs or splits, each with its own session: see [Several sessions at once](./sessions#several-sessions-at-once). Type your message and press **Enter** to send. Use **Shift+Enter** to insert a newline without sending. 
 
 If you would prefer to exclusively use the **Up Arrow** icon to send messages rather than the **Enter** key, the "Send on Enter" behavior can be toggled in **Settings → BojuBot → Send On Enter**.
 
@@ -12,7 +12,7 @@ In **Standard** permissions mode, Claude has access to your full vault — it ca
 
 ## Welcome Screen
 
-Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume. A session you haven't typed in yet shows the welcome screen again whenever you come back to it. The header shows which agent and model the session uses (BojuBot's version is in the [About dialog](#about-dialog)). Click the mascot to open the About dialog.
+Starting a new session (or opening the panel with no active conversation) shows a welcome screen: BojuBot's mascot, a greeting, a tip of the day, and — once you have past conversations — a **Recent sessions** list of up to three, click any to resume (**More…** opens the [Sessions panel](./sessions#sessions-panel) with all of them). A session you haven't typed in yet shows the welcome screen again whenever you come back to it. The header shows which agent and model the session uses (BojuBot's version is in the [About dialog](#about-dialog)). Click the mascot to open the About dialog.
 
 ![](images/new_session_window.png)
 
@@ -169,6 +169,8 @@ Claude can execute Obsidian commands directly. Three are pre-approved by default
 
 You can manage the full list in **Settings → BojuBot → UI Bridge & Commands**.
 
+Commands only run in **Standard** and **Full access**. In Chat only and Read only, BojuBot blocks them (with a notice), because commands can create or change notes.
+
 ### How permission works
 
 | Situation                                     | What happens                                              |
@@ -193,7 +195,7 @@ Claude can open a note directly in your workspace as part of its response — fo
 | Open in a new tab     | Stacked tab — doesn't replace or split anything         |
 | Jump to a heading     | Opens the file and scrolls to a specific heading        |
 
-All of these are immediate — no confirmation needed — and Claude posts a short notice each time, so you always know what changed.
+All of these are immediate — no confirmation needed — and Claude posts a short notice each time, so you always know what changed. They work in every permission mode, including Chat only: they only change what's on your screen and send nothing back to Claude.
 
 ---
 

@@ -15,11 +15,15 @@ export interface StoredSession {
   /** Agent CLI the session is bound to. Absent = Claude Code (every session from before backends existed). */
   backend?: BackendId;
   sortOrder?: number;
+  /** Pinned to the top of the Sessions panel. Absent = not pinned. */
+  pinned?: boolean;
   userLabel?: string;
   assistantLabel?: string;
   cwd?: string;
   suppressVaultContext?: boolean;
-  /** Per-session permission mode override, set via Custom Session. Undefined = use the global default. */
+  /** The session's own permission mode. Every new session saves the mode it starts
+   *  in; sessions from before this field existed (undefined) open as Standard, and
+   *  that is saved when they're opened. Never taken from the global default. */
   permissionMode?: PermissionMode;
   /** Per-session model override, set via Custom Session. Undefined = use the global default. */
   model?: string;
@@ -28,6 +32,9 @@ export interface StoredSession {
   /** Skips all BojuBot context injection (orientation, vault tree, context file, UI Bridge)
    *  for a bare Claude Code experience — the per-session equivalent of global Minimal mode. */
   rawSession?: boolean;
+  /** The CLI agent the conversation started as (Antigravity's bojubot or
+   *  bojubot-chat, #403). Absent = none. */
+  agent?: string;
 }
 
 export function sessionBackend(session: Pick<StoredSession, 'backend'>): BackendId {
@@ -143,6 +150,29 @@ export function saveSession(vaultRoot: string, session: StoredSession, sessionsD
     // Clear the marker so subsequent saves don't look for the old file again
     delete (session as StoredSession & { _legacyDir?: string })._legacyDir;
   }
+}
+
+/** One session's record by its file ID, or undefined when it's missing or unreadable. */
+export function loadSessionFile(sessionsDir: string, sessionFileId: string): StoredSession | undefined {
+  const path = join(sessionsDir, `${sessionFileId}.json`);
+  if (!existsSync(path)) return undefined;
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as StoredSession;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Merge `patch` into a session file in `sessionsDir`, keeping every other field
+ * (labels, sort order, …). Returns false, writing nothing, when the file isn't
+ * there or can't be read.
+ */
+export function updateStoredSession(sessionsDir: string, id: string, patch: Partial<StoredSession>): boolean {
+  const current = loadSessionFile(sessionsDir, id);
+  if (!current) return false;
+  writeFileSync(join(sessionsDir, `${id}.json`), JSON.stringify({ ...current, ...patch, id }, null, 2));
+  return true;
 }
 
 export function loadAllSessions(vaultRoot: string, sessionsDir: string, configDir: string): StoredSession[] {
