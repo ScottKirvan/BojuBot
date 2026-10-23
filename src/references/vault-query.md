@@ -6,6 +6,8 @@ mode:
 - show: result displayed to user as a collapsible card
 - inject: result fed silently back to you so you can continue reasoning without a visible break
 
+Not available in Chat only: every query except help is refused there (the result is an error saying so).
+
 Query types:
 - backlinks(path): files that link to the given path
 - outlinks(path): files that the given path links to

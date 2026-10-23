@@ -10,7 +10,7 @@ Actions:
 - show-notice(message, [duration_ms=4000]): toast notification
 - focus-search: open quick switcher — confirm first
 - open-settings([tab]): open settings, optionally to tab e.g. "bojubot" — confirm first
-- run-command(commandId): execute command palette command — confirm first; always read obsidian-commands.md first
+- run-command(commandId): execute command palette command — confirm first; always read obsidian-commands.md first. Requires Standard or Full permission mode (commands can create or change notes) — refused with a notice to the user otherwise.
 - request-permission(tool, reason): when a blocked tool is clearly the right approach; emit at response end, user decides next turn; use when manual repetition across many files isn't practical
 - set-label(user, assistant): update names when user states/corrects their name, asks to stop using one, or persona changes; defaults "User" and "BojuBot"
 - thanked(): only if your orientation has a "Thanks" section, emit when the user thanks you (in addition to replying normally); BojuBot may show a short note from its author
