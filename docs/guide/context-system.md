@@ -24,7 +24,7 @@ Configure depth in **Settings → BojuBot → Vault tree depth**:
 | 3 levels        | Root + two sublevels                                 |
 | Unlimited       | Full tree at any depth                               |
 
-With **Off**, Claude uses the vault query protocol to list files when it needs them, so nothing is paid upfront. Enable a depth if you find Claude frequently needs to browse the vault and you'd prefer it to have that awareness from the start of the session.
+With **Off**, Claude uses the vault query protocol to list files when it needs them, so nothing is paid upfront (except in Chat only, where vault queries are refused). Enable a depth if you find Claude frequently needs to browse the vault and you'd prefer it to have that awareness from the start of the session.
 
 ---
 
@@ -100,6 +100,8 @@ The context file path is configurable in **Settings → BojuBot**.
 The path of the currently open note is prepended to every message — e.g. `[Active note: 06_Spaces/Projects/Alpha.md]`. Claude always knows which note you're looking at.
 
 **Split-pane awareness:** When you have multiple notes open side by side, BojuBot injects all visible file paths instead — e.g. `[Open in split view: Notes/A.md | Projects/B.md]`. Toggle in **Settings → Inject split-pane files as context**.
+
+In **Chat only** none of this is sent: Claude isn't told which notes you have open. See [Permissions](./permissions#chat-only).
 
 ---
 

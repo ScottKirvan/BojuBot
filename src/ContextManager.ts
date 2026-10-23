@@ -7,6 +7,7 @@ import { scanPinnedFiles, scanFileInstructions } from './FrontmatterGuard';
 import type { BackendOrientation, PermissionMode } from './backends/types';
 import orientationTemplate from './orientation.md';
 import { renderOrientation } from './utils/orientation';
+import { canRunCommands } from './utils/modeGates';
 import { activeBrand, resolveIdentityName, DEFAULT_BRAND } from './brand';
 
 export class ContextManager {
@@ -70,7 +71,8 @@ export class ContextManager {
       backend: this.orientation,
     });
 
-    if (this.commandAllowlist.length > 0) {
+    // Chat only and Read only refuse run-command, so don't list commands or invite it (#406)
+    if (this.commandAllowlist.length > 0 && canRunCommands(this.permissionMode)) {
       const rows = this.commandAllowlist
         .map(id => {
           const name = (this.app as unknown as AppInternal).commands.commands[id]?.name ?? id;
