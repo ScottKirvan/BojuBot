@@ -69,3 +69,19 @@ export function needsFreshSessionForChatOnly(
 ): boolean {
   return newMode === 'restricted' && hasConversation && sessionMode !== 'restricted';
 }
+
+/**
+ * Attachments a mode can't send. Attaching anything from disk is a read —
+ * files of any type, pasted screenshots (saved into the vault), @-mentioned
+ * notes, Send selection, skill note fields, Custom Session attachments — and
+ * Chat only reads nothing. Images and PDFs would also send a path that reveals
+ * where the vault is. Only URLs are allowed; text the user types or pastes goes
+ * in the message itself, not here.
+ */
+export function blockedAttachments<T extends { type?: string }>(attachments: readonly T[], mode: PermissionMode): T[] {
+  if (sharesVaultInfo(mode)) return [];
+  return attachments.filter(a => a.type !== 'url');
+}
+
+export const CHAT_ONLY_ATTACHMENT_NOTICE =
+  "Chat only can't send files, notes or selections — only links. Remove them, or switch to another mode.";

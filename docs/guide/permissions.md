@@ -6,7 +6,7 @@ BojuBot runs an agent CLI (Claude Code, or [Antigravity](./agents)) as a subproc
 
 | Mode                         | Icon      | What Claude can do                                                                        |
 | ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
-| **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access, and BojuBot shares no vault information. Works with attached context and @-mentions |
+| **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access, and BojuBot shares no vault information. Only links can be attached |
 | **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied |
 | **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes, shell commands, or Obsidian commands           |
 | **Full access**              | 🔴 warning | Everything, including shell commands (Bash, git, etc.)                                    |
@@ -42,7 +42,7 @@ In Standard mode Claude Code accepts file edits automatically and also auto-appr
 
 ### Chat only
 
-Chat only is designed for conversations where you want Claude to reason and suggest, but not touch your vault. Claude can see any context you explicitly hand it — @-mentioned notes, file attachments, clipboard pastes — and can fetch web URLs and search the web. It cannot browse, read, or modify vault files on its own.
+Chat only is designed for conversations where you want Claude to reason and suggest, but not touch your vault or your files. Claude sees what you type or paste into the message, and can fetch web URLs and search the web. It cannot browse, read, or modify files.
 
 None of the automatic session-start context is injected in this mode — the vault folder tree, your context file (`_claude-context.md`), pinned notes, and per-file instructions are all skipped, since any of them could otherwise leak details established in other, non-restricted sessions. Claude is also spawned in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
 
@@ -51,6 +51,7 @@ BojuBot itself also keeps vault information away from Claude in Chat only:
 - **No vault queries.** Claude can't ask BojuBot for your file list, backlinks, outgoing links or tags. If it tries, BojuBot refuses and tells it vault queries aren't available in Chat only. (Claude can still ask for BojuBot's own reference pages, which contain nothing from your vault.)
 - **No open-note paths.** BojuBot doesn't tell Claude which note you have open, or which notes are open in a split or in stacked tabs.
 - **No Obsidian commands.** Claude can't run Obsidian commands, and isn't given your command allowlist.
+- **No files, notes or selections.** Attaching something counts as reading it, so Chat only sends links only. Files of any type, pasted screenshots, @-mentioned notes, **Send selection as context**, skill fields that pull in a note and Custom Session attachments are all held back: BojuBot shows a notice and doesn't send the message until you remove them or switch mode. Text you type or paste into the message itself is sent as usual.
 
 What Claude *can* still do through BojuBot in Chat only: open a note you name, jump to a heading, show a notice, or open Settings or the quick switcher. These only change what's on your screen; nothing is sent back to Claude.
 

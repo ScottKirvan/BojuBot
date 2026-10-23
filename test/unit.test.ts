@@ -23,7 +23,7 @@ import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, C
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
-import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, CHAT_ONLY_QUERY_REFUSAL } from '../src/utils/modeGates';
+import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
@@ -5067,6 +5067,29 @@ describe('queryAllowed / refuseQuery', () => {
   test('refuseQuery returns null when the query may be resolved', () => {
     assert.equal(refuseQuery({ query: 'backlinks', path: 'a.md', mode: 'inject' }, 'readonly'), null);
     assert.equal(refuseQuery({ query: 'help', topic: 'ui-bridge', mode: 'inject' }, 'restricted'), null);
+  });
+});
+
+describe('blockedAttachments', () => {
+  const all = [
+    { type: 'image', text: 'E:/vault/.obsidian/plugins/bojubot/tmp/a.png' },
+    { type: 'pdf', text: 'C:/Users/me/doc.pdf' },
+    { type: 'file', text: 'report.docx' },
+    { type: 'text', text: 'pasted text' },
+    { type: 'url', text: 'https://example.com' },
+    { text: 'note or selection content' },
+  ];
+  test('Chat only blocks every attachment except links: files of any type, notes, selections', () => {
+    assert.deepEqual(blockedAttachments(all, 'restricted').map(a => a.type ?? 'untyped'), ['image', 'pdf', 'file', 'text', 'untyped']);
+  });
+  test('Chat only still sends links', () => {
+    assert.deepEqual(blockedAttachments([{ type: 'url', text: 'https://example.com' }], 'restricted'), []);
+  });
+  test('other modes block nothing', () => {
+    for (const mode of ['standard', 'readonly', 'full'] as const) assert.deepEqual(blockedAttachments(all, mode), [], mode);
+  });
+  test('no attachments: nothing blocked', () => {
+    assert.deepEqual(blockedAttachments([], 'restricted'), []);
   });
 });
 
