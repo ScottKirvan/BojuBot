@@ -2,7 +2,7 @@
 
 **App**: BojuBot  
 **Developer**: Scott Kirvan  
-**Effective date**: 2026-10-25
+**Effective date**: 2026-10-26
 
 ---
 
@@ -30,6 +30,8 @@ The agent sends your requests to its provider. That includes:
 - any notes or files the agent reads or changes while it works, as your permission mode allows
 
 You can turn off the context BojuBot adds with minimal mode, or per session.
+
+**In Chat only, nothing from your vault is sent.** BojuBot adds no vault context and no open-note paths, doesn't answer the agent's vault queries, and only sends links as attachments: files, notes, selections and pasted screenshots are held back. What you type or paste into a message is still sent. See [Permissions](./guide/permissions#chat-only).
 
 How the provider stores and uses that data is set by **their** policy and your account with them. Only use an agent you trust with your notes.
 
@@ -93,5 +95,6 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-10-26 | 3.8.0 | Added what Chat only keeps from the agent: nothing from your vault is sent. |
 | 2026-10-25 | 3.8.0 | Corrected which attached images and PDFs are copied into the plugin folder (and that the copies aren't deleted), and that the open note's path is sent with every message. |
 | 2026-10-17 | 3.8.0 | First published. |
