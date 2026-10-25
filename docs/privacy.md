@@ -39,13 +39,15 @@ Each agent also keeps its own conversation history on your computer: Claude Code
 
 ## What BojuBot stores on your computer
 
-Everything BojuBot saves stays on your computer, in your vault or in Obsidian's config folder (usually `.obsidian`):
+Everything BojuBot saves stays on your computer: in your vault, in Obsidian's config folder (usually `.obsidian`), or, for Antigravity, in Antigravity's agents folder:
 
 - **Session files.** A small JSON file per session with its name, settings and the agent's conversation ID, in `.obsidian/bojubot/sessions/` by default. You can choose another folder in settings.
 - **Transcripts for Antigravity sessions.** Antigravity's own history can't be read back, so BojuBot keeps a copy of each conversation next to the session file (`<id>.transcript.jsonl`).
 - **Settings.** Your BojuBot settings, in `.obsidian/plugins/bojubot/data.json`.
 - **Attached images and PDFs.** Images and PDFs you attach with the attach button, drag in or paste as a screenshot are copied to `.obsidian/plugins/bojubot/tmp/` so the agent can read them. A file copied in your file manager and pasted is read where it is, not copied. BojuBot doesn't delete these copies; remove the folder's contents whenever you like.
 - **The debug log.** Off by default. If you turn it on, BojuBot writes a log file, which can include the start of your messages (and, at verbose detail, the agent's raw output), to `.obsidian/plugins/bojubot/bojubot-debug.log` or the path you choose.
+- **Open chat tabs.** Obsidian's workspace file (`.obsidian/workspace.json`) remembers which session each chat tab shows, so your tabs come back after a restart.
+- **Antigravity agent definitions.** When Antigravity is installed, BojuBot writes two files to `~/.gemini/config/agents/`: `bojubot.md` and `bojubot-chat.md`. They hold BojuBot's rules for the agent (how to write links, which tools to use) and nothing about you or your vault. They're the only files BojuBot writes outside your vault, and BojuBot never changes any other file in that folder.
 - **The command reference.** A list of your Obsidian commands, written to `.obsidian/plugins/bojubot/obsidian-commands.md` so the agent can look up command IDs.
 - **The context file.** A note in your vault (`_claude-context.md` by default) that describes your vault to the agent. With autonomous memory on (the default), the agent updates this note itself as it learns. Turn autonomous memory off if your vault is shared or public.
 - **Exports.** Session transcripts you choose to export are saved as notes where you tell BojuBot to put them.
@@ -95,6 +97,7 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-10-26 | 3.9.0 | Added the Antigravity agent definitions BojuBot writes to `~/.gemini/config/agents/`, and the chat tabs Obsidian's workspace file remembers. |
 | 2026-10-26 | 3.8.0 | Added what Chat only keeps from the agent: nothing from your vault is sent. |
 | 2026-10-25 | 3.8.0 | Corrected which attached images and PDFs are copied into the plugin folder (and that the copies aren't deleted), and that the open note's path is sent with every message. |
 | 2026-10-17 | 3.8.0 | First published. |
