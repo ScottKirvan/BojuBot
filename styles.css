@@ -387,7 +387,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  column-gap: 6px;
+  gap: 0 6px;
   color: var(--text-faint);
   font-size: 0.72em;
 }
@@ -921,15 +921,10 @@
   overflow-x: auto;
 }
 
-/* Obsidian hides pre>code until async syntax highlighting adds .is-loaded;
-   that callback may never fire in a custom panel, so force visibility here.
-   This isn't a specificity fight we can win structurally: Obsidian's own
-   app.css has no CSS rule gating this on .is-loaded at all (confirmed by
-   inspecting the bundled stylesheet) — the hiding comes from the highlighter
-   callback simply never having run, so no selector, however specific, can
-   substitute for forcing the property directly. */
+/* Code blocks always show as blocks (#57: they once rendered as only a copy
+   icon). Plain specificity is enough: Obsidian has no rule that hides them. */
 .bojubot-assistant pre code {
-  display: block !important;
+  display: block;
 }
 
 /* ── Setup / onboarding card ── */
@@ -2119,50 +2114,27 @@
 }
 
 /* ── Permission mode icon (input toolbar) ── */
-/* Hard-coded colors so theme variables can't override them.
-   A wrapper-class specificity bump can't be verified safe here: these same
-   colorClass names (PermissionPickerModal.ts) are reused on rows rendered
-   inside .bojubot-perm-popover, which is appended straight to
-   activeDocument.body (openModePickerPopover) — outside any BojuBot
-   container we could chain onto — and that exact body-attached context is
-   why this codebase already had to fall back to inline styles to win the
-   cascade there (see the comment in openModePickerPopover). Since these
-   colors must read identically across both that context and arbitrary
-   third-party themes, !important stays the reliable guarantee. */
-/* Restricted (planned): blue padlock */
-.bojubot-perm-restricted .svg-icon {
-  color: #60a5fa !important;
-  stroke: #60a5fa !important;
+/* Fixed colors so the four modes read the same in every theme. The same
+   classes are used on popover rows appended to document.body, so the rules
+   can't chain onto a BojuBot container; svg.svg-icon outranks Obsidian's own
+   svg.svg-icon rule without !important. */
+.bojubot-perm-restricted { --bojubot-perm-color: #60a5fa; } /* Chat only: blue padlock */
+.bojubot-perm-readonly { --bojubot-perm-color: #4ade80; }   /* Read only: green eye */
+.bojubot-perm-standard { --bojubot-perm-color: #facc15; }   /* Standard: yellow shield */
+.bojubot-perm-full { --bojubot-perm-color: #ef4444; }       /* Full: red triangle */
+
+.bojubot-perm-restricted svg.svg-icon,
+.bojubot-perm-readonly svg.svg-icon,
+.bojubot-perm-standard svg.svg-icon,
+.bojubot-perm-full svg.svg-icon {
+  color: var(--bojubot-perm-color);
+  stroke: var(--bojubot-perm-color);
 }
 
-/* Read-only: green eye */
-.bojubot-perm-readonly .svg-icon {
-  color: #4ade80 !important;
-  stroke: #4ade80 !important;
-}
-
-/* Standard: yellow shield */
-.bojubot-perm-standard .svg-icon {
-  color: #facc15 !important;
-  stroke: #facc15 !important;
-}
-
-/* Full: red triangle */
-.bojubot-perm-full .svg-icon {
-  color: #ef4444 !important;
-  stroke: #ef4444 !important;
-}
-
-/* Thicker strokes so the icon reads clearly at 14 px — same cross-context
-   reasoning as above (popover rows appended to document.body), and
-   Obsidian's own app.css varies --icon-stroke per container throughout its
-   codebase, so a plain specificity bump has no stable rule to beat. */
-.bojubot-permission-icon .svg-icon path,
-.bojubot-permission-icon .svg-icon polyline,
-.bojubot-permission-icon .svg-icon line,
-.bojubot-permission-icon .svg-icon circle,
-.bojubot-permission-icon .svg-icon rect {
-  stroke-width: 2.5 !important;
+/* Thicker strokes so the toolbar icon reads clearly at 14 px. Obsidian's
+   svg.svg-icon takes its stroke width from --icon-stroke. */
+.bojubot-permission-icon svg.svg-icon {
+  --icon-stroke: 2.5px;
 }
 
 /* ── Permission picker — shared row layout (popover + modal) ── */
