@@ -97,7 +97,7 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 
 | Date | Version | Change |
 |---|---|---|
-| 2026-10-26 | 3.9.0 | Added the Antigravity agent definitions BojuBot writes to `~/.gemini/config/agents/`, and the chat tabs Obsidian's workspace file remembers. |
+| 2026-10-26 | 3.8.0 | Added the Antigravity agent definitions BojuBot writes to `~/.gemini/config/agents/`, and the chat tabs Obsidian's workspace file remembers. |
 | 2026-10-26 | 3.8.0 | Added what Chat only keeps from the agent: nothing from your vault is sent. |
 | 2026-10-25 | 3.8.0 | Corrected which attached images and PDFs are copied into the plugin folder (and that the copies aren't deleted), and that the open note's path is sent with every message. |
 | 2026-10-17 | 3.8.0 | First published. |
