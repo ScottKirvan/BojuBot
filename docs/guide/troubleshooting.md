@@ -8,9 +8,9 @@ BojuBot couldn't find your Claude Code installation. Follow the on-screen steps,
 
 ---
 
-**"Claude Code is not authenticated" error after sending a message**
+**"Your Claude Code login has expired" or "Antigravity isn't signed in" error card**
 
-Claude Code is installed but not logged in. Click **Open terminal** in the error card — a terminal will open running Claude Code. Follow the prompts to authenticate (a browser window will open). Click **Done** when finished.
+The agent's sign-in is missing, has expired, or was rejected. See [Signing in again](#signing-in-again) below.
 
 ---
 
@@ -69,6 +69,43 @@ The model you picked needs a newer Claude Code than the one installed, and this 
 **Something unexpected happened and I want to investigate**
 
 Check `.obsidian/plugins/bojubot/bojubot-debug.log` (or the path configured in settings). Each session is separated by a `--- BojuBot log started ---` line. For more detail, switch **Log verbosity** to **Verbose** in settings — it takes effect immediately.
+
+---
+
+## Signing in again
+
+BojuBot uses the sign-in of the agent itself (Claude Code or Antigravity). That sign-in can expire, or be missing if you've never signed in on this computer or signed out. When it is, BojuBot shows an error card that says so, with an **Open terminal** button and a **Sign-in help** link to this page. Nothing you typed is lost: sign in, then send your message again.
+
+### Signing in to Claude Code again
+
+You'll see one of these cards:
+
+- **Your Claude Code login has expired**: you were signed in, but the login ran out and Claude Code couldn't renew it on its own.
+- **Claude Code isn't signed in**: Claude Code has no login on this computer.
+- **Claude Code couldn't verify your login**: Claude Code sent your login and it was refused.
+
+To sign in:
+
+1. Click **Open terminal** in the error card. A terminal window opens running Claude Code.
+2. If Claude Code asks you to sign in, follow its prompts. Otherwise type `/login` and press Enter.
+3. A browser window opens. Sign in with the Claude account that has your Pro or Max subscription. If the browser doesn't open, press `c` in the terminal to copy the sign-in link and paste it into your browser.
+4. When the terminal says you're signed in, close it.
+5. Back in BojuBot, send your message again.
+
+You can also sign in from any terminal without opening Claude Code: run `claude auth login`. To check whether you're signed in, run `claude auth status`. (Older Claude Code versions don't have `claude auth`; use `/login` inside `claude` instead, or update Claude Code.)
+
+### Signing in to Antigravity again
+
+You'll see **Antigravity isn't signed in** or **Your Antigravity sign-in has expired**.
+
+To sign in:
+
+1. Click **Open terminal** in the error card, or open a terminal yourself and run `agy`.
+2. A browser window opens. Sign in there.
+3. Once you're signed in, close the terminal.
+4. Back in BojuBot, send your message again.
+
+See [Agents](./agents) for more about using Antigravity with BojuBot.
 
 ---
 

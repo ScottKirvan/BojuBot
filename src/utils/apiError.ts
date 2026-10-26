@@ -7,7 +7,18 @@
  * followed by a `result` with `is_error: true`.
  */
 
+import { TROUBLESHOOTING_URL } from '../constants';
+
 export const API_ERROR_PREFIX = 'API Error:';
+
+/** errorCode for a Claude Code sign-in failure (missing, expired or rejected login). */
+export const CLAUDE_AUTH = 'claude_auth';
+/** errorCode for an Antigravity sign-in failure. */
+export const AGY_AUTH = 'agy_auth';
+
+/** Troubleshooting sections the sign-in cards link to (docs/guide/troubleshooting.md). */
+export const CLAUDE_SIGN_IN_HELP_URL = `${TROUBLESHOOTING_URL}#signing-in-to-claude-code-again`;
+export const AGY_SIGN_IN_HELP_URL = `${TROUBLESHOOTING_URL}#signing-in-to-antigravity-again`;
 
 export interface ApiError {
   /** HTTP status code, or null if the text didn't include one. */
@@ -23,6 +34,82 @@ export interface ApiError {
 export interface ApiErrorDisplay {
   title: string;
   details: string[];
+  /** Sign-in failures: the agent whose login needs renewing (drives Open terminal). */
+  signIn?: 'claude-code' | 'antigravity';
+  /** Sign-in failures: the troubleshooting section to link to. */
+  helpUrl?: string;
+}
+
+/**
+ * Claude Code wording for a missing, expired or rejected login. Only matched
+ * against text the CLI itself produced (a synthetic message or an API error),
+ * or anchored to the start of a reply — see claudeAuthFailure / claudeAuthReply.
+ */
+const CLAUDE_AUTH_TEXT = new RegExp([
+  'not logged in',
+  'failed to authenticate',
+  'oauth (?:session|token) (?:has )?(?:expired|been revoked)',
+  'token (?:has )?expired',
+  'invalid api key',
+  'please run /login',
+  'authentication_error',
+  'invalid (?:bearer token|x-api-key|authentication credentials)',
+].join('|'), 'i');
+
+/**
+ * Classify text the Claude Code CLI reported as a failure (the text of a
+ * synthetic assistant message). Returns the parsed API error — with errorCode
+ * CLAUDE_AUTH when it's a sign-in failure — or, for non-`API Error:` text, an
+ * ApiError only when it's a sign-in failure. Null means "not an error card":
+ * the text is shown as an ordinary reply.
+ */
+export function claudeAuthFailure(text: string): ApiError | null {
+  const parsed = parseApiError(text);
+  if (parsed) {
+    // A 401 from the API call Claude Code itself made is always the user's
+    // credentials; tool calls (e.g. a fetched web page) never come through here.
+    if (!parsed.errorCode && (parsed.status === 401 || CLAUDE_AUTH_TEXT.test(parsed.raw))) {
+      return { ...parsed, errorCode: CLAUDE_AUTH };
+    }
+    return parsed;
+  }
+  if (!CLAUDE_AUTH_TEXT.test(text)) return null;
+  const status = /API Error:\s*(\d{3})\b/.exec(text);
+  return { status: status ? Number(status[1]) : null, message: text.trim(), errorCode: CLAUDE_AUTH, raw: text };
+}
+
+/**
+ * A whole Claude Code reply that is really a sign-in failure, e.g. "Not logged
+ * in · Please run /login" or "Failed to authenticate: OAuth session expired and
+ * could not be refreshed." when it didn't arrive as a synthetic message. Only
+ * short replies that start with the failure count, so a reply that merely
+ * talks about logging in stays a reply.
+ */
+export function claudeAuthReply(text: string): ApiError | null {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 400) return null;
+  if (!/^(?:not logged in|failed to authenticate|invalid api key|oauth (?:session|token)|please run \/login|api error:\s*401\b)/i.test(trimmed)) return null;
+  return claudeAuthFailure(trimmed) ?? { status: null, message: trimmed, errorCode: CLAUDE_AUTH, raw: text };
+}
+
+/** Antigravity wording for a missing, expired or rejected sign-in. */
+const AGY_AUTH_TEXT = new RegExp([
+  /authentication required|not (?:signed|logged) in|unauthenticated|login required|re-?authenticat/,
+  /(?:sign|log)(?:ed)?[ -]?in (?:again|required|expired)/,
+  /(?:token|session|credentials?|login|sign-?in|auth\w*) (?:has |have |is |are )?expired/,
+  /expired (?:token|session|credentials?|login|sign-?in)/,
+  /invalid (?:credentials|auth token|access token|refresh token)/,
+  /\b(?:status|code|http)\W{0,3}401\b|\b401\W{0,3}unauthori[sz]ed|unauthori[sz]ed\W{0,3}401\b/,
+].map(r => r.source).join('|'), 'i');
+
+/**
+ * True when an Antigravity failure means the user must sign in again. Only
+ * agy's own fatal errors reach this (its "error: …" stderr line and
+ * result.error); a tool's failure — say a 401 from a fetched page — arrives as
+ * a tool step error and never does. Pure — exported for tests.
+ */
+export function isAgyAuthFailure(message: string): boolean {
+  return AGY_AUTH_TEXT.test(message);
 }
 
 /**
@@ -70,13 +157,31 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
     };
   }
 
-  if (err.errorCode === 'agy_auth') {
+  if (err.errorCode === CLAUDE_AUTH) {
+    const expired = /expired|could not be refreshed|revoked/i.test(err.raw);
+    const missing = /not logged in/i.test(err.raw);
     return {
-      title: "Antigravity isn't signed in",
+      title: expired ? 'Your Claude Code login has expired'
+        : missing ? "Claude Code isn't signed in"
+          : "Claude Code couldn't verify your login",
+      details: [
+        'Click Open terminal below to start Claude Code. Type /login and press Enter (skip this if it already asks you to sign in), then sign in in the browser window that opens.',
+        "Once you're signed in, close the terminal and send your message again.",
+      ],
+      signIn: 'claude-code',
+      helpUrl: CLAUDE_SIGN_IN_HELP_URL,
+    };
+  }
+
+  if (err.errorCode === AGY_AUTH) {
+    return {
+      title: /expired/i.test(err.raw) ? 'Your Antigravity sign-in has expired' : "Antigravity isn't signed in",
       details: [
         'Click Open terminal below, or run "agy" in a terminal yourself. It opens a browser window where you sign in.',
-        'Once you\'re signed in, close the terminal and send your message again.',
+        "Once you're signed in, close the terminal and send your message again.",
       ],
+      signIn: 'antigravity',
+      helpUrl: AGY_SIGN_IN_HELP_URL,
     };
   }
 

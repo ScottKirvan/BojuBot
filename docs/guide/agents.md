@@ -62,7 +62,7 @@ BojuBot runs Antigravity as one of its own Antigravity agents, which carry BojuB
 
 **"Antigravity not found" when the panel opens.** Your default agent is Antigravity but BojuBot can't find `agy`. Install it, set **Antigravity binary path**, or switch **Agent** back to Claude Code, then click **Check again**.
 
-**"Antigravity isn't signed in."** Click **Open terminal** in the error card, or run `agy` in a terminal yourself, and sign in. Then send your message again.
+**"Antigravity isn't signed in" or "Your Antigravity sign-in has expired."** Click **Open terminal** in the error card, or run `agy` in a terminal yourself, and sign in. Then send your message again. See [Signing in to Antigravity again](./troubleshooting#signing-in-to-antigravity-again).
 
 **"Model not available."** The model saved for the session isn't in Antigravity's list any more. Pick another one from the model picker.
 
