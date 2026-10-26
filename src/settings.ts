@@ -211,15 +211,18 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
   getSettingDefinitions(): SettingDefinitionItem<ControlKey>[] {
     return [
-      { type: 'group', items: this.generalSettings() },
+      { type: 'group', heading: 'Agents', items: this.agentSettings() },
+      { type: 'group', heading: 'Chat', items: this.chatSettings() },
       { type: 'group', heading: 'Context & memory', cls: 'bojubot-settings-context', items: this.contextSettings() },
       { type: 'group', heading: 'Permissions', items: this.permissionSettings() },
       { type: 'group', heading: 'UI bridge & commands', items: this.bridgeSettings() },
-      { type: 'group', heading: 'Logging', items: this.loggingSettings() },
+      { type: 'group', heading: 'Sessions', items: this.sessionSettings() },
+      { type: 'group', heading: 'Skills', items: this.skillSettings() },
       // Everything here is optional. Blank fields fall back to the stock BojuBot
       // identity (see resolveBrand). Nothing is ever removed — an empty link just
       // hides its card. Greetings/tips overrides are data.json-only for now.
       { type: 'group', heading: 'Branding', items: this.brandingSettings() },
+      { type: 'group', heading: 'Logging', items: this.loggingSettings() },
       { type: 'group', heading: 'Help & feedback', items: this.helpSettings() },
       // Ways to support the project, at the very bottom (#376). Never shown on
       // white-labeled builds: a downstream distributor handles its own funding.
@@ -327,9 +330,9 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     for (const cleanup of cleanups) cleanup();
   }
 
-  // ── General ───────────────────────────────────────────────────────────────
+  // ── Agents ────────────────────────────────────────────────────────────────
 
-  private generalSettings(): Definition[] {
+  private agentSettings(): Definition[] {
     const plugin = this.plugin;
 
     return [
@@ -347,20 +350,27 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         },
         control: { type: 'text', key: 'agyBinaryPath', placeholder: '(Auto-detect)' },
       },
+    ];
+  }
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+
+  private chatSettings(): Definition[] {
+    return [
       {
         name: 'Send on enter',
         desc: 'Press Enter to send. Shift+Enter always inserts a newline.',
         control: { type: 'toggle', key: 'sendOnEnter' },
       },
       {
-        name: 'Resume last session on startup',
-        desc: 'Automatically resume the most recent session when the panel opens.',
-        control: { type: 'toggle', key: 'resumeLastSession' },
-      },
-      {
         name: "Stream replies as they're written",
         desc: 'Show reply text word by word as the agent writes it, instead of a block at a time. For Claude, needs a Claude Code version that supports streaming. Takes effect on the next message.',
         control: { type: 'toggle', key: 'streamPartialMessages' },
+      },
+      {
+        name: 'Resume last session on startup',
+        desc: 'Automatically resume the most recent session when the panel opens.',
+        control: { type: 'toggle', key: 'resumeLastSession' },
       },
       {
         name: '@-mention file types',
@@ -374,11 +384,26 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
   private contextSettings(): Definition[] {
     const settings = () => this.plugin.settings;
-    // Minimal mode skips context injection, so these rows are muted (the
-    // .bojubot-settings-context group styles its disabled rows).
+    // Minimal mode skips context injection, so the rows with `disabled: muted`
+    // are muted (the .bojubot-settings-context group styles its disabled rows).
+    // Minimal mode itself and the setup prompt stay enabled.
     const muted = () => settings().minimalMode;
 
     return [
+      {
+        name: 'Minimal mode',
+        desc:
+          'Skip all context injection — no orientation, vault tree, context file, or active note. ' +
+          'Reduces session start cost to zero. ' +
+          'UI Bridge actions (open file, show notice, etc.) and vault queries will not work in this mode. ' +
+          'Skills still work.',
+        control: { type: 'toggle', key: 'minimalMode' },
+      },
+      {
+        name: 'Show context file setup prompt',
+        desc: 'Show the setup modal on launch when no context file is found. Disable if you prefer to create the file manually.',
+        control: { type: 'toggle', key: 'showContextFilePrompt' },
+      },
       {
         name: 'Context file path',
         desc: 'Vault-relative path to the context file injected at session start.',
@@ -453,15 +478,6 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         control: { type: 'text', key: 'contextFileSizeCapTokens', placeholder: '0 (No limit)', disabled: muted },
       },
       {
-        name: 'Minimal mode',
-        desc:
-          'Skip all context injection — no orientation, vault tree, context file, or active note. ' +
-          'Reduces session start cost to zero. ' +
-          'UI Bridge actions (open file, show notice, etc.) and vault queries will not work in this mode. ' +
-          'Skills still work.',
-        control: { type: 'toggle', key: 'minimalMode' },
-      },
-      {
         name: 'Inject split-pane files as context',
         desc: 'When notes are open side by side in split panes, include all visible file paths in the active note context.',
         control: { type: 'toggle', key: 'injectSplitPaneFiles', disabled: muted },
@@ -475,44 +491,6 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         name: 'Max canvas size (characters)',
         desc: 'Canvas files converted to text and injected as context will be truncated at this character limit. Set to 0 for no limit.',
         control: { type: 'text', key: 'canvasMaxChars', placeholder: '50000', disabled: muted },
-      },
-      {
-        name: 'Export folder',
-        desc: 'Vault-relative folder where "export session to vault" saves notes. Created automatically if it does not exist.',
-        control: {
-          type: 'folder',
-          key: 'exportFolder',
-          get placeholder() { return `${brandName()} exports`; },
-        },
-      },
-      {
-        name: 'Session storage path',
-        get desc() {
-          return 'Where session files are stored. ' +
-            'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
-            'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
-            'or an absolute path to store them outside the vault entirely. ' +
-            `Restart ${brandName()} after changing this.`;
-        },
-        control: { type: 'folder', key: 'sessionStoragePath', placeholder: 'Default (Obsidian config folder/BojuBot/sessions)' },
-      },
-      {
-        name: 'Skills folder',
-        desc:
-          'Folder containing your skill files (.md files). ' +
-          'Leave empty for the default location (plugin dir/commands). ' +
-          'Use a vault-relative path (e.g. _skills) to keep skills in your vault, ' +
-          'or an absolute path. Skills reload each time you open the / menu.',
-        control: { type: 'folder', key: 'commandsFolder', placeholder: 'Default (plugin dir/commands)' },
-      },
-      {
-        name: 'Register skills as Ctrl+P commands',
-        get desc() {
-          return 'Expose each skill as an Obsidian command palette entry (prefixed "Skill: …"). ' +
-            `Run "${brandName()}: Reload skills" from the palette after adding or removing skill files. ` +
-            'Disable if you find the extra commands cluttering the palette.';
-        },
-        control: { type: 'toggle', key: 'registerSkillsAsCommands' },
       },
     ];
   }
@@ -540,11 +518,6 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         desc: 'When off, full access lasts until Obsidian restarts: then the default goes back to standard, and sessions left in full access reopen in standard.',
         visible: () => this.plugin.settings.permissionMode === 'full' || this.plugin.getEffectivePermissionMode() === 'full',
         control: { type: 'toggle', key: 'persistFullAccess' },
-      },
-      {
-        name: 'Show context file setup prompt',
-        desc: 'Show the setup modal on launch when no context file is found. Disable if you prefer to create the file manually.',
-        control: { type: 'toggle', key: 'showContextFilePrompt' },
       },
     ];
   }
@@ -686,6 +659,58 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       bodyEl.remove();
       setting.settingEl.removeClass('bojubot-command-browser');
     };
+  }
+
+  // ── Sessions ──────────────────────────────────────────────────────────────
+
+  private sessionSettings(): Definition[] {
+    return [
+      {
+        name: 'Session storage path',
+        get desc() {
+          return 'Where session files are stored. ' +
+            'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
+            'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
+            'or an absolute path to store them outside the vault entirely. ' +
+            `Restart ${brandName()} after changing this.`;
+        },
+        control: { type: 'folder', key: 'sessionStoragePath', placeholder: 'Default (Obsidian config folder/BojuBot/sessions)' },
+      },
+      {
+        name: 'Export folder',
+        desc: 'Vault-relative folder where "export session to vault" saves notes. Created automatically if it does not exist.',
+        control: {
+          type: 'folder',
+          key: 'exportFolder',
+          get placeholder() { return `${brandName()} exports`; },
+        },
+      },
+    ];
+  }
+
+  // ── Skills ────────────────────────────────────────────────────────────────
+
+  private skillSettings(): Definition[] {
+    return [
+      {
+        name: 'Skills folder',
+        desc:
+          'Folder containing your skill files (.md files). ' +
+          'Leave empty for the default location (plugin dir/commands). ' +
+          'Use a vault-relative path (e.g. _skills) to keep skills in your vault, ' +
+          'or an absolute path. Skills reload each time you open the / menu.',
+        control: { type: 'folder', key: 'commandsFolder', placeholder: 'Default (plugin dir/commands)' },
+      },
+      {
+        name: 'Register skills as Ctrl+P commands',
+        get desc() {
+          return 'Expose each skill as an Obsidian command palette entry (prefixed "Skill: …"). ' +
+            `Run "${brandName()}: Reload skills" from the palette after adding or removing skill files. ` +
+            'Disable if you find the extra commands cluttering the palette.';
+        },
+        control: { type: 'toggle', key: 'registerSkillsAsCommands' },
+      },
+    ];
   }
 
   // ── Logging ───────────────────────────────────────────────────────────────

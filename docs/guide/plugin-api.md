@@ -59,7 +59,7 @@ These fire in order during an agent turn:
 | Event               | Payload                        | When                                                             |
 | ------------------- | ------------------------------ | ---------------------------------------------------------------- |
 | `turn:start`        | `()`                           | Agent CLI process spawned                                        |
-| `turn:text`         | `(accumulated: string, committed: string)` | Text received. `accumulated` is the text to display so far, including a live preview of the reply being written when [streaming](./settings#general) is on. `committed` is the clean text from complete messages only — use it if you need final text |
+| `turn:text`         | `(accumulated: string, committed: string)` | Text received. `accumulated` is the text to display so far, including a live preview of the reply being written when [streaming](./settings#chat) is on. `committed` is the clean text from complete messages only — use it if you need final text |
 | `turn:action`       | `(action: BojuBotAction)`      | UI bridge action parsed (excludes `request-permission`)          |
 | `turn:tool-call`    | `(tool, input, toolUseId)`     | The agent initiated a tool call                                  |
 | `turn:tool-result`  | `(toolUseId, content)`         | Tool result received                                             |
