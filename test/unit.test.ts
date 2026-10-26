@@ -39,7 +39,7 @@ import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
-import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from '../src/utils/apiError';
+import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice, claudeAuthFailure, claudeAuthReply, isAgyAuthFailure, CLAUDE_AUTH, AGY_AUTH, CLAUDE_SIGN_IN_HELP_URL, AGY_SIGN_IN_HELP_URL } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities } from '../src/utils/cliCapabilities';
 import { extractActions } from '../src/utils/actionParser';
 import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
@@ -5296,5 +5296,204 @@ describe('renderOrientation per permission mode (#406)', () => {
       assert.ok(!out.includes('Not available in Chat only'), m);
       assert.ok(!out.includes('run-command is unavailable'), m);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sign-in failures (#409) — one card per agent with sign-in directions
+// ---------------------------------------------------------------------------
+
+// Real Claude Code wording
+const CLAUDE_OAUTH_SESSION_EXPIRED = 'Failed to authenticate: OAuth session expired and could not be refreshed.';
+const CLAUDE_NOT_LOGGED_IN = 'Not logged in · Please run /login';
+const CLAUDE_TOKEN_EXPIRED_401 = 'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired. Please obtain a new token or refresh your existing token."},"request_id":"req_011CUmV4nY5Lw4N1xr3cSDcx"}';
+const CLAUDE_INVALID_KEY = 'Invalid API key · Please run /login';
+const CLAUDE_AUTH_ERROR_NO_STATUS = 'API Error: {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}';
+
+describe('claudeAuthFailure', () => {
+  test('recognises every Claude Code sign-in failure', () => {
+    for (const text of [CLAUDE_OAUTH_SESSION_EXPIRED, CLAUDE_NOT_LOGGED_IN, CLAUDE_TOKEN_EXPIRED_401, CLAUDE_INVALID_KEY, CLAUDE_AUTH_ERROR_NO_STATUS]) {
+      assert.equal(claudeAuthFailure(text)?.errorCode, CLAUDE_AUTH, text);
+    }
+  });
+  test('a bare 401 API error is a sign-in failure', () => {
+    const e = claudeAuthFailure('API Error: 401 Unauthorized');
+    assert.equal(e?.errorCode, CLAUDE_AUTH);
+    assert.equal(e?.status, 401);
+  });
+  test('keeps the parsed status and message of an API error', () => {
+    const e = claudeAuthFailure(CLAUDE_TOKEN_EXPIRED_401) as ApiError;
+    assert.equal(e.status, 401);
+    assert.match(e.message, /^OAuth token has expired/);
+    assert.equal(e.raw, CLAUDE_TOKEN_EXPIRED_401);
+  });
+  test('plain-text failure keeps its text and finds an embedded status', () => {
+    assert.deepEqual(claudeAuthFailure(CLAUDE_OAUTH_SESSION_EXPIRED), {
+      status: null, message: CLAUDE_OAUTH_SESSION_EXPIRED, errorCode: CLAUDE_AUTH, raw: CLAUDE_OAUTH_SESSION_EXPIRED,
+    });
+    assert.equal(claudeAuthFailure('Failed to authenticate. API Error: 401 {"type":"error"}')?.status, 401);
+  });
+  test('other API errors stay generic', () => {
+    assert.equal(claudeAuthFailure('API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}')?.errorCode, null);
+    assert.equal(claudeAuthFailure('API Error: 429 {"type":"error","error":{"type":"rate_limit_error","message":"Rate limited"}}')?.errorCode, null);
+    assert.equal(claudeAuthFailure('API Error: 403 {"type":"error","error":{"type":"permission_error","message":"Your organization has disabled this model"}}')?.errorCode, null);
+    assert.equal(claudeAuthFailure(VERSION_TOO_OLD_TEXT)?.errorCode, 'claude_code_version_too_old');
+  });
+  test('non-error text is not an error', () => {
+    assert.equal(claudeAuthFailure('Here is the summary you asked for.'), null);
+    assert.equal(claudeAuthFailure(''), null);
+  });
+});
+
+describe('claudeAuthReply', () => {
+  test('a reply that is only a sign-in failure', () => {
+    assert.equal(claudeAuthReply(CLAUDE_NOT_LOGGED_IN)?.errorCode, CLAUDE_AUTH);
+    assert.equal(claudeAuthReply(`  ${CLAUDE_OAUTH_SESSION_EXPIRED}\n`)?.errorCode, CLAUDE_AUTH);
+    assert.equal(claudeAuthReply(CLAUDE_INVALID_KEY)?.errorCode, CLAUDE_AUTH);
+    assert.equal(claudeAuthReply(CLAUDE_TOKEN_EXPIRED_401)?.errorCode, CLAUDE_AUTH);
+  });
+  test('a reply that talks about logging in stays a reply', () => {
+    assert.equal(claudeAuthReply('If you see "Not logged in", run /login in Claude Code.'), null);
+    assert.equal(claudeAuthReply('The site returned 401 Unauthorized, so I could not fetch it.'), null);
+    assert.equal(claudeAuthReply(`Not logged in users see the landing page. ${'x'.repeat(400)}`), null);
+    assert.equal(claudeAuthReply('API Error: 529 Overloaded'), null);
+    assert.equal(claudeAuthReply(''), null);
+  });
+});
+
+describe('isAgyAuthFailure', () => {
+  test('recognises Antigravity sign-in failures', () => {
+    for (const text of [
+      'authentication required',
+      'You are not signed in',
+      'not logged in',
+      'rpc error: code = Unauthenticated desc = request had invalid authentication credentials',
+      'please sign in again',
+      'login required',
+      'Your session has expired. Please re-authenticate.',
+      'oauth token expired',
+      'credentials have expired',
+      'expired token',
+      'invalid refresh token',
+      'request failed with status 401',
+      'HTTP 401: Unauthorized',
+      '401 Unauthorized',
+    ]) assert.equal(isAgyAuthFailure(text), true, text);
+  });
+  test('ordinary errors are not sign-in failures', () => {
+    for (const text of [
+      'quota exhausted for Gemini Models',
+      AGY_BAD_MODEL_ERROR,
+      'unknown agent "bojubot-chat" (available: x)',
+      'context deadline exceeded',
+      'tool run_command is unauthorized in this mode',
+      'listening on port 4010',
+      'trial expired for feature X',
+    ]) assert.equal(isAgyAuthFailure(text), false, text);
+  });
+  test('agyApiError uses it', () => {
+    assert.equal(agyApiError('error: Your session has expired. Please re-authenticate.').errorCode, AGY_AUTH);
+    assert.equal(agyApiError('error: request failed with status 401').errorCode, AGY_AUTH);
+    assert.equal(agyApiError('error: quota exhausted').errorCode, 'agy_error');
+  });
+});
+
+describe('formatApiError sign-in cards', () => {
+  test('expired Claude Code login', () => {
+    const d = formatApiError(claudeAuthFailure(CLAUDE_OAUTH_SESSION_EXPIRED) as ApiError, 'win32');
+    assert.equal(d.title, 'Your Claude Code login has expired');
+    assert.match(d.details[0], /Open terminal/);
+    assert.match(d.details[0], /\/login/);
+    assert.match(d.details[1], /send your message again/);
+    assert.equal(d.signIn, 'claude-code');
+    assert.equal(d.helpUrl, CLAUDE_SIGN_IN_HELP_URL);
+    assert.equal(formatApiError(claudeAuthFailure(CLAUDE_TOKEN_EXPIRED_401) as ApiError, 'win32').title, 'Your Claude Code login has expired');
+  });
+  test('missing and rejected Claude Code logins', () => {
+    assert.equal(formatApiError(claudeAuthFailure(CLAUDE_NOT_LOGGED_IN) as ApiError, 'win32').title, "Claude Code isn't signed in");
+    assert.equal(formatApiError(claudeAuthFailure(CLAUDE_INVALID_KEY) as ApiError, 'win32').title, "Claude Code couldn't verify your login");
+  });
+  test('Antigravity sign-in cards', () => {
+    const d = formatApiError(agyApiError('authentication required'), 'win32');
+    assert.equal(d.title, "Antigravity isn't signed in");
+    assert.equal(d.signIn, 'antigravity');
+    assert.equal(d.helpUrl, AGY_SIGN_IN_HELP_URL);
+    assert.equal(formatApiError(agyApiError('error: oauth token expired'), 'win32').title, 'Your Antigravity sign-in has expired');
+  });
+  test('help links point at the troubleshooting sections', () => {
+    assert.match(CLAUDE_SIGN_IN_HELP_URL, /\/guide\/troubleshooting#signing-in-to-claude-code-again$/);
+    assert.match(AGY_SIGN_IN_HELP_URL, /\/guide\/troubleshooting#signing-in-to-antigravity-again$/);
+  });
+  test('other errors carry no sign-in action', () => {
+    const d = formatApiError({ status: 529, message: 'Overloaded', errorCode: null, raw: '' }, 'win32');
+    assert.equal(d.signIn, undefined);
+    assert.equal(d.helpUrl, undefined);
+  });
+});
+
+describe('parseStreamOutput sign-in failures', () => {
+  function run(lines: object[]): Promise<{ texts: string[], apiErrors: ApiError[] }> {
+    return new Promise((resolve) => {
+      const proc = mockProc();
+      const texts: string[] = [];
+      const apiErrors: ApiError[] = [];
+      parseStreamOutput(proc, {
+        onText: (t) => texts.push(t),
+        onAction: () => { /* unused */ },
+        onToolCall: () => { /* unused */ },
+        onPermissionDenied: () => { /* unused */ },
+        onUsage: () => { /* unused */ },
+        onError: () => { /* unused */ },
+        onApiError: (e) => apiErrors.push(e),
+        onDone: () => resolve({ texts, apiErrors }),
+      });
+      for (const l of lines) proc.stdout.emit('data', Buffer.from(JSON.stringify(l) + '\n'));
+      proc.emit('close', 1);
+    });
+  }
+  const synthetic = (text: string) => ({ type: 'assistant', message: { model: '<synthetic>', content: [{ type: 'text', text }] } });
+
+  test('synthetic plain-text sign-in failure becomes one error card', async () => {
+    const r = await run([synthetic(CLAUDE_OAUTH_SESSION_EXPIRED), { type: 'result', is_error: true, result: CLAUDE_OAUTH_SESSION_EXPIRED }]);
+    assert.deepEqual(r.texts, []);
+    assert.deepEqual(r.apiErrors.map(e => e.errorCode), [CLAUDE_AUTH]);
+  });
+  test('synthetic 401 API error becomes a sign-in card', async () => {
+    const r = await run([synthetic(CLAUDE_TOKEN_EXPIRED_401)]);
+    assert.deepEqual(r.apiErrors.map(e => e.errorCode), [CLAUDE_AUTH]);
+  });
+  test('a sign-in failure reported only in the result', async () => {
+    const r = await run([{ type: 'result', is_error: true, result: CLAUDE_NOT_LOGGED_IN }]);
+    assert.deepEqual(r.apiErrors.map(e => e.errorCode), [CLAUDE_AUTH]);
+  });
+  test('other failed results add no card', async () => {
+    const r = await run([{ type: 'result', is_error: true, result: 'Request was aborted.' }]);
+    assert.deepEqual(r.apiErrors, []);
+  });
+  test('model text about logging in stays text', async () => {
+    const r = await run([{ type: 'assistant', message: { model: 'claude-opus-5-5', content: [{ type: 'text', text: CLAUDE_NOT_LOGGED_IN }] } }]);
+    assert.deepEqual(r.texts, [CLAUDE_NOT_LOGGED_IN]);
+    assert.deepEqual(r.apiErrors, []);
+  });
+  test('synthetic text that is not an error stays text', async () => {
+    const r = await run([synthetic('No response requested.')]);
+    assert.deepEqual(r.texts, ['No response requested.']);
+    assert.deepEqual(r.apiErrors, []);
+  });
+});
+
+describe('parseAgyStream sign-in failures', () => {
+  test('a failed result with an expired sign-in shows the sign-in card', async () => {
+    const r = await runAgy([{ event: 'result', result: { conversation_id: '', status: 'ERROR', response: '', error: 'oauth token expired, please sign in again', num_turns: 0 } }]);
+    assert.deepEqual(r.apiErrors.map(e => e.errorCode), [AGY_AUTH]);
+  });
+  test('a 401 from a tool (e.g. a fetched page) is a tool result, not a sign-in card', async () => {
+    const r = await runAgy([
+      { event: 'step_update', step_update: { conversation_id: 'c', step_index: 1, state: 'ACTIVE', step_type: 'tool', tool_name: 'read_url_content', tool_info: { name: 'read_url_content', parameters: { Url: 'https://example.com' } } } },
+      { event: 'step_update', step_update: { conversation_id: 'c', step_index: 1, state: 'ERROR', step_type: 'tool', tool_name: 'read_url_content', tool_info: { name: 'read_url_content', parameters: { Url: 'https://example.com' }, error: { type: 'TOOL_ERROR', message: 'HTTP 401: Unauthorized' } } } },
+      { event: 'result', result: { conversation_id: 'c', status: 'SUCCESS', response: 'The page needs a login.', num_turns: 1 } },
+    ]);
+    assert.deepEqual(r.apiErrors, []);
+    assert.equal(r.results[0].content, 'HTTP 401: Unauthorized');
   });
 });

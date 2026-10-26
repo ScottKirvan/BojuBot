@@ -29,7 +29,7 @@ import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
 import { extractToolDetail } from './utils/toolFormatting';
-import { formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
+import { formatApiError, ApiError, claudeAuthReply, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
 import { repairLinks } from './utils/linkRepair';
 import { formatCliVersion, has } from './utils/cliCapabilities';
 import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
@@ -393,8 +393,10 @@ export class ClaudeView extends ItemView {
       this._activeTurnEls = null;
 
       statusEl.remove();
+      // A Claude Code sign-in failure that came through as the whole reply (#409)
+      const authReply = !apiError && this.coordinator.backendId === 'claude-code' ? claudeAuthReply(accumulated) : null;
       // An API error already explains why the turn failed
-      if (!result.clean && !apiError) this.appendMessage('system', 'Interrupted.');
+      if (!result.clean && !apiError && !authReply) this.appendMessage('system', 'Interrupted.');
 
       // Collapse tool calls into a toggle
       if (toolCallCount > 0) {
@@ -421,8 +423,8 @@ export class ClaudeView extends ItemView {
         assistantEl.remove();
       } else if (!accumulated) {
         assistantEl.setText('(No response)');
-      } else if (this.isAuthError(accumulated)) {
-        this.renderAuthError(assistantEl);
+      } else if (authReply) {
+        this.renderApiError(assistantEl, authReply);
       } else {
         const repaired = this.repairLinks(accumulated);
         assistantEl.dataset.markdown = repaired;
@@ -448,7 +450,7 @@ export class ClaudeView extends ItemView {
       const permissionRequest = this.coordinator.modeNeedsNewSession('full') ? null : result.pendingPermissionRequest;
       if (!continues) {
         if (!this._stoppingForSwitch && permissionRequest) this.applyStatus({ type: 'wait-start' });
-        this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: !!apiError || this.isAuthError(accumulated) });
+        this.applyStatus({ type: 'turn-end', visible: this.plugin.isChatVisible(this), error: !!apiError || !!authReply });
       }
 
       // Stopped so the panel can switch session: no follow-up turn in this one.
@@ -2125,27 +2127,33 @@ export class ClaudeView extends ItemView {
   }
 
   private renderApiError(el: HTMLElement, err: ApiError) {
-    const { title, details } = formatApiError(err, process.platform);
+    const { title, details, signIn, helpUrl } = formatApiError(err, process.platform);
     el.empty();
     el.createEl('p', { text: title, cls: 'bojubot-setup-step-title' });
     for (const line of details) el.createEl('p', { text: line, cls: 'bojubot-setup-note' });
+
+    if (signIn) {
+      // Sign-in failures (#409): both agents sign in from their interactive
+      // mode in a terminal, which opens a browser window.
+      const binary = this.plugin.getBinaryPath(signIn);
+      if (binary) {
+        const btnRow = el.createDiv({ cls: 'bojubot-setup-btn-row' });
+        const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
+        loginBtn.addEventListener('click', () => {
+          this.openTerminalWith(binary);
+          loginBtn.setText('Opened — sign in, then send your message again');
+          loginBtn.disabled = true;
+        });
+      }
+      if (helpUrl) el.createEl('a', { cls: 'bojubot-report-this', text: 'Sign-in help', href: helpUrl });
+      return;
+    }
+
     const report = el.createEl('a', { cls: 'bojubot-report-this', text: 'Report this problem', href: '#' });
     report.addEventListener('click', (e) => {
       e.preventDefault();
       this.plugin.openReportForm({ type: 'bug', errorText: err.raw.trim().slice(0, 1000) });
     });
-
-    // Antigravity signs in from its interactive mode, which opens a browser
-    const agyBinary = this.plugin.getBinaryPath('antigravity');
-    if (err.errorCode === 'agy_auth' && agyBinary) {
-      const btnRow = el.createDiv({ cls: 'bojubot-setup-btn-row' });
-      const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
-      loginBtn.addEventListener('click', () => {
-        this.openTerminalWith(agyBinary);
-        loginBtn.setText('Opened — sign in, then send your message again');
-        loginBtn.disabled = true;
-      });
-    }
   }
 
   /** Open a new terminal window running a CLI interactively (for signing in). */
@@ -2159,41 +2167,6 @@ export class ClaudeView extends ItemView {
         : ['-e', binaryPath ?? ''];
       spawn(term, args, { detached: true });
     }
-  }
-
-  private isAuthError(text: string): boolean {
-    return text.includes('Not logged in');
-  }
-
-  private renderAuthError(el: HTMLElement) {
-    el.empty();
-    el.createEl('p', { text: 'Error: Claude Code is not authenticated.', cls: 'bojubot-setup-step-title' });
-    el.createEl('p', {
-      text: 'Click Open terminal below. Claude Code will launch and open a browser window to log in. ' +
-        'If the browser does not open automatically, press c in the terminal to copy the login URL.',
-      cls: 'bojubot-setup-note',
-    });
-    el.createEl('p', {
-      text: 'A Claude pro or max subscription is required.',
-      cls: 'bojubot-setup-note',
-    });
-
-    const btnRow = el.createDiv({ cls: 'bojubot-setup-btn-row' });
-
-    const loginBtn = btnRow.createEl('button', { text: 'Open terminal', cls: 'mod-cta bojubot-setup-check-btn' });
-    loginBtn.addEventListener('click', () => {
-      this.openTerminalWith(this.plugin.getBinaryPath('claude-code'));
-
-      loginBtn.setText('Opened — log in, then click done');
-      loginBtn.disabled = true;
-
-      const doneBtn = btnRow.createEl('button', { text: 'Done', cls: 'bojubot-setup-check-btn' });
-      doneBtn.addEventListener('click', () => {
-        doneBtn.setText('Checking…');
-        doneBtn.disabled = true;
-        void this.onOpen();
-      });
-    });
   }
 
   private handlePermissionRequest(request: { tool: string; reason: string }, unlock: () => void) {

@@ -3,7 +3,7 @@ import { join } from 'path';
 import * as os from 'os';
 import { execSync, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from '../utils/logger';
-import { parseApiError } from '../utils/apiError';
+import { claudeAuthFailure, CLAUDE_AUTH } from '../utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from '../utils/cliCapabilities';
 import { extractResultText } from '../utils/planUsage';
 import { splitBojuLines } from '../utils/bojuLines';
@@ -271,6 +271,8 @@ export function parseStreamOutput(proc: ChildProcess, cb: StreamCallbacks): void
 /** Text of the main-thread content block currently being streamed (partial messages only). */
 interface PreviewState {
   blockText: string;
+  /** The turn already produced reply text or an error card (see the `result` case). */
+  replied?: boolean;
 }
 
 /**
@@ -333,10 +335,11 @@ function handleMessage(
         for (const block of content) {
           if (block.type === 'text') {
             const raw = (block.text as string) ?? '';
-            // API failures arrive as a synthetic assistant message, not as model output
-            const apiError = message?.model === '<synthetic>' && cb.onApiError ? parseApiError(raw) : null;
+            // API and sign-in failures arrive as a synthetic assistant message, not as model output
+            const apiError = message?.model === '<synthetic>' && cb.onApiError ? claudeAuthFailure(raw) : null;
             if (apiError) {
               WARN('API error:', apiError.raw);
+              preview.replied = true;
               cb.onApiError?.(apiError);
               continue;
             }
@@ -345,7 +348,10 @@ function handleMessage(
               if (l.kind === 'action') cb.onAction(l.line);
               else cb.onQuery?.(l.line);
             }
-            if (clean) cb.onText(clean);
+            if (clean) {
+              preview.replied = true;
+              cb.onText(clean);
+            }
           } else if (block.type === 'tool_use') {
             cb.onToolCall(block.name as string, block.input, block.id as string);
           }
@@ -379,6 +385,15 @@ function handleMessage(
     case 'result':
       setGotResult(!msg.is_error);
       if (msg.session_id) setSessionId(msg.session_id as string);
+      // A sign-in failure can end the turn with only the result's text (#409)
+      if (msg.is_error && !preview.replied && cb.onApiError && typeof msg.result === 'string') {
+        const authError = claudeAuthFailure(msg.result);
+        if (authError?.errorCode === CLAUDE_AUTH) {
+          WARN('sign-in error:', authError.raw);
+          preview.replied = true;
+          cb.onApiError(authError);
+        }
+      }
       {
         const raw = msg.permission_denials as Array<Record<string, unknown>> | undefined;
         if (raw?.length) {

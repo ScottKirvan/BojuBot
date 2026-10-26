@@ -10,7 +10,7 @@ import { execSync, ChildProcess } from 'child_process';
 import { log as LOG, warn as WARN, logv as LOGV } from '../utils/logger';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from '../utils/cliCapabilities';
 import { splitBojuLines } from '../utils/bojuLines';
-import type { ApiError } from '../utils/apiError';
+import { type ApiError, AGY_AUTH, isAgyAuthFailure } from '../utils/apiError';
 import { launchCli, runCli, runCliCapture } from './process';
 import { AGY_CHAT_AGENT, AGY_MAIN_AGENT, AgyAgentName, syncAgyAgentDefinitions } from './agyAgents';
 import type {
@@ -328,8 +328,8 @@ export function isAgyDenialNotice(text: string): boolean {
  */
 export function agyApiError(text: string): ApiError {
   const message = text.trim().replace(/^error:\s*/i, '');
-  const errorCode = /authentication required|not (?:signed|logged) in|unauthenticated|sign in again/i.test(message)
-    ? 'agy_auth'
+  const errorCode = isAgyAuthFailure(message)
+    ? AGY_AUTH
     : /invalid model selection|not recognized as a known model/i.test(message)
       ? 'agy_invalid_model'
       : isAgyAgentRejection(message)
