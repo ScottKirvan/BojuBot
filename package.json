@@ -29,5 +29,8 @@
   },
   "dependencies": {
     "bojuvue": "^0.4.1"
+  },
+  "overrides": {
+    "vite": "^6.4.2"
   }
 }
