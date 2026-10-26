@@ -8,7 +8,7 @@ import type { BackendId } from './backends/types';
  */
 export function renderAgentIcon(parent: HTMLElement, id: BackendId, cls: string): HTMLElement {
   const backend = getBackend(id);
-  const el = parent.createSpan({ cls: `bojubot-agent-icon ${cls}`, attr: { 'aria-label': backend.displayName, title: backend.displayName } });
+  const el = parent.createSpan({ cls: `bojubot-agent-icon ${cls}`, attr: { 'aria-label': backend.label, title: backend.label } });
   if ('svg' in backend.icon) el.appendChild(sanitizeHTMLToDom(backend.icon.svg));
   else setIcon(el, backend.icon.lucide);
   return el;

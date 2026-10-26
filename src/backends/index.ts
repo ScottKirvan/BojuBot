@@ -15,6 +15,11 @@ export function isBackendId(value: unknown): value is BackendId {
   return typeof value === 'string' && (BACKEND_IDS as string[]).includes(value);
 }
 
+/** "the Antigravity CLI" → "The Antigravity CLI", for a phrase that starts a sentence. */
+export function sentenceStart(phrase: string): string {
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
 export function getBackend(id: BackendId = DEFAULT_BACKEND_ID): AgentBackend {
   return BACKENDS[id];
 }

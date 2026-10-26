@@ -24,7 +24,7 @@ import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
 import { ClaudeModel } from './settings';
-import { BACKEND_IDS } from './backends';
+import { BACKEND_IDS, sentenceStart } from './backends';
 import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
 import { resolveExportFolder, isWhiteLabeled } from './brand';
@@ -723,7 +723,9 @@ export class ClaudeView extends ItemView {
             const backend = this.plugin.getBackend(id);
             return {
               id,
-              displayName: backend.displayName,
+              label: backend.label,
+              name: backend.name,
+              cliName: backend.cliName,
               installed: !!this.plugin.getBinaryPath(id),
               models: this.plugin.getModels(id),
               defaultModel: this.plugin.getDefaultModel(id),
@@ -994,7 +996,7 @@ export class ClaudeView extends ItemView {
   /** Called by the plugin when a backend's capability probe finishes. */
   onCliCapabilitiesChanged(id: BackendId): void {
     const backend = this.plugin.getBackend(id);
-    log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.getCapabilities(id), backend.displayName));
+    log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.getCapabilities(id), backend.cliName));
     this.updateModelIndicator();
   }
 
@@ -1032,7 +1034,7 @@ export class ClaudeView extends ItemView {
       if (this.coordinator.isBusy) {
         // The next send makes the switch (handleSend).
         this.pendingNewSessionMode = mode;
-        new Notice(modeChangeNotice(mode, this.coordinator.backend.displayName, true), 8000);
+        new Notice(modeChangeNotice(mode, this.coordinator.backend.name, true), 8000);
       } else {
         this.startSessionForModeChange(mode);
       }
@@ -1199,7 +1201,7 @@ export class ClaudeView extends ItemView {
    */
   private startSessionForModeChange(mode: PermissionMode, announce = true): void {
     const c = this.coordinator;
-    const agent = c.backend.displayName;
+    const agent = c.backend.name;
     this._customAttachments = [];
     this._customInitialInstructions = '';
     this._customSuppressVaultContext = c.suppressVaultContext;
@@ -1654,7 +1656,7 @@ export class ClaudeView extends ItemView {
     }
 
     if (!this.plugin.getBinaryPath(this.coordinator.backendId)) {
-      this.appendMessage('system', `${this.coordinator.backend.displayName} binary not found. Check ${this.plugin.brand.name} settings.`);
+      this.appendMessage('system', `${sentenceStart(this.coordinator.backend.cliPhrase)} wasn't found. Check ${this.plugin.brand.name} settings.`);
       return;
     }
 
@@ -1969,17 +1971,23 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  /** "Agent: Antigravity · Model: Gemini 3.8 Flash (High)", for problem reports. */
+  /** "Agent: Gemini (Antigravity CLI) · Model: Gemini 3.8 Flash", for problem reports. */
   sessionSummary(): string {
-    return `Agent: ${this.coordinator.backend.displayName} · Model: ${this.effectiveModelName()}`;
+    return `Agent: ${this.coordinator.backend.label} · Model: ${this.effectiveModelName()}`;
   }
 
-  /** "Agent · model" for the welcome header, e.g. "Antigravity · Gemini 3.8 Flash (High)". */
+  /** "Agent · model" for the welcome header, e.g. "Gemini (Antigravity CLI) · Gemini 3.8 Flash". */
   private agentAndModelLabel(): string {
-    const agent = this.coordinator.backend.displayName;
+    const agent = this.coordinator.backend.label;
     return this.coordinator.getEffectiveModel()
       ? `${agent} · ${this.effectiveModelName()}`
       : `${agent} · default model`;
+  }
+
+  /** "Claude (Claude Code) or Gemini (Antigravity CLI)", from the backend list. */
+  private agentLabelList(): string {
+    const labels = BACKEND_IDS.map(id => this.plugin.getBackend(id).label);
+    return labels.length > 1 ? `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}` : labels.join('');
   }
 
   private renderSetupPanel() {
@@ -1995,10 +2003,14 @@ export class ClaudeView extends ItemView {
       return;
     }
 
-    card.createEl('h3', { text: 'Error: Claude Code not found', cls: 'bojubot-setup-title' });
+    card.createEl('h3', { text: `Error: ${this.plugin.getBackend('claude-code').label} not found`, cls: 'bojubot-setup-title' });
     card.createEl('p', {
-      text: `${this.plugin.brand.name} requires the Claude Code CLI (included with Claude Pro/Max). ` +
-        'Follow the steps below, then click Check again.',
+      text: `${this.plugin.brand.name} runs ${this.agentLabelList()}. New sessions are set to use Claude, ` +
+        "but Claude Code (included with Claude Pro/Max) wasn't found. Follow the steps below, then click Check again.",
+      cls: 'bojubot-setup-intro',
+    });
+    card.createEl('p', {
+      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Agent.`,
       cls: 'bojubot-setup-intro',
     });
 
@@ -2037,7 +2049,7 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-step-title',
     });
     pathSection.createEl('p', {
-      text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude binary below, then click check again.',
+      text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude Code binary below, then click check again.',
       cls: 'bojubot-setup-note',
     });
     const pathRow = pathSection.createDiv({ cls: 'bojubot-setup-code-row' });
@@ -2080,12 +2092,16 @@ export class ClaudeView extends ItemView {
   /** Setup card for a non-Claude default agent whose CLI wasn't found. */
   private renderAgentNotFound(card: HTMLElement) {
     const id = this.plugin.settings.backend;
-    const name = this.plugin.getBackend(id).displayName;
-    card.createEl('h3', { text: `Error: ${name} not found`, cls: 'bojubot-setup-title' });
+    const backend = this.plugin.getBackend(id);
+    card.createEl('h3', { text: `Error: ${backend.label} not found`, cls: 'bojubot-setup-title' });
     card.createEl('p', {
-      text: `New sessions are set to run on ${name}, but its CLI wasn't found. ` +
-        `Install it and sign in, set its path in ${this.plugin.brand.name} settings, ` +
-        'or switch the agent back to Claude Code. Then click Check again.',
+      text: `${this.plugin.brand.name} runs ${this.agentLabelList()}. New sessions are set to use ${backend.name}, ` +
+        `but ${backend.cliPhrase} wasn't found. Install it and sign in, or set its path in ${this.plugin.brand.name} settings. ` +
+        'Then click Check again.',
+      cls: 'bojubot-setup-intro',
+    });
+    card.createEl('p', {
+      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Agent.`,
       cls: 'bojubot-setup-intro',
     });
     if (id === 'antigravity') {
@@ -2120,7 +2136,7 @@ export class ClaudeView extends ItemView {
       if (current !== id || this.plugin.detectBinary(current)) {
         void this.onOpen();
       } else {
-        const err = card.createEl('p', { text: `Still not found. Check the ${name} binary path in settings.`, cls: 'bojubot-setup-error' });
+        const err = card.createEl('p', { text: `Still not found. Check the ${backend.cliName} binary path in settings.`, cls: 'bojubot-setup-error' });
         window.setTimeout(() => err.remove(), 6000);
       }
     });
@@ -2695,7 +2711,7 @@ export class ClaudeView extends ItemView {
   private effectiveModelName(): string {
     const backend = this.coordinator.backend;
     const id = this.coordinator.getEffectiveModel();
-    if (!id) return `${backend.displayName} default`;
+    if (!id) return `${backend.cliName} default`;
     return this.plugin.getModels(this.coordinator.backendId).find(m => m.id === id)?.displayName ?? id;
   }
 
@@ -2709,7 +2725,7 @@ export class ClaudeView extends ItemView {
     const backend = this.plugin.getBackend(id);
     const binary = this.plugin.getBinaryPath(id);
     if (!binary) {
-      this.appendMessage('system', `${backend.displayName} binary not found. Check ${this.plugin.brand.name} settings.`);
+      this.appendMessage('system', `${sentenceStart(backend.cliPhrase)} wasn't found. Check ${this.plugin.brand.name} settings.`);
       return;
     }
     this.messagesEl.querySelector('.bojubot-welcome')?.remove();
@@ -2730,11 +2746,11 @@ export class ClaudeView extends ItemView {
   openEffortPicker() {
     const levels = this.supportedEffortLevels();
     if (levels.length === 0) {
-      new Notice(`${this.plugin.brand.name}: your ${this.coordinator.backend.displayName} version doesn't support effort levels.`);
+      new Notice(`${this.plugin.brand.name}: your ${this.coordinator.backend.cliName} version doesn't support effort levels.`);
       return;
     }
     const current = this.coordinator.getEffectiveEffort() ?? '';
-    new EffortPickerModal(this.app, current, levels, (level) => {
+    new EffortPickerModal(this.app, current, levels, this.coordinator.backend.cliPhrase, (level) => {
       const previous = this.plugin.settings.defaultEffort;
       this.plugin.settings.defaultEffort = level;
       void this.plugin.saveSettings().then(() => {
@@ -2758,7 +2774,7 @@ export class ClaudeView extends ItemView {
     const id = this.coordinator.backendId;
     const allModels = this.plugin.getModels(id);
     if (allModels.length === 0) {
-      new Notice(`${this.plugin.brand.name}: ${this.coordinator.backend.displayName} hasn't listed its models yet — try again in a moment.`);
+      new Notice(`${this.plugin.brand.name}: ${sentenceStart(this.coordinator.backend.cliPhrase)} hasn't listed its models yet — try again in a moment.`);
       return;
     }
 
@@ -2925,6 +2941,8 @@ class EffortPickerModal extends Modal {
     app: App,
     private currentLevel: string,
     private levels: readonly string[],
+    /** Who decides at Default: "Claude Code", "the Antigravity CLI". */
+    private cliPhrase: string,
     private onSelect: (level: string) => void,
   ) {
     super(app);
@@ -2934,7 +2952,7 @@ class EffortPickerModal extends Modal {
     this.titleEl.setText('Switch effort');
     this.contentEl.addClass('bojubot-model-picker');
 
-    // '' = Default: the --effort flag is left off and Claude Code decides.
+    // '' = Default: the --effort flag is left off and the CLI decides.
     for (const level of ['', ...this.levels]) {
       const row = this.contentEl.createDiv({ cls: 'bojubot-model-row' });
       if (level === this.currentLevel) row.addClass('is-active');
@@ -2943,7 +2961,7 @@ class EffortPickerModal extends Modal {
       text.createDiv({ cls: 'bojubot-model-name', text: level || 'Default' });
       text.createDiv({
         cls: 'bojubot-model-desc',
-        text: level ? (EFFORT_DESCRIPTIONS[level] ?? '') : 'Let Claude Code choose',
+        text: level ? (EFFORT_DESCRIPTIONS[level] ?? '') : `Let ${this.cliPhrase} choose`,
       });
 
       if (level === this.currentLevel) {

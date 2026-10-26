@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import type { ChildProcess } from 'child_process';
 import type { AgentBackend, BackendId, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
 import { killProcess } from './backends/process';
+import { sentenceStart } from './backends';
 import { resolveSpawnCwd } from './backends/modes';
 import { VaultQuery } from './QueryHandler';
 import { BOJU_PREFIX } from './constants';
@@ -490,12 +491,12 @@ export class SessionCoordinator {
     }
     const backend = this.backend;
     if (!backend.compactPrompt) {
-      onError(`${backend.displayName} doesn't support compacting a session.`);
+      onError(`${backend.name} sessions can't be compacted.`);
       return;
     }
     const binary = this.host.getBinaryPath(this._s.backend);
     if (!binary) {
-      onError(`${backend.displayName} binary not found.`);
+      onError(`${sentenceStart(backend.cliPhrase)} wasn't found.`);
       return;
     }
 
@@ -514,7 +515,7 @@ export class SessionCoordinator {
         agent: this._s.agent,
       });
     } catch (e) {
-      onError(`Failed to start ${backend.displayName}: ${e}`);
+      onError(`Failed to start ${backend.cliPhrase}: ${e}`);
       return;
     }
 
@@ -554,7 +555,7 @@ export class SessionCoordinator {
     const backend = this.backend;
     const binary = this.host.getBinaryPath(turnSession.backend);
     if (!binary) {
-      this.emit('turn:error', `${backend.displayName} binary not found.`);
+      this.emit('turn:error', `${sentenceStart(backend.cliPhrase)} wasn't found.`);
       return;
     }
 
@@ -586,7 +587,7 @@ export class SessionCoordinator {
       });
       this._activeProc = proc;
     } catch (e) {
-      this.emit('turn:error', `Failed to start ${backend.displayName}: ${e}`);
+      this.emit('turn:error', `Failed to start ${backend.cliPhrase}: ${e}`);
       return;
     }
 

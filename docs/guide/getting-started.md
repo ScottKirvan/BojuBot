@@ -51,7 +51,7 @@ To use Gemini, BojuBot runs Google's Antigravity CLI (`agy`), which runs Gemini.
 
 1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
 2. **Sign in once.** Open a terminal, run `agy`, and sign in with your Google account in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
-3. **Pick it in BojuBot** once the plugin is installed: **Settings → BojuBot → Agent** → **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
+3. **Pick it in BojuBot** once the plugin is installed: **Settings → BojuBot → Agent** → **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 
 The model picker then lists Gemini models (plus the Claude and GPT-OSS models Antigravity offers). See [Choosing an Agent](./agents) for what works differently with Gemini.
 

@@ -177,7 +177,7 @@ export function spawnAgy(opts: TurnOptions): ChildProcess {
   LOG('spawnAgy cwd:', opts.cwd, 'conversation:', opts.resumeSessionId ?? 'new');
   const proc = launchCli(opts.binaryPath, args, opts.cwd, opts.env);
   if (!proc.stdin) {
-    throw new Error('Antigravity process started with no stdin pipe — cannot send prompt.');
+    throw new Error('The Antigravity CLI started with no stdin pipe — cannot send prompt.');
   }
   // One prompt line, then close stdin so agy ends after this turn.
   proc.stdin.write(agyPromptLine(opts.prompt), 'utf8');
@@ -242,7 +242,7 @@ function firstString(fallback: string, ...values: unknown[]): string {
 export function formatAgyUsage(json: string, formatTime: (iso: string) => string = iso => new Date(iso).toLocaleString()): string {
   const parsed = JSON.parse(json) as Record<string, unknown>;
   if (parsed.status !== 'SUCCESS') {
-    throw new Error(typeof parsed.error === 'string' && parsed.error ? parsed.error : 'Antigravity returned no usage information.');
+    throw new Error(typeof parsed.error === 'string' && parsed.error ? parsed.error : 'The Antigravity CLI returned no usage information.');
   }
   const data = (parsed.command as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined;
   const groups = (data?.groups ?? []) as Array<Record<string, unknown>>;
@@ -260,7 +260,7 @@ export function formatAgyUsage(json: string, formatTime: (iso: string) => string
   }
   if (!lines.length) {
     const text = typeof parsed.response === 'string' ? parsed.response.trim() : '';
-    if (!text) throw new Error('Antigravity returned no usage information.');
+    if (!text) throw new Error('The Antigravity CLI returned no usage information.');
     return text;
   }
   return lines.join('\n');
@@ -288,7 +288,7 @@ export async function listAgyModels(
   cwd: string,
 ): Promise<ModelOption[]> {
   const models = parseAgyModels(await runCli(binaryPath, ['models'], cwd, env, MODELS_TIMEOUT_MS));
-  if (!models.length) throw new Error('Antigravity listed no models.');
+  if (!models.length) throw new Error('The Antigravity CLI listed no models.');
   return models;
 }
 
@@ -345,7 +345,7 @@ function reportAgyError(cb: StreamCallbacks, text: string): void {
     agentsRejected = true;
   }
   if (cb.onApiError) cb.onApiError(err);
-  else cb.onText(`Antigravity error: ${err.message}`);
+  else cb.onText(`Gemini error: ${err.message}`);
 }
 
 export function parseAgyStream(proc: ChildProcess, cb: StreamCallbacks): void {
@@ -546,7 +546,7 @@ export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
 /** Chat only needs BojuBot's bojubot-chat agent (#403); without it agy can't
  *  block file access for a single session. Exported for tests. */
 export function agyUnavailableModes(caps: CliCapabilities): Partial<Record<PermissionMode, string>> {
-  return agyAgentsAvailable(caps) ? {} : { restricted: "Antigravity can't block file access for a single session." };
+  return agyAgentsAvailable(caps) ? {} : { restricted: "The Antigravity CLI can't block file access for a single session." };
 }
 
 /** Picker wording. Chat only is only described when it's offered. Exported for tests. */
@@ -561,12 +561,15 @@ export function agyModeDescriptions(caps: CliCapabilities): Partial<Record<Permi
 
 /** The Gemini sparkle from Microsoft's Codicons (CC BY 4.0, credited in src/credits.json;
  *  the mark itself is Google's). No Antigravity mark is published under an open license. */
-const GEMINI_MARK_SVG = '<svg role="img" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="100%" height="100%"><title>Antigravity</title><path d="M7.98695 0C8.15434 0 8.30031 0.114462 8.34117 0.276923C8.46604 0.773819 8.63059 1.25989 8.83323 1.73046C9.36295 2.96123 10.0898 4.0384 11.0127 4.96123C11.936 5.88431 13.0129 6.6112 14.2434 7.14092C14.7141 7.3435 15.2003 7.50805 15.6972 7.63298C15.8597 7.67385 15.9739 7.81957 15.9739 7.98695C15.9739 8.15434 15.8597 8.30031 15.697 8.34117C15.2001 8.46604 14.714 8.63059 14.2434 8.83323C13.0127 9.36295 11.9358 10.0898 11.0127 11.0127C10.0898 11.936 9.36295 13.0129 8.83323 14.2434C8.63056 14.7141 8.46593 15.2003 8.34092 15.6972C8.32114 15.7762 8.27558 15.8463 8.21146 15.8964C8.14734 15.9465 8.06833 15.9738 7.98695 15.9739C7.81957 15.9739 7.67385 15.8597 7.63298 15.697C7.50802 15.2001 7.34339 14.714 7.14068 14.2434C6.6112 13.0127 5.88455 11.9358 4.96123 11.0127C4.03815 10.0898 2.96123 9.36295 1.73046 8.83323C1.25987 8.63058 0.773805 8.46595 0.276923 8.34092C0.197979 8.3212 0.127873 8.27569 0.077712 8.21162C0.0275511 8.14755 0.00020297 8.06857 0 7.9872C0 7.81982 0.114462 7.67409 0.276923 7.63323C0.773826 7.50828 1.2599 7.34365 1.73046 7.14092C2.96123 6.61145 4.0384 5.88455 4.96123 4.96148C5.88431 4.03865 6.6112 2.96148 7.14092 1.73071C7.3435 1.26011 7.50804 0.774045 7.63298 0.277169C7.65267 0.198138 7.69819 0.127947 7.76232 0.0777335C7.82645 0.0275203 7.90551 0.000161972 7.98695 0Z"/></svg>';
+const GEMINI_MARK_SVG = '<svg role="img" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="100%" height="100%"><title>Gemini (Antigravity CLI)</title><path d="M7.98695 0C8.15434 0 8.30031 0.114462 8.34117 0.276923C8.46604 0.773819 8.63059 1.25989 8.83323 1.73046C9.36295 2.96123 10.0898 4.0384 11.0127 4.96123C11.936 5.88431 13.0129 6.6112 14.2434 7.14092C14.7141 7.3435 15.2003 7.50805 15.6972 7.63298C15.8597 7.67385 15.9739 7.81957 15.9739 7.98695C15.9739 8.15434 15.8597 8.30031 15.697 8.34117C15.2001 8.46604 14.714 8.63059 14.2434 8.83323C13.0127 9.36295 11.9358 10.0898 11.0127 11.0127C10.0898 11.936 9.36295 13.0129 8.83323 14.2434C8.63056 14.7141 8.46593 15.2003 8.34092 15.6972C8.32114 15.7762 8.27558 15.8463 8.21146 15.8964C8.14734 15.9465 8.06833 15.9738 7.98695 15.9739C7.81957 15.9739 7.67385 15.8597 7.63298 15.697C7.50802 15.2001 7.34339 14.714 7.14068 14.2434C6.6112 13.0127 5.88455 11.9358 4.96123 11.0127C4.03815 10.0898 2.96123 9.36295 1.73046 8.83323C1.25987 8.63058 0.773805 8.46595 0.276923 8.34092C0.197979 8.3212 0.127873 8.27569 0.077712 8.21162C0.0275511 8.14755 0.00020297 8.06857 0 7.9872C0 7.81982 0.114462 7.67409 0.276923 7.63323C0.773826 7.50828 1.2599 7.34365 1.73046 7.14092C2.96123 6.61145 4.0384 5.88455 4.96123 4.96148C5.88431 4.03865 6.6112 2.96148 7.14092 1.73071C7.3435 1.26011 7.50804 0.774045 7.63298 0.277169C7.65267 0.198138 7.69819 0.127947 7.76232 0.0777335C7.82645 0.0275203 7.90551 0.000161972 7.98695 0Z"/></svg>';
 
 export const antigravityBackend: AgentBackend = {
   id: 'antigravity',
   icon: { svg: GEMINI_MARK_SVG },
-  displayName: 'Antigravity',
+  label: 'Gemini (Antigravity CLI)',
+  name: 'Gemini',
+  cliName: 'Antigravity CLI',
+  cliPhrase: 'the Antigravity CLI',
   findBinary: findAgyBinary,
   probe: probeAgyCapabilities,
   spawnTurn: spawnAgy,

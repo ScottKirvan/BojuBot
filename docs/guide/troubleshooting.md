@@ -7,7 +7,7 @@
 BojuBot couldn't find the CLI for the agent new sessions use (**Settings → BojuBot → Agent**).
 
 - **Claude (Claude Code):** follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
-- **Gemini (Antigravity CLI):** install Google's Antigravity CLI (`agy`) and sign in, or set **Antigravity binary path**. See [Choosing an Agent](./agents#troubleshooting).
+- **Gemini (Antigravity CLI):** install Google's Antigravity CLI (`agy`) and sign in, or set **Antigravity CLI binary path**. See [Choosing an Agent](./agents#troubleshooting).
 - **Using Gemini but seeing the Claude Code panel?** Switch **Settings → BojuBot → Agent** to **Gemini (Antigravity CLI)**, then click **Check again**.
 
 ---
@@ -60,7 +60,7 @@ claude update
 
 :::
 
-Run `claude --version` afterwards to check, then restart Obsidian so BojuBot picks up the new version. The detected version is shown in the [Help & resources dialog](./chat-panel#about-dialog) and under **Claude binary path** in settings.
+Run `claude --version` afterwards to check, then restart Obsidian so BojuBot picks up the new version. The detected version is shown in the [Help & resources dialog](./chat-panel#about-dialog) and under **Claude Code binary path** in settings.
 
 ---
 

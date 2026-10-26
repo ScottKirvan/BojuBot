@@ -175,7 +175,7 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
 
   if (err.errorCode === AGY_AUTH) {
     return {
-      title: /expired/i.test(err.raw) ? 'Your Antigravity sign-in has expired' : "Antigravity isn't signed in",
+      title: /expired/i.test(err.raw) ? 'Your Antigravity CLI sign-in has expired' : "The Antigravity CLI isn't signed in",
       details: [
         'Click Open terminal below, or run "agy" in a terminal yourself. It opens a browser window where you sign in.',
         "Once you're signed in, close the terminal and send your message again.",
@@ -197,16 +197,16 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
 
   if (err.errorCode === 'agy_agent_rejected') {
     return {
-      title: "Antigravity couldn't start this mode's agent",
+      title: "The Antigravity CLI couldn't start this mode's agent",
       details: [
         err.message.split('\n')[0],
-        "Until Obsidian restarts, new Antigravity sessions start without it and Chat only is unavailable. Send your message again.",
+        "Until Obsidian restarts, new Gemini sessions start without it and Chat only is unavailable. Send your message again.",
       ],
     };
   }
 
   if (err.errorCode === 'agy_error') {
-    return { title: 'Antigravity error', details: [err.message] };
+    return { title: 'Gemini error', details: [err.message] };
   }
 
   return {

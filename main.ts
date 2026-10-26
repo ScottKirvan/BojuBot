@@ -8,7 +8,7 @@ import { ChatPanelState, PanelInfo, panelForSession, pickTargetPanel, planNewSes
 import { SessionStatus, statusNotice } from './src/utils/sessionStatus';
 import { BojuBotSettings, DEFAULT_SETTINGS, BojuBotSettingsTab, CLAUDE_MODELS, DEFAULT_MODEL_ID } from './src/settings';
 import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
-import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId } from './src/backends';
+import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId, sentenceStart } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
 import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
@@ -94,7 +94,7 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     if (!this.getBinaryPath(this.settings.backend)) {
-      new Notice(`${this.brand.name}: ${this.getBackend().displayName} binary not found. Check plugin settings.`);
+      new Notice(`${this.brand.name}: ${sentenceStart(this.getBackend().cliPhrase)} wasn't found. Check plugin settings.`);
     }
 
     // Register custom icon — three S-curves suggesting bojubot folds (gyri).
@@ -788,7 +788,7 @@ export default class BojuBotPlugin extends Plugin {
   installedAgentVersions(): AgentVersion[] {
     return BACKEND_IDS
       .filter(id => this.runtime[id].binaryPath && this.runtime[id].caps.version)
-      .map(id => ({ name: getBackend(id).displayName, version: this.runtime[id].caps.version ?? "" }));
+      .map(id => ({ name: getBackend(id).cliName, version: this.runtime[id].caps.version ?? "" }));
   }
 
   /** Settings changed the backend for new sessions. */
@@ -818,7 +818,7 @@ export default class BojuBotPlugin extends Plugin {
         if (seq !== rt.probeSeq) return;
         rt.models = models;
       } catch (e) {
-        warn(`${backend.displayName} model list failed:`, e instanceof Error ? e.message : String(e));
+        warn(`${backend.cliName} model list failed:`, e instanceof Error ? e.message : String(e));
       }
     }
     for (const view of this.chatViews()) view.onCliCapabilitiesChanged(id);
@@ -868,7 +868,7 @@ export default class BojuBotPlugin extends Plugin {
   private showMemoryUpdateNotice(): void {
     const notice = new Notice('', 8000);
     notice.messageEl.empty();
-    notice.messageEl.createSpan({ text: 'Memory file was modified by Claude. ' });
+    notice.messageEl.createSpan({ text: 'Memory file was modified by the agent. ' });
     const link = notice.messageEl.createEl('a', { cls: 'bojubot-notice-link', text: 'Review', href: '#' });
     link.addEventListener('click', (e) => {
       e.preventDefault();
