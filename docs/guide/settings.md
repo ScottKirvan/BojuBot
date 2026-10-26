@@ -2,6 +2,8 @@
 
 Open **Settings → BojuBot** to configure. Grouped below to match the sections in the settings panel itself.
 
+On Obsidian 1.13 or later you can also find any BojuBot setting with the search in Obsidian's settings window (Ctrl+F, or Cmd+F on macOS, while settings are open): type part of its name or description (for example *minimal mode* or *allowlist*) and pick the result to jump straight to it.
+
 ## General
 
 | Setting                            | Default | Description                                                                                                                                                                          |

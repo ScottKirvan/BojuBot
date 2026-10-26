@@ -4,7 +4,8 @@
   display: none;
 }
 
-.bojubot-setting-muted {
+/* Context rows muted by minimal mode (disabled rows in the settings group) */
+.bojubot-settings-context .setting-item.is-disabled {
   opacity: 0.35;
   pointer-events: none;
 }
@@ -1480,6 +1481,15 @@
 }
 
 /* ── Command allowlist browser (settings) ── */
+/* The "Filter commands" row wraps its list onto a full-width line below */
+.setting-item.bojubot-command-browser {
+  flex-wrap: wrap;
+}
+
+.bojubot-command-browser-body {
+  flex-basis: 100%;
+}
+
 .bojubot-command-list {
   max-height: 240px;
   overflow-y: auto;

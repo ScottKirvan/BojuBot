@@ -52,6 +52,8 @@ import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, 
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
 import { IDLE_STATUS, StatusEvent, nextStatus, displayStatus, statusNotice, STATUS_LABELS } from '../src/utils/sessionStatus';
+import { evalFlag, rowDisabled, hasContent, planFallback, asText, parseNonNegativeInt, tokenCapText, brandFieldOf, orphanedCommandIds, filterCommands, commandCountText } from '../src/utils/settingDefinitions';
+import type { SettingDefinition, SettingDefinitionItem } from 'obsidian';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -5771,4 +5773,209 @@ describe('SessionCoordinator agent switch and per-agent effort (#402)', () => {
     assert.equal(agy.spawns[0].model, 'gemini-3.8-flash');
     assert.equal(agy.spawns[0].effort, 'low');
   }));
+});
+// ---------------------------------------------------------------------------
+// Settings tab definitions (src/utils/settingDefinitions.ts)
+// ---------------------------------------------------------------------------
+
+describe('evalFlag', () => {
+  test('undefined uses the fallback', () => {
+    assert.equal(evalFlag(undefined, true), true);
+    assert.equal(evalFlag(undefined, false), false);
+  });
+  test('a boolean is used as-is', () => {
+    assert.equal(evalFlag(false, true), false);
+    assert.equal(evalFlag(true, false), true);
+  });
+  test('a predicate is called each time', () => {
+    let on = false;
+    const flag = () => on;
+    assert.equal(evalFlag(flag, true), false);
+    on = true;
+    assert.equal(evalFlag(flag, false), true);
+  });
+  test('a predicate that throws counts as the fallback', () => {
+    const original = console.error;
+    console.error = () => undefined;
+    try {
+      assert.equal(evalFlag(() => { throw new Error('boom'); }, true), true);
+      assert.equal(evalFlag(() => { throw new Error('boom'); }, false), false);
+    } finally {
+      console.error = original;
+    }
+  });
+});
+
+describe('rowDisabled', () => {
+  test("reads the control's disabled flag", () => {
+    assert.equal(rowDisabled({ name: 'a', control: { type: 'toggle', key: 'a', disabled: true } }), true);
+    assert.equal(rowDisabled({ name: 'a', control: { type: 'toggle', key: 'a', disabled: () => false } }), false);
+    assert.equal(rowDisabled({ name: 'a', control: { type: 'toggle', key: 'a' } }), false);
+  });
+  test("reads an action row's own disabled flag", () => {
+    assert.equal(rowDisabled({ name: 'a', action: () => undefined, disabled: () => true }), true);
+  });
+  test('render and empty rows are never disabled by the renderer', () => {
+    assert.equal(rowDisabled({ name: 'a', render: () => undefined }), false);
+    assert.equal(rowDisabled({ name: 'a' }), false);
+  });
+});
+
+describe('hasContent', () => {
+  test('a definition with a name, render, control or action is drawn', () => {
+    assert.equal(hasContent({ name: 'a' }), true);
+    assert.equal(hasContent({ name: '', render: () => undefined }), true);
+    assert.equal(hasContent({ name: '', control: { type: 'text', key: 'k' } }), true);
+    assert.equal(hasContent({ name: '', action: () => undefined }), true);
+  });
+  test('a nameless description-only definition is skipped (as Obsidian does)', () => {
+    assert.equal(hasContent({ name: '', desc: 'text' }), false);
+  });
+});
+
+describe('planFallback', () => {
+  const row = (name: string, extra: Partial<SettingDefinition> = {}): SettingDefinition =>
+    ({ name, ...extra } as SettingDefinition);
+  const names = (items: SettingDefinitionItem[]) =>
+    planFallback(items).map(s => ({ heading: s.heading, cls: s.cls, rows: s.rows.map(r => r.def.name) }));
+
+  test('groups become sections with their heading and class, in order', () => {
+    assert.deepEqual(names([
+      { type: 'group', items: [row('a')] },
+      { type: 'group', heading: 'Two', cls: 'x', items: [row('b'), row('c')] },
+    ]), [
+      { heading: undefined, cls: undefined, rows: ['a'] },
+      { heading: 'Two', cls: 'x', rows: ['b', 'c'] },
+    ]);
+  });
+  test('consecutive top-level definitions share one untitled section', () => {
+    assert.deepEqual(names([row('a'), row('b'), { type: 'group', heading: 'G', items: [row('c')] }, row('d')]), [
+      { heading: undefined, cls: undefined, rows: ['a', 'b'] },
+      { heading: 'G', cls: undefined, rows: ['c'] },
+      { heading: undefined, cls: undefined, rows: ['d'] },
+    ]);
+  });
+  test('hidden rows are left out; predicates are evaluated at plan time', () => {
+    let show = false;
+    const items: SettingDefinitionItem[] = [{ type: 'group', items: [row('a'), row('b', { visible: () => show }), row('c', { visible: false })] }];
+    assert.deepEqual(names(items)[0].rows, ['a']);
+    show = true;
+    assert.deepEqual(names(items)[0].rows, ['a', 'b']);
+  });
+  test('a hidden group is left out with its heading', () => {
+    assert.deepEqual(names([{ type: 'group', heading: 'G', visible: () => false, items: [row('a')] }]), []);
+  });
+  test('a group whose rows are all hidden is left out', () => {
+    assert.deepEqual(names([{ type: 'group', heading: 'G', items: [row('a', { visible: false })] }]), []);
+  });
+  test('an empty group keeps its heading', () => {
+    assert.deepEqual(names([{ type: 'group', heading: 'G', items: [] }]), [{ heading: 'G', cls: undefined, rows: [] }]);
+  });
+  test('lists render like groups; pages and contentless rows are skipped', () => {
+    assert.deepEqual(names([
+      { type: 'page', name: 'P', items: [row('inside')] },
+      { type: 'list', heading: 'L', items: [row('a'), { type: 'page', name: 'Q' }, row('', { desc: 'only' })] },
+    ]), [{ heading: 'L', cls: undefined, rows: ['a'] }]);
+  });
+  test('rows carry their disabled state', () => {
+    const plan = planFallback([{ type: 'group', items: [
+      row('a', { control: { type: 'toggle', key: 'a', disabled: () => true } }),
+      row('b', { control: { type: 'toggle', key: 'b' } }),
+    ] }]);
+    assert.deepEqual(plan[0].rows.map(r => r.disabled), [true, false]);
+  });
+});
+
+describe('asText', () => {
+  test('strings, numbers and booleans become field text', () => {
+    assert.equal(asText('abc'), 'abc');
+    assert.equal(asText(''), '');
+    assert.equal(asText(-1), '-1');
+    assert.equal(asText(false), 'false');
+  });
+  test('missing values and objects are blank', () => {
+    assert.equal(asText(undefined), '');
+    assert.equal(asText(null), '');
+    assert.equal(asText({ a: 1 }), '');
+  });
+});
+
+describe('parseNonNegativeInt', () => {
+  test('parses whole numbers', () => {
+    assert.equal(parseNonNegativeInt('50000'), 50000);
+    assert.equal(parseNonNegativeInt('12abc'), 12);
+    assert.equal(parseNonNegativeInt('0'), 0);
+  });
+  test('blank, negative or non-numeric input is 0', () => {
+    assert.equal(parseNonNegativeInt(''), 0);
+    assert.equal(parseNonNegativeInt('-5'), 0);
+    assert.equal(parseNonNegativeInt('abc'), 0);
+  });
+});
+
+describe('tokenCapText', () => {
+  test('0 (no limit) shows as a blank field', () => {
+    assert.equal(tokenCapText(0), '');
+  });
+  test('a limit shows as its number', () => {
+    assert.equal(tokenCapText(4000), '4000');
+  });
+});
+
+describe('brandFieldOf', () => {
+  test('maps brand.* control keys to branding fields', () => {
+    assert.equal(brandFieldOf('brand.name'), 'name');
+    assert.equal(brandFieldOf('brand.icon'), 'icon');
+    assert.equal(brandFieldOf('brand.logo'), 'logo');
+    assert.equal(brandFieldOf('brand.sprite'), 'sprite');
+    assert.equal(brandFieldOf('brand.applyToAssistantIdentity'), 'applyToAssistantIdentity');
+    assert.equal(brandFieldOf('brand.locked'), 'locked');
+  });
+  test('other keys and unknown branding fields are null', () => {
+    assert.equal(brandFieldOf('binaryPath'), null);
+    assert.equal(brandFieldOf('brand'), null);
+    assert.equal(brandFieldOf('brand.links'), null);
+    assert.equal(brandFieldOf('brandname'), null);
+  });
+});
+
+describe('command allowlist browser', () => {
+  const commands = [
+    { id: 'app:open-help', name: 'Open help' },
+    { id: 'editor:open-search', name: 'Search: Find' },
+    { id: 'switcher:open', name: 'Quick switcher: Open' },
+  ];
+
+  test('orphanedCommandIds lists allowlisted IDs with no registered command, in order', () => {
+    assert.deepEqual(orphanedCommandIds(['gone:b', 'switcher:open', 'gone:a'], commands), ['gone:b', 'gone:a']);
+    assert.deepEqual(orphanedCommandIds(['switcher:open'], commands), []);
+    assert.deepEqual(orphanedCommandIds([], commands), []);
+  });
+
+  test('filterCommands puts allowlisted commands first, otherwise keeps the order', () => {
+    assert.deepEqual(filterCommands(commands, ['switcher:open'], '').map(c => c.id),
+      ['switcher:open', 'app:open-help', 'editor:open-search']);
+  });
+  test('filterCommands matches name or ID, ignoring case', () => {
+    assert.deepEqual(filterCommands(commands, [], 'SEARCH').map(c => c.id), ['editor:open-search']);
+    assert.deepEqual(filterCommands(commands, [], 'app:').map(c => c.id), ['app:open-help']);
+    assert.deepEqual(filterCommands(commands, [], 'nothing'), []);
+  });
+  test('filterCommands does not reorder its input', () => {
+    const input = commands.slice();
+    filterCommands(input, ['switcher:open'], '');
+    assert.deepEqual(input, commands);
+  });
+
+  test('commandCountText with nothing allowlisted', () => {
+    assert.equal(commandCountText([], commands), 'No commands enabled.');
+  });
+  test('commandCountText counts enabled commands', () => {
+    assert.equal(commandCountText(['switcher:open'], commands), '1 command enabled.');
+    assert.equal(commandCountText(['switcher:open', 'app:open-help'], commands), '2 commands enabled.');
+  });
+  test('commandCountText reports allowlisted IDs that are not found', () => {
+    assert.equal(commandCountText(['switcher:open', 'gone:a'], commands), '1 command enabled, 1 not found (uncheck to remove).');
+    assert.equal(commandCountText(['gone:a', 'gone:b'], commands), '0 commands enabled, 2 not found (uncheck to remove).');
+  });
 });
