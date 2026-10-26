@@ -22,7 +22,7 @@ hero:
 features:
   - icon: 🧠
     title: Full vault access
-    details: Claude can read, write, create, move, and organize any note in your vault. Just describe what you need.
+    details: Your agent can read, write, create, move, and organize any note in your vault. Just describe what you need.
 
   - icon: 💬
     title: Persistent sessions
@@ -30,19 +30,19 @@ features:
 
   - icon: 📎
     title: Rich context attachment
-    details: Attach notes with @-mention, paste images from clipboard, drag files from Explorer, or attach any URL — Claude sees it all.
+    details: Attach notes with @-mention, paste images from clipboard, drag files from Explorer, or attach any URL — your agent sees it all.
 
   - icon: 🔧
     title: Runs Obsidian commands
-    details: Claude can trigger Obsidian commands directly — open today's daily note, refresh Dataview, run Templater templates, and more.
+    details: Your agent can trigger Obsidian commands directly — open today's daily note, refresh Dataview, run Templater templates, and more.
 
   - icon: 🔒
     title: Permission modes
     details: Choose Chat only, Read-only, Standard, or Full Access per session. Blocked operations surface a clear denial card with a one-click upgrade option.
 
   - icon: 🔌
-    title: No API key needed
-    details: BojuBot rides your existing Claude Pro or Max subscription via the Claude Code CLI. No separate billing, no extra configuration.
+    title: Claude or Gemini, no API key
+    details: Use Claude through Claude Code with your Claude Pro or Max subscription, or Gemini through Google's Antigravity CLI (in beta builds). BojuBot runs the agent on your computer with the account you already have. No separate billing.
 ---
 
 <!-- Begin Sponsors -->

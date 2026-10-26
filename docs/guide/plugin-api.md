@@ -8,7 +8,7 @@ The plugin API is available in BojuBot 2.14.0 and later. It is designed for supp
 
 ## Overview
 
-`SessionCoordinator` is the session and turn lifecycle manager inside BojuBot. It owns session state (ID, title, timestamps), spawns Claude turns, and emits typed events as the stream progresses. External plugins subscribe to those events to react to what Claude is doing without coupling to BojuBot's internal DOM or chat UI.
+`SessionCoordinator` is the session and turn lifecycle manager inside BojuBot. It owns session state (ID, title, timestamps), spawns agent turns (Claude Code or Antigravity), and emits typed events as the stream progresses. External plugins subscribe to those events to react to what the agent is doing without coupling to BojuBot's internal DOM or chat UI.
 
 ## Accessing the coordinator
 
@@ -40,30 +40,30 @@ All events are typed. Import `SessionCoordinatorEvents` for the full type map.
 | ----------------- | ----------------------------------- | ----------------------------------------------------------- |
 | `session:new`     | `(session: StoredSession)`          | A fresh session placeholder was created                     |
 | `session:loaded`  | `(payload: SessionLoadedPayload)`   | A session was loaded from the session list                  |
-| `session:updated` | `(updates: { title?, sessionId? })` | The session title or Claude session ID changed after a turn |
+| `session:updated` | `(updates: { title?, sessionId? })` | The session title or the agent's conversation ID changed after a turn |
 
 `SessionLoadedPayload`:
 ```typescript
 interface SessionLoadedPayload {
   session: StoredSession;  // session metadata
   messages: ChatMessage[]; // loaded history (empty if remote/new)
-  isNew: boolean;          // session has no prior Claude conversation
+  isNew: boolean;          // session has no prior agent conversation
   canResume: boolean;      // history is available locally
 }
 ```
 
 ### Turn events
 
-These fire in order during a Claude turn:
+These fire in order during an agent turn:
 
 | Event               | Payload                        | When                                                             |
 | ------------------- | ------------------------------ | ---------------------------------------------------------------- |
-| `turn:start`        | `()`                           | Claude process spawned                                           |
+| `turn:start`        | `()`                           | Agent CLI process spawned                                        |
 | `turn:text`         | `(accumulated: string, committed: string)` | Text received. `accumulated` is the text to display so far, including a live preview of the reply being written when [streaming](./settings#general) is on. `committed` is the clean text from complete messages only — use it if you need final text |
 | `turn:action`       | `(action: BojuBotAction)`      | UI bridge action parsed (excludes `request-permission`)          |
-| `turn:tool-call`    | `(tool, input, toolUseId)`     | Claude initiated a tool call                                     |
+| `turn:tool-call`    | `(tool, input, toolUseId)`     | The agent initiated a tool call                                  |
 | `turn:tool-result`  | `(toolUseId, content)`         | Tool result received                                             |
-| `turn:query`        | `(query: VaultQuery)`          | Claude issued a vault query (backlinks, outlinks, tags, file-list) |
+| `turn:query`        | `(query: VaultQuery)`          | The agent issued a vault query (backlinks, outlinks, tags, file-list) |
 | `turn:usage`        | `(usage: TokenUsage)`          | Token usage statistics                                           |
 | `turn:stderr`       | `(err: string)`                | stderr output (non-fatal)                                        |
 | `turn:error`        | `(err: string)`                | Fatal process error — no `turn:done` follows                     |
@@ -83,7 +83,8 @@ interface TurnDoneResult {
 ## State accessors
 
 ```typescript
-coordinator.sessionId        // Claude's internal session ID (used for --resume)
+coordinator.sessionId        // the agent CLI's conversation ID (used to resume it)
+coordinator.backendId        // 'claude-code' | 'antigravity'
 coordinator.sessionFileId    // JSON storage file ID
 coordinator.sessionTitle     // current session title
 coordinator.sessionCreatedAt // ISO timestamp
@@ -148,7 +149,7 @@ coordinator.on('turn:done', (result) => {
   if (!result.clean) return; // interrupted — skip
   if (!result.sessionId) return;
 
-  // Do something after every Claude response, e.g. trigger a Dataview refresh
+  // Do something after every agent response, e.g. trigger a Dataview refresh
   this.app.commands.executeCommandById('dataview:dataview-force-refresh-views');
 });
 ```

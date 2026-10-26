@@ -4,9 +4,9 @@ The chat panel opens as a sidebar. You can open several, as tabs or splits, each
 
 If you would prefer to exclusively use the **Up Arrow** icon to send messages rather than the **Enter** key, the "Send on Enter" behavior can be toggled in **Settings → BojuBot → Send On Enter**.
 
-Replies stream in word by word as Claude writes them, then switch to fully formatted markdown when each reply is complete. To get a whole block at a time instead, turn off **Settings → BojuBot → Stream replies as they're written**. Live streaming needs a Claude Code version that supports it; on older versions replies arrive a block at a time either way.
+Replies stream in word by word as the agent writes them, then switch to fully formatted markdown when each reply is complete. To get a whole block at a time instead, turn off **Settings → BojuBot → Stream replies as they're written**. On Claude Code, live streaming needs a version that supports it; on older versions replies arrive a block at a time either way.
 
-In **Standard** permissions mode, Claude has access to your full vault — it can read, write, create, move, and organize notes. The vault root is Claude's working directory.  You can confirm this by typing, "What is your current working directory?"
+In **Standard** permissions mode, the agent has access to your full vault — it can read, write, create, move, and organize notes. The vault root is the agent's working directory.  You can confirm this by typing, "What is your current working directory?"
 
 ---
 
@@ -60,8 +60,8 @@ Non-Markdown files show their extension in the dropdown. By default all vault fi
 
 | Option          | What it does                                                                                                                                                      |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Attach file** | Opens your system file picker. Text files (`.md`, `.txt`, `.js`, etc.) are read inline. Images and PDFs are copied to a temporary folder so Claude can read them. |
-| **Attach URL**  | Passes a URL to Claude as-is. Claude fetches or references it based on your message.                                                                              |
+| **Attach file** | Opens your system file picker. Text files (`.md`, `.txt`, `.js`, etc.) are read inline. Images and PDFs are copied to a temporary folder so the agent can read them. |
+| **Attach URL**  | Passes a URL to the agent as-is. The agent fetches or references it based on your message.                                                                        |
 | **@ Add note**  | Opens the same vault note search as the `@` shortcut.                                                                                                             |
 
 ### Paste from clipboard
@@ -95,7 +95,9 @@ The change takes effect on the next message. See [Permissions](./permissions.md)
 
 ## Model Indicator
 
-The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the active Claude model. Click it to open the model picker and switch to a different model.
+The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the session's model. Click it to open the model picker and switch to a different model. The picker lists the models of the session's agent.
+
+On **Claude Code**, the built-in models are:
 
 | Model         | Best for                         |
 | ------------- | -------------------------------- |
@@ -104,32 +106,34 @@ The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects th
 | Claude Opus   | Complex reasoning and long tasks |
 | Claude Fable  | Long-running agents              |
 
+On **Antigravity** <Badge type="warning" text="Beta" />, the picker shows whatever `agy models` lists, and **Antigravity default** lets Antigravity choose. See [Choosing an Agent](./agents#what-s-different-on-antigravity).
+
 You can switch models **mid-conversation** — the session continues with its full history, and the new model takes over from your next message. This is handy for getting a second opinion: work through a problem with one model, then switch to another to review the result without re-explaining everything.
 
-The selected model also becomes the default for new sessions and persists across restarts. If the session was started as a [Custom session](./sessions.md#starting-a-new-session) with its own pinned model, switching updates that session's model too.
+The selected model also becomes the default for new sessions on that agent and persists across restarts. If the session was started as a [Custom session](./sessions.md#starting-a-new-session) with its own pinned model, switching updates that session's model too.
 
 ::: tip
-The first message after a switch costs more than usual: prompt caching is per model, so the new model reads the conversation history uncached once. Later messages are cached again.
+On Claude Code, the first message after a switch costs more than usual: prompt caching is per model, so the new model reads the conversation history uncached once. Later messages are cached again.
 :::
 
 You can also switch via `/model` in the slash menu or **BojuBot: Switch model** in the Command Palette.
 
-To add models not in the built-in list, see [Custom models](./settings.md#custom-models) in Settings.
+To add Claude Code models not in the built-in list, see [Custom models](./settings.md#custom-models) in Settings.
 
 ### Effort
 
-Effort controls how much thinking Claude does on each turn — lower is faster and lighter on your plan, higher reasons more deeply on hard problems. Click the **gauge icon** next to the model name to pick a level. When a level other than **Default** is active, the model indicator shows it, e.g. *Claude Sonnet 5.5 · high*.
+Effort controls how much thinking the model does on each turn — lower is faster and lighter on your plan or quota, higher reasons more deeply on hard problems. Click the **gauge icon** next to the model name to pick a level. When a level other than **Default** is active, the model indicator shows it, e.g. *Claude Sonnet 5.5 · high*.
 
 | Level       | What it means                                     |
 | ----------- | ------------------------------------------------- |
-| **Default** | Let Claude Code choose (no level is sent)         |
+| **Default** | Let the agent choose (no level is sent)           |
 | low         | Fastest replies, least thinking                   |
 | medium      | Balanced speed and depth                          |
 | high        | Deeper reasoning for harder tasks                 |
 | xhigh       | Extra thinking — slower, uses more of your plan   |
 | max         | Most thinking — slowest, uses the most of your plan |
 
-The list comes from your installed Claude Code CLI, so it may differ on other versions. If your CLI doesn't support effort levels, the gauge icon and the effort commands are hidden.
+The list comes from the session's agent CLI, so it may differ between agents and versions. If the CLI doesn't support effort levels (older Claude Code versions, for example), the gauge icon and the effort commands are hidden.
 
 Like a model switch, an effort change applies from your **next message** and the session continues. The chosen level also becomes the default for new sessions. A [Custom session](./sessions.md#starting-a-new-session) can pin its own level; switching mid-session updates that pin too.
 
@@ -139,27 +143,32 @@ You can also switch via `/effort` in the slash menu or **BojuBot: Switch effort*
 
 ## Plan Usage
 
-Choose **Usage** from the `/` menu (or run **BojuBot: Show plan usage** from the Command Palette) to see how much of your Claude plan you've used — the current session and current week percentages and when they reset, plus Claude Code's breakdown of what's contributing. The report appears as a card in the chat.
+Choose **Usage** from the `/` menu (or run **BojuBot: Show plan usage** from the Command Palette) to see how much of your plan or quota you've used. The report appears as a card in the chat, and depends on the session's agent:
 
-Checking usage is free: it runs Claude Code's own `/usage` command in a separate process, so it isn't sent to Claude, doesn't become part of your conversation, and doesn't affect the context gauge. You can check it while Claude is still replying.
+- **Claude Code:** how much of your Claude plan you've used — the current session and current week percentages and when they reset, plus Claude Code's breakdown of what's contributing.
+- **Antigravity** <Badge type="warning" text="Beta" />: the remaining weekly and 5-hour quota for each Antigravity model group.
+
+Checking usage is free: it runs the agent CLI's own `/usage` command in a separate process, so it isn't sent to the model, doesn't become part of your conversation, and doesn't affect the context gauge. You can check it while the agent is still replying.
 
 ---
 
 ## Context Gauge
 
-A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.
+*Claude Code only.* A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.
+
+Antigravity sessions don't show the gauge, because Antigravity doesn't report its context size or offer a compact command.
 
 ---
 
 ## Tool Call Visibility
 
-While Claude is working, tool calls appear above the response bubble in real time — you can see what Claude is reading, writing, or searching. When the response completes, the tool list collapses to a single toggle line. Click to expand or collapse.
+While the agent is working, tool calls appear above the response bubble in real time — you can see what it's reading, writing, or searching. When the response completes, the tool list collapses to a single toggle line. Click to expand or collapse.
 
 ---
 
 ## Running Obsidian Commands
 
-Claude can execute Obsidian commands directly. Three are pre-approved by default:
+The agent can execute Obsidian commands directly. Three are pre-approved by default:
 
 | Command                   | ID                   |
 | ------------------------- | -------------------- |
@@ -186,7 +195,7 @@ Commands only run in **Standard** and **Full access**. In Chat only and Read onl
 
 ## Opening & Navigating Files
 
-Claude can open a note directly in your workspace as part of its response — for example, after creating or finding something you'll want to look at:
+The agent can open a note directly in your workspace as part of its response — for example, after creating or finding something you'll want to look at:
 
 | Behavior             | What happens                                          |
 | --------------------- | ------------------------------------------------------ |
@@ -195,23 +204,23 @@ Claude can open a note directly in your workspace as part of its response — fo
 | Open in a new tab     | Stacked tab — doesn't replace or split anything         |
 | Jump to a heading     | Opens the file and scrolls to a specific heading        |
 
-All of these are immediate — no confirmation needed — and Claude posts a short notice each time, so you always know what changed. They work in every permission mode, including Chat only: they only change what's on your screen and send nothing back to Claude.
+All of these are immediate — no confirmation needed — and the agent posts a short notice each time, so you always know what changed. They work in every permission mode, including Chat only: they only change what's on your screen and send nothing back to the agent.
 
 ---
 
 ## Other Actions
 
-A few smaller things Claude can do as part of a conversation:
+A few smaller things the agent can do as part of a conversation:
 
 - **Change how it addresses you (or itself)** — just say so, e.g. *"Call me Alex from now on"* or *"I'd rather you go by a different name."* Persists across sessions.
-- **Request permission** — if a task genuinely needs a capability your current permission mode blocks (e.g. a shell command that changes files, which Standard mode denies), Claude can ask instead of giving up silently. You decide via the denial card on your next message — see [Permission Denials](./permissions.md#permission-denials).
-- **Open Settings** or **the quick switcher** — Claude asks first in chat text, waits for you to confirm, then acts on your next message. Never fires without that round-trip.
+- **Request permission** — if a task genuinely needs a capability your current permission mode blocks (e.g. a shell command that changes files, which Standard mode denies), the agent can ask instead of giving up silently. You decide via the denial card on your next message — see [Permission Denials](./permissions.md#permission-denials).
+- **Open Settings** or **the quick switcher** — the agent asks first in chat text, waits for you to confirm, then acts on your next message. Never fires without that round-trip.
 
 ---
 
 ## File Operations
 
-Claude can rename, move, and delete vault files through Obsidian's own API rather than the filesystem directly — so wikilinks and embeds pointing at the file update automatically instead of breaking.
+The agent can rename, move, and delete vault files through Obsidian's own API rather than the filesystem directly — so wikilinks and embeds pointing at the file update automatically instead of breaking.
 
 - **Delete** moves the file to trash per your vault's configured trash preference (system trash or `.trash/` folder) — it's not a permanent delete.
 - Requires **Standard** or **Full access** permission mode. In Chat only or Read only mode these are no-ops — the current mode doesn't allow vault writes, so nothing happens (with a notice explaining why).

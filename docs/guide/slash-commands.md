@@ -23,18 +23,19 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Session** | Show sessions     | Browse and resume past sessions in the [Sessions panel](./sessions#sessions-panel) |
 | **Session** | Export session    | Save the current session to your vault   |
 | **Session** | Switch model      | Change model; the session continues     |
-| **Session** | Switch effort     | Change effort level (`/effort`); shown only when your Claude Code CLI supports it |
-| **Session** | Usage             | Show how much of your plan's session and weekly limits you've used (`/usage`). Free, and not sent to Claude |
+| **Session** | Switch effort     | Change effort level (`/effort`); shown only when the session's agent CLI supports it |
+| **Session** | Usage             | Show how much of your plan or quota you've used (`/usage`): Claude plan limits on Claude Code, model-group quota on Antigravity. Free, and not sent to the model |
 | **Context** | Attach file       | Add a file, image, or URL to the prompt  |
 | **Context** | Open context file | Edit your persistent vault context       |
 | **Context** | Refresh context   | Re-inject vault context into the session |
 | **Context** | Open settings     | Open BojuBot settings                    |
 | **Help**    | Report a problem  | Report a bug, request a feature or send feedback (`/bug`) — see [Reporting a problem](./chat-panel#reporting-a-problem) |
 | **Help**    | Help              | Open Help & resources (`/help`): docs, help, report a problem, version info |
+| **Security** | Audit memory file | Ask the agent to review your context file for suspicious content — see [Commands](./commands#context-memory) |
 
 ## Skills
 
-Skills are the real power of the `/` menu. A skill is a markdown file that gives Claude a defined mission — from a simple reusable prompt to a fully parameterized agentic workflow.
+Skills are the real power of the `/` menu. A skill is a markdown file that gives your agent a defined mission — from a simple reusable prompt to a fully parameterized agentic workflow.
 
 Drop a `.md` file in your skills folder and it appears in the menu instantly. No restart required.
 
@@ -82,4 +83,4 @@ params:
 File a GitHub issue in {{repo}} titled "{{title}}".
 ```
 
-The user fills in the form, hits **Run**, and Claude gets a precisely scoped prompt. No prompt editing required.
+The user fills in the form, hits **Run**, and the agent gets a precisely scoped prompt. No prompt editing required.

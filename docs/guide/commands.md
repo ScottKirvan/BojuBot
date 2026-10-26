@@ -25,8 +25,8 @@ With several chat panels open, commands that act on a chat panel use the one you
 | **BojuBot: New session**            | `new-session`             | Start a fresh conversation. The current session is saved automatically. If a reply is still running, it keeps running and the new session opens in a new tab. |
 | **BojuBot: Clear current session**  | `clear-session`           | Clear all messages from the current session. Context is re-injected on the next message. |
 | **BojuBot: Switch model**           | `switch-model`            | Open the model picker. The current session continues with the new model — see [Model Indicator](./chat-panel#model-indicator). |
-| **BojuBot: Switch effort**          | `switch-effort`           | Open the effort picker (Default / low / medium / high / …). Takes effect on the next message — see [Effort](./chat-panel#effort). Only listed when your Claude Code CLI supports effort levels. |
-| **BojuBot: Show plan usage**        | `show-plan-usage`         | Show your Claude plan's usage (current session and week) in the chat panel — see [Plan usage](./chat-panel#plan-usage). Doesn't use any of your limits and isn't part of the conversation. |
+| **BojuBot: Switch effort**          | `switch-effort`           | Open the effort picker (Default / low / medium / high / …). Takes effect on the next message — see [Effort](./chat-panel#effort). Only listed when the session's agent CLI supports effort levels. |
+| **BojuBot: Show plan usage**        | `show-plan-usage`         | Show your plan or quota usage in the chat panel (Claude plan limits on Claude Code, model-group quota on Antigravity) — see [Plan usage](./chat-panel#plan-usage). Doesn't use any of your limits and isn't part of the conversation. |
 | **BojuBot: Change permission mode** | `change-permission-mode`  | Open a picker to change the open session's permission mode (Chat only / Read only / Standard / Full access); it's saved with the session and becomes the default for new ones. Takes effect on the next message. |
 
 ## Context & Memory
@@ -35,7 +35,7 @@ With several chat panels open, commands that act on a chat panel use the one you
 | ----------------------------------------| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | **BojuBot: Open context file**         | `open-context-file`   | Open `_claude-context.md` (or your configured path) for editing.                                                                   |
 | **BojuBot: Refresh session context**   | `refresh-context`     | Re-inject the context file, command allowlist, and frontmatter into the active session. Queued and sent with your next message.    |
-| **BojuBot: Audit memory file**         | `audit-memory-file`   | Starts a new session and asks Claude to review your context file for prompt-injection-style content — instructions or directives that look out of place, encoded/obfuscated text, or anything a third party may have slipped in. Run this if autonomous memory is on and you want a sanity check. |
+| **BojuBot: Audit memory file**         | `audit-memory-file`   | Starts a new session and asks the agent to review your context file for prompt-injection-style content — instructions or directives that look out of place, encoded/obfuscated text, or anything a third party may have slipped in. Run this if autonomous memory is on and you want a sanity check. |
 | **BojuBot: Send selection as context** | `send-selection`      | Highlight text in any note, then run this command to attach it as context.                                                         |
 
 ## Communication & Settings
@@ -44,7 +44,7 @@ With several chat panels open, commands that act on a chat panel use the one you
 | ---------------------------------------| ------------------------ | --------------------------------------------------------------------------------- |
 | **BojuBot: Export conversation**      | `export-conversation`  | Copy the current conversation as markdown to the clipboard.                    |
 | **BojuBot: Export session to vault**  | `export-to-vault`      | Save the current conversation as a vault note. Prompts for a path (defaults to configured Export folder). |
-| **BojuBot: Copy last response**       | `copy-last-response`   | Copy Claude's last response to the clipboard.                                  |
+| **BojuBot: Copy last response**       | `copy-last-response`   | Copy the agent's last response to the clipboard.                               |
 | **BojuBot: Open settings**            | `open-settings`        | Jump directly to the BojuBot settings panel.                                   |
 | **BojuBot: Open help & resources**    | `open-help`            | Open Help & resources: version info, docs, help, credits — see [About Dialog](./chat-panel#about-dialog). |
 | **BojuBot: About (deprecated)**       | `show-about`           | Same as `open-help`. Kept so existing hotkeys keep working; use `open-help` instead. |
