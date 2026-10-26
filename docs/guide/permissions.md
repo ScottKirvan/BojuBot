@@ -1,13 +1,13 @@
 # Permissions
 
-BojuBot runs an agent CLI (Claude Code for Claude, or [Antigravity](./agents) for Gemini) as a subprocess and controls what it's allowed to do through that CLI's own permission settings. Every session has **its own permission mode**, saved with the session. It applies from the next message you send; it can't change in the middle of a reply.
+BojuBot runs an agent CLI (Claude Code for Claude, or [the Antigravity CLI](./agents) for Gemini) as a subprocess and controls what it's allowed to do through that CLI's own permission settings. Every session has **its own permission mode**, saved with the session. It applies from the next message you send; it can't change in the middle of a reply.
 
 ## Modes
 
 | Mode                         | Icon      | What the agent can do                                                                     |
 | ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access, and BojuBot shares no vault information. Only links can be attached |
-| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied. On Antigravity, every shell command is denied |
+| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied. With Gemini (Antigravity CLI), every shell command is denied |
 | **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes, shell commands, or Obsidian commands           |
 | **Full access**              | 🔴 warning | Everything, including shell commands (Bash, git, etc.)                                    |
 
@@ -28,8 +28,8 @@ With **Persist full access between restarts** off (the default), Full access las
 
 Turn the setting on if you want sessions to keep Full access after a restart.
 
-::: info On Antigravity
-Each mode allows slightly different things on Antigravity, and switching out of Chat only also starts a new session there (switching into it does on [both agents](#chat-only)). The picker shows each mode's behavior for the session's agent. See [Permissions on each agent](#permissions-on-each-agent).
+::: info With Gemini
+Each mode allows slightly different things with Gemini (Antigravity CLI), and switching out of Chat only also starts a new Gemini session (switching into it does on [both agents](#chat-only)). The picker shows each mode's behavior for the session's agent. See [Permissions on each agent](#permissions-on-each-agent).
 :::
 
 ::: info Claude Code version detection
@@ -40,7 +40,7 @@ When the plugin loads, BojuBot runs `claude --version` and `claude --help` in th
 
 On Claude Code, Standard mode accepts file edits automatically and also auto-approves shell commands Claude Code classifies as read-only and safe (listing files, printing text, and similar). Any other shell command — anything that could change files or download something, such as `curl -o page.html …` — is denied, and the [denial card](#permission-denials) appears so you can retry with full access. On Claude Code versions that support it, BojuBot passes `--permission-prompts none` so these denials are explicit rather than a side effect of running non-interactively.
 
-On Antigravity, Standard accepts file edits too, but denies every shell command, read-only or not. See [Permissions on each agent](#permissions-on-each-agent).
+With Gemini (Antigravity CLI), Standard accepts file edits too, but denies every shell command, read-only or not. See [Permissions on each agent](#permissions-on-each-agent).
 
 ### Chat only
 
@@ -75,7 +75,7 @@ Antigravity support is in [beta builds](beta-builds.md) and will ship in the nex
 
 The four modes mean the same thing on both agents, but each agent CLI enforces them its own way, so the details differ.
 
-| | Claude Code | Antigravity |
+| | Claude (Claude Code) | Gemini (Antigravity CLI) |
 | --- | --- | --- |
 | **Chat only** | Web search and web pages. No files, no shell. | Web search and web pages. No files, no shell. |
 | **Read only** | Reads and searches files, web search and web pages. No writes, no shell. | Reads and searches files, web search. No writes, no shell. Asked for a change, it may answer with a plan for you to apply. |
@@ -88,7 +88,7 @@ The four modes mean the same thing on both agents, but each agent CLI enforces t
 ### Changing mode on Antigravity
 
 - **Between Read only, Standard and Full access:** works mid-session, exactly as on Claude Code. Your next message uses the new mode, and the conversation carries on.
-- **Into or out of Chat only:** BojuBot starts a new Antigravity session in the same tab, with the same settings, and tells you so. Your previous session stays in the [Sessions panel](./sessions#sessions-panel), where you can go back to it. A session you haven't sent a message in yet just switches.
+- **Into or out of Chat only:** BojuBot starts a new Gemini session in the same tab, with the same settings, and tells you so. Your previous session stays in the [Sessions panel](./sessions#sessions-panel), where you can go back to it. A session you haven't sent a message in yet just switches.
 - **Starting a session in Chat only** works as usual, from the toolbar picker or with Shift+click on **+** ([Custom Session](./sessions#starting-a-new-session)).
 
 ### Why Antigravity works differently
@@ -111,7 +111,7 @@ When the agent attempts a blocked operation, a **denial card** appears in the ch
 
 The upgrade option in the denial card depends on the current mode:
 
-- **Chat only** → offers **Allow standard access for this session** (Claude Code only; on Antigravity, Chat only has nothing that could be denied)
+- **Chat only** → offers **Allow standard access for this session** (Claude only; in a Gemini session, Chat only has nothing that could be denied)
 - **Standard / Read only** → offers **Allow full access for this session**
 
 Allowing upgrades the session the card was shown in, and only that one: the new mode is saved with the session, so it's still there when you come back to it (see [Full access and restarts](#full-access-and-restarts)). Other sessions, and new ones, aren't affected. You can lower the mode again at any time with the picker. A card left over from a session that's no longer open does nothing.

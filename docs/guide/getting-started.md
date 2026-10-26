@@ -4,8 +4,8 @@
 
 - **Obsidian desktop**: Windows, Mac, or Linux. Mobile is not supported.
 - **An AI agent**, installed and signed in. BojuBot doesn't talk to an AI service itself: it runs an agent program (a CLI) on your computer and uses your existing account with it, so there's no API key to set up. Pick one:
-  - **Claude**, through Anthropic's **Claude Code** CLI. This is the default. Needs a **Claude Pro or Max subscription**.
-  - **Gemini**, through **Google's Antigravity CLI** (`agy`) <Badge type="warning" text="Beta" />. Needs a **Google account with Antigravity access**; usage counts against your Antigravity quota, not a Claude plan. Antigravity also offers some Claude and GPT-OSS models on the same quota.
+  - **Claude**, through Anthropic's **Claude Code** CLI. This is the default, listed in BojuBot as **Claude (Claude Code)**. Needs a **Claude Pro or Max subscription**.
+  - **Gemini**, through **Google's Antigravity CLI** (`agy`) <Badge type="warning" text="Beta" />, listed in BojuBot as **Gemini (Antigravity CLI)**. Needs a **Google account with Antigravity access**; usage counts against your Antigravity quota, not a Claude plan. Antigravity also offers some Claude and GPT-OSS models on the same quota.
 
 You only need one of them. If you install both, you can switch between them at any time (see [Switching agents later](#switching-agents-later)), and [Choosing an Agent](./agents) compares the two.
 
@@ -37,7 +37,7 @@ claude --version
 
 Then run `claude` once in your terminal to sign in. It opens a browser window; if it doesn't open automatically, press `c` to copy the login URL. See Anthropic's [full install guide](https://code.claude.com/docs/en/overview#native-install-recommended) for other options.
 
-Claude Code is BojuBot's default agent, so there's nothing to change in BojuBot's settings.
+Claude (Claude Code) is BojuBot's default agent, so there's nothing to change in BojuBot's settings.
 
 ---
 
@@ -47,13 +47,13 @@ Claude Code is BojuBot's default agent, so there's nothing to change in BojuBot'
 Gemini support through Antigravity is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version only runs Claude Code.
 :::
 
-To use Gemini, BojuBot runs Google's Antigravity CLI (`agy`), which runs Gemini. In BojuBot's settings and menus this agent is called **Antigravity**.
+To use Gemini, BojuBot runs Google's Antigravity CLI (`agy`), which runs Gemini. In BojuBot's settings and menus it's listed as **Gemini (Antigravity CLI)**.
 
 1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
 2. **Sign in once.** Open a terminal, run `agy`, and sign in with your Google account in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
-3. **Pick it in BojuBot** once the plugin is installed: **Settings → BojuBot → Agent** → **Antigravity**. If BojuBot doesn't find `agy` on its own, set **Antigravity binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
+3. **Pick it in BojuBot** once the plugin is installed: **Settings → BojuBot → Agent** → **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 
-The model picker then lists Gemini models (plus the Claude and GPT-OSS models Antigravity offers). See [Choosing an Agent](./agents) for what works differently on Antigravity.
+The model picker then lists Gemini models (plus the Claude and GPT-OSS models Antigravity offers). See [Choosing an Agent](./agents) for what works differently with Gemini.
 
 ---
 

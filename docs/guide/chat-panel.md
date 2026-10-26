@@ -95,9 +95,9 @@ The change takes effect on the next message. See [Permissions](./permissions.md)
 
 ## Model Indicator
 
-The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the session's model. Click it to open the model picker and switch to a different model. The picker lists the models of the session's agent.
+The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the session's model. Click it to open the model picker and switch to a different model.
 
-On **Claude Code**, the built-in models are:
+For **Claude (Claude Code)** sessions, the built-in models are:
 
 | Model         | Best for                         |
 | ------------- | -------------------------------- |
@@ -106,7 +106,7 @@ On **Claude Code**, the built-in models are:
 | Claude Opus   | Complex reasoning and long tasks |
 | Claude Fable  | Long-running agents              |
 
-On **Antigravity** <Badge type="warning" text="Beta" />, the picker shows whatever `agy models` lists, and **Antigravity default** lets Antigravity choose. See [Choosing an Agent](./agents#what-s-different-on-antigravity).
+For **Gemini (Antigravity CLI)** sessions <Badge type="warning" text="Beta" />, the picker lists the models the Antigravity CLI offers: Gemini, plus some Claude and GPT-OSS models. See [Choosing an Agent](./agents#what-s-different-with-gemini).
 
 You can switch models **mid-conversation** — the session continues with its full history, and the new model takes over from your next message. This is handy for getting a second opinion: work through a problem with one model, then switch to another to review the result without re-explaining everything.
 
@@ -145,8 +145,8 @@ You can also switch via `/effort` in the slash menu or **BojuBot: Switch effort*
 
 Choose **Usage** from the `/` menu (or run **BojuBot: Show plan usage** from the Command Palette) to see how much of your plan or quota you've used. The report appears as a card in the chat, and depends on the session's agent:
 
-- **Claude Code:** how much of your Claude plan you've used — the current session and current week percentages and when they reset, plus Claude Code's breakdown of what's contributing.
-- **Antigravity** <Badge type="warning" text="Beta" />: the remaining weekly and 5-hour quota for each Antigravity model group.
+- **Claude (Claude Code):** how much of your Claude plan you've used — the current session and current week percentages and when they reset, plus Claude Code's breakdown of what's contributing.
+- **Gemini (Antigravity CLI)** <Badge type="warning" text="Beta" />: the remaining weekly and 5-hour quota for each Antigravity model group.
 
 Checking usage is free: it runs the agent CLI's own `/usage` command in a separate process, so it isn't sent to the model, doesn't become part of your conversation, and doesn't affect the context gauge. You can check it while the agent is still replying.
 
@@ -154,9 +154,9 @@ Checking usage is free: it runs the agent CLI's own `/usage` command in a separa
 
 ## Context Gauge
 
-*Claude Code only.* A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.
+*Claude (Claude Code) sessions only.* A **ring icon** appears in the input bar after your first message. Hover to see how much of the 200K token context window remains. Click it to manually compact the session history if it's filling up.
 
-Antigravity sessions don't show the gauge, because Antigravity doesn't report its context size or offer a compact command.
+Gemini sessions don't show the gauge, because the Antigravity CLI doesn't report its context size or offer a compact command.
 
 ---
 
