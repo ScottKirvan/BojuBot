@@ -103,7 +103,7 @@ What picking does:
 - **Another agent's model, in a session you haven't sent a message in yet**, moves the session to that agent.
 - **Another agent's model, in a session with messages**, starts a new session on that agent and model in the same tab, with a notice. Your previous session stays in the Sessions panel. The new session keeps the old one's permission mode; if the new agent doesn't offer it, it gets the nearest mode with less access (never more).
 
-Picking a model also makes its agent the default for new sessions (**Settings → BojuBot → Default agent for new sessions**).
+Picking a model also makes it, and its agent, what new sessions start with.
 
 For **Claude (Claude Code)** sessions, the built-in models are:
 
