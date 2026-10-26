@@ -2012,10 +2012,7 @@ export class ClaudeView extends ItemView {
         "but Claude Code (included with Claude Pro/Max) wasn't found. Follow the steps below, then click Check again.",
       cls: 'bojubot-setup-intro',
     });
-    card.createEl('p', {
-      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Default agent for new sessions.`,
-      cls: 'bojubot-setup-intro',
-    });
+    this.renderUseOtherAgent(card);
 
     // Step 1 — Install
     const step1 = card.createDiv({ cls: 'bojubot-setup-step' });
@@ -2092,6 +2089,35 @@ export class ClaudeView extends ItemView {
     });
   }
 
+  /**
+   * The way out of a setup card: switch new sessions to another agent that is
+   * installed (the model picker that does this lives in the chat toolbar,
+   * which isn't usable until an agent is found). Lists the others to install
+   * when none is.
+   */
+  private renderUseOtherAgent(card: HTMLElement) {
+    const current = this.plugin.settings.backend;
+    const others = BACKEND_IDS.filter(id => id !== current);
+    const installed = others.filter(id => this.plugin.getBinaryPath(id) || this.plugin.detectBinary(id));
+    if (installed.length === 0) {
+      const labels = others.map(id => this.plugin.getBackend(id).label).join(' or ');
+      if (labels) card.createEl('p', { text: `You can also use ${labels}: install it, then click Check again.`, cls: 'bojubot-setup-intro' });
+      return;
+    }
+    const row = card.createDiv({ cls: 'bojubot-setup-btn-row' });
+    for (const id of installed) {
+      const btn = row.createEl('button', { text: `Use ${this.plugin.getBackend(id).label} instead`, cls: 'mod-cta bojubot-setup-check-btn' });
+      btn.addEventListener('click', () => void this.useAgentForNewSessions(id));
+    }
+  }
+
+  private async useAgentForNewSessions(id: BackendId): Promise<void> {
+    this.plugin.settings.backend = id;
+    await this.plugin.saveSettings();
+    this.plugin.onDefaultBackendChanged();
+    await this.onOpen();
+  }
+
   /** Setup card for a non-Claude default agent whose CLI wasn't found. */
   private renderAgentNotFound(card: HTMLElement) {
     const id = this.plugin.settings.backend;
@@ -2103,10 +2129,7 @@ export class ClaudeView extends ItemView {
         'Then click Check again.',
       cls: 'bojubot-setup-intro',
     });
-    card.createEl('p', {
-      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Default agent for new sessions.`,
-      cls: 'bojubot-setup-intro',
-    });
+    this.renderUseOtherAgent(card);
     if (id === 'antigravity') {
       const step = card.createDiv({ cls: 'bojubot-setup-step' });
       step.createEl('p', { text: 'To sign in after installing', cls: 'bojubot-setup-step-title' });

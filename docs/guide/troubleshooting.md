@@ -4,11 +4,11 @@
 
 **Setup panel appears instead of the chat panel**
 
-BojuBot couldn't find the CLI for the agent new sessions use (**Settings → BojuBot → Default agent for new sessions**).
+BojuBot couldn't find the CLI for the agent new sessions use (the one you picked last in the model picker; Claude by default).
 
 - **Claude (Claude Code):** follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
 - **Gemini (Antigravity CLI):** install Google's Antigravity CLI (`agy`) and sign in, or set **Antigravity CLI binary path**. See [Choosing an Agent](./agents#troubleshooting).
-- **Using Gemini but seeing the Claude Code panel?** Switch **Settings → BojuBot → Default agent for new sessions** to **Gemini (Antigravity CLI)**, then click **Check again**.
+- **Using Gemini but seeing the Claude Code panel?** Click **Use Gemini (Antigravity CLI) instead** in the panel.
 
 ---
 

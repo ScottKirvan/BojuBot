@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import type { BackendId, ModelOption, PermissionMode } from './backends/types';
 export type { PermissionMode };
-import { BACKEND_IDS, getBackend } from './backends';
+import { getBackend } from './backends';
 import { AppInternal } from './obsidianInternal';
 import { FolderSuggest } from './utils/FolderSuggest';
 import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
@@ -176,20 +176,6 @@ export class BojuBotSettingsTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-
-    new Setting(containerEl)
-      .setName('Default agent for new sessions')
-      .setDesc('The agent new sessions run on. Picking a model of another agent in the chat panel changes it too. Existing sessions keep the agent they started with.')
-      .addDropdown((drop) => {
-        for (const id of BACKEND_IDS) drop.addOption(id, getBackend(id).label);
-        drop
-          .setValue(this.plugin.settings.backend)
-          .onChange(async (value) => {
-            this.plugin.settings.backend = value as BackendId;
-            await this.plugin.saveSettings();
-            this.plugin.onDefaultBackendChanged();
-          });
-      });
 
     new Setting(containerEl)
       .setName('Claude Code binary path')

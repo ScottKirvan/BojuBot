@@ -16,7 +16,7 @@ BojuBot is a chat panel for an AI agent that runs on your own computer. What you
 
 ## The AI agent and where your words go
 
-BojuBot doesn't talk to any AI service itself. It runs an agent CLI on your computer and passes your messages to it. You choose which one in **Settings → BojuBot → Default agent for new sessions**:
+BojuBot doesn't talk to any AI service itself. It runs an agent CLI on your computer and passes your messages to it. You choose which one in the chat panel's model picker:
 
 - **Claude Code**, made by Anthropic. See [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy).
 - **Antigravity CLI** (`agy`), made by Google. See [Google's privacy policy](https://policies.google.com/privacy).
