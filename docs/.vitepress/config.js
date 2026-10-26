@@ -1,7 +1,7 @@
 export default {
   base: '/BojuBot/',
   title: 'BojuBot',
-  description: 'A Claude Code agent inside your Obsidian vault',
+  description: 'An AI agent inside your Obsidian vault: Claude through Claude Code, or Gemini through Google Antigravity',
 
   vite: {
     ssr: {

@@ -4,7 +4,11 @@
 
 **Setup panel appears instead of the chat panel**
 
-BojuBot couldn't find your Claude Code installation. Follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
+BojuBot couldn't find the CLI for the agent new sessions use (**Settings → BojuBot → Agent**).
+
+- **Claude Code:** follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
+- **Antigravity (Gemini):** install Google's Antigravity CLI (`agy`) and sign in, or set **Antigravity binary path**. See [Choosing an Agent](./agents#troubleshooting).
+- **Using Gemini but seeing the Claude Code panel?** Switch **Settings → BojuBot → Agent** to **Antigravity**, then click **Check again**.
 
 ---
 
@@ -20,27 +24,27 @@ Ensure Safe Mode is disabled (**Settings → Community Plugins**) and that the `
 
 ---
 
-**Claude doesn't seem to know about my vault structure**
+**The agent doesn't seem to know about my vault structure**
 
-Check that your context file exists at the configured path (`_claude-context.md` by default) and contains useful information about your vault. If Claude seems unaware of your vault's folder structure, enable **Vault tree depth** in settings (1–3 levels is a good starting point) so the structure is injected at session start.
-
----
-
-**Claude is doing something unexpected mid-task**
-
-Click the **Stop** button (square icon in the input bar) to interrupt immediately. Claude's process and any subprocesses are killed. Files already written before you stopped will remain — review them before continuing. Start a new session or send a follow-up to correct course.
+Check that your context file exists at the configured path (`_claude-context.md` by default) and contains useful information about your vault. If the agent seems unaware of your vault's folder structure, enable **Vault tree depth** in settings (1–3 levels is a good starting point) so the structure is injected at session start.
 
 ---
 
-**Claude seems to be running but nothing is happening**
+**The agent is doing something unexpected mid-task**
 
-If the status indicator has been showing for a long time with no output, Claude may be stuck. Click **Stop**, then try again. Run `claude --version` in a terminal to confirm the install is visible to your shell.
+Click the **Stop** button (square icon in the input bar) to interrupt immediately. The agent's process and any subprocesses are killed. Files already written before you stopped will remain — review them before continuing. Start a new session or send a follow-up to correct course.
+
+---
+
+**The agent seems to be running but nothing is happening**
+
+If the status indicator has been showing for a long time with no output, the agent may be stuck. Click **Stop**, then try again. Run `claude --version` (Claude Code) or `agy --version` (Antigravity) in a terminal to confirm the install is visible to your shell.
 
 ---
 
 **"Your Claude Code doesn't know this model yet" note**
 
-BojuBot shows this note, once per model, when Claude Code warns that it doesn't recognize the model you picked. In older BojuBot versions it appeared as a raw line: `stderr: [claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}`.
+*Claude Code only.* BojuBot shows this note, once per model, when Claude Code warns that it doesn't recognize the model you picked. In older BojuBot versions it appeared as a raw line: `stderr: [claude-code:unrecognized_model] {"model":"claude-haiku-5-5","query_source":"sdk"}`.
 
 This is a warning from Claude Code, not an error. Your installed Claude Code is older than the model you picked, so the model isn't in its built-in list. The reply still works, but Claude Code may guess at that model's limits, so token counts can be a little off. Update Claude Code to make the warning go away:
 
@@ -62,7 +66,7 @@ Run `claude --version` afterwards to check, then restart Obsidian so BojuBot pic
 
 **"Claude Code needs an update" error card**
 
-The model you picked needs a newer Claude Code than the one installed, and this time the request is refused rather than just warned about. Update Claude Code with the commands above and send your message again. To keep working in the meantime, [switch to an older model](./chat-panel#model-indicator).
+*Claude Code only.* The model you picked needs a newer Claude Code than the one installed, and this time the request is refused rather than just warned about. Update Claude Code with the commands above and send your message again. To keep working in the meantime, [switch to an older model](./chat-panel#model-indicator).
 
 ---
 
@@ -134,8 +138,7 @@ The log file is not visible in Obsidian's file browser — no `.gitignore` entry
 
 - **Desktop only** — Obsidian mobile is not supported (Node.js APIs unavailable on mobile)
 - **Claude Code must be installed via a terminal** — on Windows use PowerShell; on Mac/Linux use Terminal
-- **One active session at a time** — concurrent sessions are not supported
-- Claude operates with full vault access — no per-file infrastructure enforcement (see [Per-note Frontmatter](./context-system#5-per-note-frontmatter-context) for convention-based protection)
+- In Standard and Full access, the agent operates with full vault access — no per-file infrastructure enforcement (see [Per-note Frontmatter](./context-system#5-per-note-frontmatter-context) for convention-based protection)
 - Sessions are stored in `.obsidian/bojubot/sessions/` which is typically gitignored; sessions do not sync across devices
 
 ---

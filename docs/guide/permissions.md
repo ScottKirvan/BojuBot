@@ -1,13 +1,13 @@
 # Permissions
 
-BojuBot runs an agent CLI (Claude Code, or [Antigravity](./agents)) as a subprocess and controls what it's allowed to do through that CLI's own permission settings. Every session has **its own permission mode**, saved with the session. It applies from the next message you send; it can't change in the middle of a reply.
+BojuBot runs an agent CLI (Claude Code for Claude, or [Antigravity](./agents) for Gemini) as a subprocess and controls what it's allowed to do through that CLI's own permission settings. Every session has **its own permission mode**, saved with the session. It applies from the next message you send; it can't change in the middle of a reply.
 
 ## Modes
 
-| Mode                         | Icon      | What Claude can do                                                                        |
+| Mode                         | Icon      | What the agent can do                                                                     |
 | ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | **Chat only**                | 🔵 lock    | Web search/fetch only — no file system access, and BojuBot shares no vault information. Only links can be attached |
-| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied |
+| **Standard** *(recommended)* | 🟡 shield  | Read and write files, use web search/fetch, and run read-only shell commands that Claude Code classifies as safe (e.g. `ls`, `echo`) — other shell commands are denied. On Antigravity, every shell command is denied |
 | **Read only**                | 🟢 eye     | Read files, search, fetch web — no writes, shell commands, or Obsidian commands           |
 | **Full access**              | 🔴 warning | Everything, including shell commands (Bash, git, etc.)                                    |
 
@@ -38,30 +38,32 @@ When the plugin loads, BojuBot runs `claude --version` and `claude --help` in th
 
 ### Standard and shell commands
 
-In Standard mode Claude Code accepts file edits automatically and also auto-approves shell commands it classifies as read-only and safe (listing files, printing text, and similar). Any other shell command — anything that could change files or download something, such as `curl -o page.html …` — is denied, and the [denial card](#permission-denials) appears so you can retry with full access. On Claude Code versions that support it, BojuBot passes `--permission-prompts none` so these denials are explicit rather than a side effect of running non-interactively.
+On Claude Code, Standard mode accepts file edits automatically and also auto-approves shell commands Claude Code classifies as read-only and safe (listing files, printing text, and similar). Any other shell command — anything that could change files or download something, such as `curl -o page.html …` — is denied, and the [denial card](#permission-denials) appears so you can retry with full access. On Claude Code versions that support it, BojuBot passes `--permission-prompts none` so these denials are explicit rather than a side effect of running non-interactively.
+
+On Antigravity, Standard accepts file edits too, but denies every shell command, read-only or not. See [Permissions on each agent](#permissions-on-each-agent).
 
 ### Chat only
 
-Chat only is designed for conversations where you want Claude to reason and suggest, but not touch your vault or your files. Claude sees what you type or paste into the message, and can fetch web URLs and search the web. It cannot browse, read, or modify files.
+Chat only is designed for conversations where you want the agent to reason and suggest, but not touch your vault or your files. The agent sees what you type or paste into the message, and can fetch web URLs and search the web. It cannot browse, read, or modify files.
 
-None of the automatic session-start context is injected in this mode — the vault folder tree, your context file (`_claude-context.md`), pinned notes, and per-file instructions are all skipped, since any of them could otherwise leak details established in other, non-restricted sessions. Claude is also spawned in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
+None of the automatic session-start context is injected in this mode — the vault folder tree, your context file (`_claude-context.md`), pinned notes, and per-file instructions are all skipped, since any of them could otherwise leak details established in other, non-restricted sessions. The agent is also started in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
 
-BojuBot itself also keeps vault information away from Claude in Chat only:
+BojuBot itself also keeps vault information away from the agent in Chat only:
 
-- **No vault queries.** Claude can't ask BojuBot for your file list, backlinks, outgoing links or tags. If it tries, BojuBot refuses and tells it vault queries aren't available in Chat only. (Claude can still ask for BojuBot's own reference pages, which contain nothing from your vault.)
-- **No open-note paths.** BojuBot doesn't tell Claude which note you have open, or which notes are open in a split or in stacked tabs.
-- **No Obsidian commands.** Claude can't run Obsidian commands, and isn't given your command allowlist.
+- **No vault queries.** The agent can't ask BojuBot for your file list, backlinks, outgoing links or tags. If it tries, BojuBot refuses and tells it vault queries aren't available in Chat only. (The agent can still ask for BojuBot's own reference pages, which contain nothing from your vault.)
+- **No open-note paths.** BojuBot doesn't tell the agent which note you have open, or which notes are open in a split or in stacked tabs.
+- **No Obsidian commands.** The agent can't run Obsidian commands, and isn't given your command allowlist.
 - **No files, notes or selections.** Attaching something counts as reading it, so Chat only sends links only. Files of any type, pasted screenshots, @-mentioned notes, **Send selection as context**, skill fields that pull in a note and Custom Session attachments are all held back: BojuBot shows a notice and doesn't send the message until you remove them or switch mode. Text you type or paste into the message itself is sent as usual.
 
-What Claude *can* still do through BojuBot in Chat only: open a note you name, jump to a heading, show a notice, or open Settings or the quick switcher. These only change what's on your screen; nothing is sent back to Claude.
+What the agent *can* still do through BojuBot in Chat only: open a note you name, jump to a heading, show a notice, or open Settings or the quick switcher. These only change what's on your screen; nothing is sent back to the agent.
 
-Anything you hand Claude yourself still reaches it: @-mentioned notes, attachments, selections you send, and notes you pick in a skill's form.
+Anything you hand the agent yourself still reaches it: @-mentioned notes, attachments, selections you send, and notes you pick in a skill's form.
 
 **Switching into Chat only starts a new session** if the current one already has messages, on both agents, because the earlier messages may hold vault information. The new session opens in the same tab, on the same agent with the same settings, and is saved in Chat only. BojuBot shows a notice, and your previous session stays in the [Sessions panel](./sessions#sessions-panel), in the mode it had. If a reply is still running, the new session starts when you send your next message. A session with no messages just switches. A session that's already in Chat only stays as it is.
 
 ### Read only and Obsidian commands
 
-Read only can't run Obsidian commands through BojuBot either, because commands can create or change notes. Claude isn't given your command allowlist in this mode. Vault queries and open-note paths work as usual.
+Read only can't run Obsidian commands through BojuBot either, because commands can create or change notes. The agent isn't given your command allowlist in this mode. Vault queries and open-note paths work as usual.
 
 ---
 
@@ -105,7 +107,7 @@ BojuBot writes the two agents to Antigravity's agents folder, `~/.gemini/config/
 
 ## Permission Denials
 
-When Claude attempts a blocked operation, a **denial card** appears in the chat after the response completes, listing what was blocked.
+When the agent attempts a blocked operation, a **denial card** appears in the chat after the response completes, listing what was blocked.
 
 The upgrade option in the denial card depends on the current mode:
 
@@ -114,10 +116,10 @@ The upgrade option in the denial card depends on the current mode:
 
 Allowing upgrades the session the card was shown in, and only that one: the new mode is saved with the session, so it's still there when you come back to it (see [Full access and restarts](#full-access-and-restarts)). Other sessions, and new ones, aren't affected. You can lower the mode again at any time with the picker. A card left over from a session that's no longer open does nothing.
 
-The same applies when Claude asks for a permission during a turn and you grant it.
+The same applies when the agent asks for a permission during a turn and you grant it.
 
 ::: warning
-Permission granularity is at the **tool level**, not the command level. "Allow full access" unlocks all shell commands for the rest of the session — there is no way to approve `git status` while still blocking `rm`. This is a constraint of how Claude Code works in streaming mode.
+Permission granularity is at the **tool level**, not the command level. "Allow full access" unlocks all shell commands for the rest of the session — there is no way to approve `git status` while still blocking `rm` from BojuBot. This is a constraint of how the agent CLIs work when BojuBot runs them non-interactively. (On Antigravity you can allow particular commands in its own settings: see [Choosing an Agent](./agents#permissions-on-antigravity).)
 
-If you need Bash access regularly, set the default permission mode to **Full access** in settings rather than upgrading each session.
+If you need shell access regularly, set the default permission mode to **Full access** in settings rather than upgrading each session.
 :::

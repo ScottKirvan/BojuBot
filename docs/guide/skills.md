@@ -1,8 +1,8 @@
 # Skills
 
-A **skill** is a markdown file that gives Claude a defined mission. Skills live in your skills folder and appear in the `/` menu — and optionally in the Obsidian command palette — ready to run on demand.
+A **skill** is a markdown file that gives your agent a defined mission. Skills live in your skills folder and appear in the `/` menu — and optionally in the Obsidian command palette — ready to run on demand.
 
-Skills range from simple reusable prompts to fully parameterized agentic workflows. Because Claude runs with full tool access, a skill can read and write vault notes, run shell commands, call APIs, and more. If you can describe it in a prompt, you can make it a skill.
+Skills range from simple reusable prompts to fully parameterized agentic workflows. Because the agent can use its tools (as far as the session's [permission mode](./permissions) allows), a skill can read and write vault notes, run shell commands, call APIs, and more. If you can describe it in a prompt, you can make it a skill.
 
 ## File format
 
@@ -27,7 +27,7 @@ Review my notes from this week. Give me:
 {{focus}}
 ```
 
-The frontmatter controls how the skill appears in the menu and how it behaves. The body is the prompt Claude receives.
+The frontmatter controls how the skill appears in the menu and how it behaves. The body is the prompt the agent receives.
 
 ## Frontmatter reference
 
@@ -79,7 +79,7 @@ Interpolation only strips the <code v-pre>{{id}}</code> token itself — any sta
 **Additional instructions:** {{extra_notes}}
 ```
 
-leaves a dangling `**Additional instructions:**` with nothing after it. It's harmless, but noisy, and can read like a cut-off instruction to Claude.
+leaves a dangling `**Additional instructions:**` with nothing after it. It's harmless, but noisy, and can read like a cut-off instruction to the agent.
 
 Wrap optional parameters in XML-style tags instead:
 
@@ -89,14 +89,14 @@ Wrap optional parameters in XML-style tags instead:
 </extra_instructions>
 ```
 
-Claude treats XML-like tags as semantic containers, so this pattern handles both cases cleanly:
+Models treat XML-like tags as semantic containers, so this pattern handles both cases cleanly:
 
-- **Empty** — Claude sees a clearly-bounded empty block and ignores it.
+- **Empty** — the agent sees a clearly-bounded empty block and ignores it.
 - **Populated** — the user's content is unambiguously scoped, so it can't blend into the skill's own surrounding instructions.
 
 This matters most for free-text fields (`input`, `textarea`) where the user might paste in dense or instruction-like text. Use it for any optional parameter, not just the ones that happen to be empty most of the time.
 
-**Keep internal protocol details out of skill bodies.** Skills intended for general use should describe actions in plain language ("open the file in Obsidian") and let Claude's system context handle the mechanics — don't embed raw UI Bridge trigger syntax directly in a skill prompt body.
+**Keep internal protocol details out of skill bodies.** Skills intended for general use should describe actions in plain language ("open the file in Obsidian") and let BojuBot's system context handle the mechanics — don't embed raw UI Bridge trigger syntax directly in a skill prompt body.
 
 ## Execution modes
 
@@ -205,7 +205,7 @@ params:
 Summarize the attached note concisely, preserving key decisions and open questions.
 ```
 
-The picked note is injected as a context attachment — Claude reads it exactly as it would read an @-mentioned note.
+The picked note is injected as a context attachment — the agent reads it exactly as it would read an @-mentioned note.
 
 ### Programming agent
 

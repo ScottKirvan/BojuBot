@@ -40,7 +40,9 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 
 *Requirements:*
 - *Obsidian desktop (Windows, Mac, Linux — no mobile support)*
-- *[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) installed and authenticated — included in Claude Pro/Max subscriptions. (Windows: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)*
+- *An AI agent, installed and signed in with an account you already have (no API key needed):*
+  - **Claude**, through the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) — included in Claude Pro/Max subscriptions. (Windows: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)
+  - **Gemini**, through Google's [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli#download-and-install) (`agy`) — needs a Google account with Antigravity access. Currently in [beta builds](https://www.scottkirvan.com/BojuBot/guide/beta-builds) only; ships in the next release. See [Choosing an Agent](https://www.scottkirvan.com/BojuBot/guide/agents).
 
 ### From the Community Plugin Browser
 1. Open Obsidian → **Settings → Community Plugins → Browse**
@@ -56,16 +58,17 @@ Or find it at **[community.obsidian.md/plugins/bojubot](https://community.obsidi
 ---
 ## Quick Start
 
-1. Open the BojuBot panel from the ribbon (brain/circuit icon) or Command Palette: `BojuBot: Open agent panel`
-2. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
-3. See the [User Guide](https://www.scottkirvan.com/BojuBot/) for details on Skills, session management, and settings
+1. Using Gemini (beta builds)? Set **Settings → BojuBot → Agent** to **Antigravity** first (Claude Code is the default)
+2. Open the BojuBot panel from the ribbon (brain/circuit icon) or Command Palette: `BojuBot: Open agent panel`
+3. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
+4. See the [User Guide](https://www.scottkirvan.com/BojuBot/) for details on Skills, session management, and settings
 
 ---
 ## What makes BojuBot different?
 <details>
 <summary><b>🔧 Create custom commands — expand Obsidian's capabilities</b></summary>
 
-<!--[GIF: Skills form modal opening, user filling fields, Claude executing]-->
+<!--[GIF: Skills form modal opening, user filling fields, agent executing]-->
 
 <br>
 <b>Skills</b> are the "bot" in BojuBot. Write a natural language prompt, save it as a markdown file in your commands folder, and it becomes a first-class command — available in the '/' slash menu, in the Obsidian command palette with hotkey support, <em>and</em> exposed as an API endpoint, callable by any plugin or script within Obsidian.
@@ -86,7 +89,7 @@ BojuBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> Ob
 <ul>
 <li><b>Obsidian UI control</b> — opens files, splits panes, navigates headings, shows notifications</li>
 <li><b>Run any command</b> — execute anything from the command palette; and you control which commands are allowed and which aren't</li>
-<li><b>Live vault graph</b> — Claude can query backlinks, outlinks, tags, and file lists mid-reasoning</li>
+<li><b>Live vault graph</b> — the agent can query backlinks, outlinks, tags, and file lists mid-reasoning</li>
 <li><b>Canvas</b> — reads and generates <code>.canvas</code> files natively</li>
 </ul>
 <br>
@@ -101,7 +104,7 @@ BojuBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> Ob
 <li><b>Configurable safety modes</b> — readonly, standard, full access; blocked operations show an in-chat card with one-click upgrade</li>
 <li><b>Per-note frontmatter controls</b> — pin notes to every session, inject per-note instructions, all via Obsidian Properties</li>
 <li><b>Vault-native memory</b> — <code>_claude-context.md</code> persists context across sessions and syncs across machines</li>
-<li><b>Context gauge</b> — live session memory indicator below the input; one-click compaction</li>
+<li><b>Context gauge</b> — live session memory indicator below the input; one-click compaction (Claude Code sessions)</li>
 </ul>
 <br><br>
 </details>
@@ -112,7 +115,7 @@ BojuBot isn't a chat window bolted onto Obsidian. It integrates <em>with</em> Ob
 BojuBot doesn't stop at the edges of your vault. Given proper permissions (which you control), it can search the web, work with files anywhere on your system, and interact with external services — and everything it finds comes back as a note, woven into your vault where it belongs.
 <br><br>
 <ul>
-<li><b>Web search</b> — Claude can search the web mid-conversation and bring results back as chat responses or notes</li>
+<li><b>Web search</b> — the agent can search the web mid-conversation and bring results back as chat responses or notes</li>
 <li><b>Filesystem access</b> — BojuBot, under your direction, can read, write, and organize files anywhere on your system, not just inside the vault</li>
 <li><b>External services</b> — Home automation, calendar/weather, GitHub, etc.  For example, BojuBot can manage GitHub issues, pull in data, run CLI tools — all from a single conversational interface</li>
 <li><b>Your vault as hub</b> — everything that comes in lands where you decide, searchable and linked</li>

@@ -1,19 +1,19 @@
 # Choosing an Agent <Badge type="warning" text="Beta" />
 
 ::: warning Not released yet
-Antigravity support is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version doesn't have it yet.
+Gemini support through Antigravity is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version doesn't have it yet.
 :::
 
-BojuBot can run on one of two agent CLIs:
+BojuBot can work with Claude or with Gemini. It runs each one through an agent CLI installed on your computer:
 
-- **Claude Code**: the default, using your Claude Pro or Max subscription.
-- **Antigravity CLI** (`agy`): Google's agent CLI, using your Google account's Antigravity quota.
+- **Claude, through Claude Code**: the default, using your Claude Pro or Max subscription.
+- **Gemini, through Google's Antigravity CLI** (`agy`), which runs Gemini using your Google account's Antigravity quota. Antigravity also offers some Claude and GPT-OSS models on that quota. In BojuBot's settings and menus this agent is called **Antigravity**.
 
 Both work with the same chat panel, sessions, skills, UI Bridge and vault queries.
 
-A common setup is to keep your Claude quota for heavy work, such as programming in Claude Code itself, and use Antigravity for everyday note-taking in Obsidian. You can switch any time; each session remembers which agent it started on.
+A common setup is to keep your Claude quota for heavy work, such as programming in Claude Code itself, and use Gemini through Antigravity for everyday note-taking in Obsidian. You can switch any time; each session remembers which agent it started on.
 
-## Setting up Antigravity
+## Setting up Antigravity (for Gemini)
 
 1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
 2. **Sign in once.** Open a terminal, run `agy`, and sign in in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
@@ -27,7 +27,7 @@ To start a single session on the other agent without changing the setting, Shift
 
 | | Claude Code | Antigravity |
 | --- | --- | --- |
-| Models | Claude models, plus your `custom-models.json` | Whatever `agy models` lists: Gemini Flash variants, plus Claude and GPT models through Antigravity |
+| Models | Claude models, plus your `custom-models.json` | Whatever `agy models` lists: Gemini Flash variants, plus Claude and GPT-OSS models through Antigravity |
 | Model picker default | Claude Sonnet | "Antigravity default", which lets Antigravity choose |
 | Effort levels | When your Claude Code version supports them | Low to max |
 | Chat only mode | Available | Available; switching into or out of it starts a new session |
