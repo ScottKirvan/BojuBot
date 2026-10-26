@@ -11,6 +11,7 @@ import { log as LOG, warn as WARN, logv as LOGV } from '../utils/logger';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from '../utils/cliCapabilities';
 import { splitBojuLines } from '../utils/bojuLines';
 import { type ApiError, AGY_AUTH, isAgyAuthFailure } from '../utils/apiError';
+import { collapseEffortVariants, splitEffortVariant } from '../utils/agentModels';
 import { launchCli, runCli, runCliCapture } from './process';
 import { AGY_CHAT_AGENT, AGY_MAIN_AGENT, AgyAgentName, syncAgyAgentDefinitions } from './agyAgents';
 import type {
@@ -112,10 +113,12 @@ export function buildAgySpawnArgs(
   args.push(...(opts.agent === AGY_CHAT_AGENT
     ? ['--dangerously-skip-permissions']
     : agyPermissionArgs(opts.permissionMode ?? 'standard')));
-  if (opts.model) args.push('--model', opts.model);
-  if (opts.effort && has(caps, '--effort') && caps.effortLevels.includes(opts.effort)) {
-    args.push('--effort', opts.effort);
-  }
+  const effort = opts.effort && has(caps, '--effort') && caps.effortLevels.includes(opts.effort) ? opts.effort : undefined;
+  // agy rejects an effort-variant model with --effort ("conflicts with
+  // --effort"): with a level, always send the base model.
+  const model = effort && opts.model ? (splitEffortVariant(opts.model)?.base ?? opts.model) : opts.model;
+  if (model) args.push('--model', model);
+  if (effort) args.push('--effort', effort);
   if (opts.resumeSessionId) args.push('--conversation', opts.resumeSessionId);
   return args;
 }
@@ -287,7 +290,8 @@ export async function listAgyModels(
   env: Record<string, string>,
   cwd: string,
 ): Promise<ModelOption[]> {
-  const models = parseAgyModels(await runCli(binaryPath, ['models'], cwd, env, MODELS_TIMEOUT_MS));
+  // One entry per base model, with the effort levels it has (#402)
+  const models = collapseEffortVariants(parseAgyModels(await runCli(binaryPath, ['models'], cwd, env, MODELS_TIMEOUT_MS)));
   if (!models.length) throw new Error('The Antigravity CLI listed no models.');
   return models;
 }
@@ -579,6 +583,7 @@ export const antigravityBackend: AgentBackend = {
   // Its history is a private SQLite store, so BojuBot keeps a transcript instead.
   readableHistory: false,
   listModels: listAgyModels,
+  effortVariants: true,
   unavailableModes: agyUnavailableModes,
   modeDescriptions: agyModeDescriptions,
   conversationAgent: agyConversationAgent,

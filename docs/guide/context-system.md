@@ -36,7 +36,7 @@ A markdown file injected at the start of every session. Default path: `_claude-c
 
 When you first open BojuBot, a setup dialog offers three options:
 
-- **Generate with Claude** — the agent set in **Settings → BojuBot → Agent** (Claude or Gemini) scans your vault structure and writes a context file tailored to your folders and naming conventions. You'll be asked one optional question first: *"Tell me a little about yourself and how you use this vault."* The more you share, the more personalised the result — but it's entirely optional.
+- **Generate with Claude** — the agent set in **Settings → BojuBot → Default agent for new sessions** (Claude or Gemini) scans your vault structure and writes a context file tailored to your folders and naming conventions. You'll be asked one optional question first: *"Tell me a little about yourself and how you use this vault."* The more you share, the more personalised the result — but it's entirely optional.
 - **Create blank template** — Gives you a pre-structured file with placeholder sections to fill in yourself.
 - **Skip** — Skips setup for now. You can relaunch it any time via **BojuBot: Open context file** from the palette — if the file doesn't exist yet, the setup dialog reopens automatically.
 

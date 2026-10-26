@@ -8,7 +8,7 @@ Click the **+** button in the toolbar to start a new session with default settin
 
 | Field | What it does |
 |---|---|
-| **Agent** | Which agent CLI the session runs on (**Claude (Claude Code)** or **Gemini (Antigravity CLI)**), pre-filled from the **Agent** setting. Changing it refills the model and effort fields for that agent. Agents that aren't installed are listed but can't be picked. See [Choosing an Agent](./agents). |
+| **Agent and model** | Which agent the session runs on (**Claude (Claude Code)** or **Gemini (Antigravity CLI)**) and its model, picked from the same agent + model picker as the [model indicator](./chat-panel#model-indicator). Pre-filled from **Default agent for new sessions** and that agent's default model. Picking another agent's model refills the effort field for it. Agents that aren't installed are listed but can't be picked. See [Choosing an Agent](./agents). |
 | **Session name** | Pre-fills the title instead of waiting for auto-naming from the first message. Leave blank to use the default. |
 | **Working directory** | Sets the directory the agent runs in (useful for code projects outside the vault). The folder browser opens at your vault root. Leave blank to use the vault root. |
 | **Permission mode** | Pre-filled with your current default (with its colored icon), so you can see exactly what you're starting from. Click a different mode to start the session in it instead. Every session keeps its own mode; see [Permissions](./permissions#the-mode-belongs-to-the-session). |

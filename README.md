@@ -58,7 +58,7 @@ Or find it at **[community.obsidian.md/plugins/bojubot](https://community.obsidi
 ---
 ## Quick Start
 
-1. Using Gemini (beta builds)? Set **Settings → BojuBot → Agent** to **Gemini (Antigravity CLI)** first (Claude is the default)
+1. Using Gemini (beta builds)? Set **Settings → BojuBot → Default agent for new sessions** to **Gemini (Antigravity CLI)** first (Claude is the default)
 2. Open the BojuBot panel from the ribbon (brain/circuit icon) or Command Palette: `BojuBot: Open agent panel`
 3. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
 4. See the [User Guide](https://www.scottkirvan.com/BojuBot/) for details on Skills, session management, and settings

@@ -11,6 +11,7 @@ import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId, sentenceStart } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
+import { migrateVariantModel } from './src/utils/agentModels';
 import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
 import type { ReportType } from './src/utils/report';
 import { ReportModal } from './src/modals/ReportModal';
@@ -623,7 +624,12 @@ export default class BojuBotPlugin extends Plugin {
   modelDisplayName(backend: BackendId, modelId?: string): string | undefined {
     const id = modelId || this.getDefaultModel(backend);
     if (!id) return undefined;
-    return this.getModels(backend).find(m => m.id === id)?.displayName ?? id;
+    const models = this.getModels(backend);
+    const found = models.find(m => m.id === id);
+    if (found) return found.displayName;
+    // An old effort-variant ID ("gemini-3.8-flash-high") names its base model (#402)
+    const base = getBackend(backend).effortVariants ? migrateVariantModel(id).model : id;
+    return models.find(m => m.id === base)?.displayName ?? id;
   }
 
   exportConversation() {
@@ -684,6 +690,14 @@ export default class BojuBotPlugin extends Plugin {
     // sibling defaults.
     this.refreshBrand();
     if (!isBackendId(this.settings.backend)) this.settings.backend = DEFAULT_BACKEND_ID;
+    // Antigravity models used to be saved as effort variants ("gemini-3.8-flash-high"):
+    // keep the base model and carry the level over as Antigravity's default effort (#402)
+    const agyModel = migrateVariantModel(this.settings.agyDefaultModel ?? '');
+    if (agyModel.level) {
+      this.settings.agyDefaultModel = agyModel.model;
+      if (!this.settings.agyDefaultEffort) this.settings.agyDefaultEffort = agyModel.level;
+      await this.saveData(this.settings);
+    }
     // show-about was renamed open-help: carry allow/deny decisions over to the new ID
     const renamed = migrateRenamedCommands(this.settings.commandAllowlist, this.settings.commandDenylist);
     if (renamed.changed) {
@@ -748,6 +762,16 @@ export default class BojuBotPlugin extends Plugin {
   setDefaultModel(id: BackendId, model: string): void {
     if (id === 'claude-code') this.settings.defaultModel = model;
     else this.settings.agyDefaultModel = model;
+  }
+
+  /** Global default effort level for a backend; '' = Default (flag left off). */
+  getDefaultEffort(id: BackendId): string {
+    return (id === 'claude-code' ? this.settings.defaultEffort : this.settings.agyDefaultEffort) ?? '';
+  }
+
+  setDefaultEffort(id: BackendId, level: string): void {
+    if (id === 'claude-code') this.settings.defaultEffort = level;
+    else this.settings.agyDefaultEffort = level;
   }
 
   private binaryOverride(id: BackendId): string {

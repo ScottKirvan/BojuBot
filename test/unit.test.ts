@@ -25,7 +25,7 @@ import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
 import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
-import type { AgentBackend, BackendId, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
+import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
 import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands, RENAMED_COMMANDS } from '../src/utils/commandsReference';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
@@ -35,7 +35,7 @@ import { reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
 import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
-import { resolveEffort, modelIndicatorText } from '../src/utils/effort';
+import { agentModelIndicatorText, collapseEffortVariants, migrateVariantModel, modeForAgentSwitch, modelEffortLevels, modelPickAction, nearestLevel, resolveTurnModel, splitEffortVariant } from '../src/utils/agentModels';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
@@ -1874,47 +1874,6 @@ describe('SessionCoordinator session-level overrides (Custom Session)', () => {
   });
 });
 
-describe('resolveEffort', () => {
-  const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
-
-  test('session pin wins over the global default', () => {
-    assert.equal(resolveEffort('low', 'high', LEVELS), 'low');
-  });
-
-  test('falls back to the global default with no pin', () => {
-    assert.equal(resolveEffort(undefined, 'high', LEVELS), 'high');
-    assert.equal(resolveEffort('', 'high', LEVELS), 'high');
-  });
-
-  test('Default everywhere means no flag', () => {
-    assert.equal(resolveEffort(undefined, '', LEVELS), undefined);
-  });
-
-  test('a level the CLI did not list is dropped, never sent', () => {
-    assert.equal(resolveEffort('ultra', '', LEVELS), undefined);
-    assert.equal(resolveEffort(undefined, 'ultra', LEVELS), undefined);
-  });
-
-  test('an unsupported pin does not fall through to the global default', () => {
-    assert.equal(resolveEffort('ultra', 'high', LEVELS), undefined);
-  });
-
-  test('nothing is sent when the CLI lists no levels', () => {
-    assert.equal(resolveEffort('high', 'high', []), undefined);
-  });
-});
-
-describe('modelIndicatorText', () => {
-  test('appends the level when one applies', () => {
-    assert.equal(modelIndicatorText('Claude Sonnet 5.5', 'high'), 'Claude Sonnet 5.5 · high');
-  });
-
-  test('shows just the model at Default', () => {
-    assert.equal(modelIndicatorText('Claude Sonnet 5.5', undefined), 'Claude Sonnet 5.5');
-    assert.equal(modelIndicatorText('Claude Sonnet 5.5', ''), 'Claude Sonnet 5.5');
-  });
-});
-
 describe('SessionCoordinator effort (session pin + global default)', () => {
   const withCoordinator = async (
     overrides: Partial<SessionCoordinatorHost>,
@@ -2435,8 +2394,8 @@ describe('buildAgySpawnArgs', () => {
 
   test('resumed turn with model, effort and mode', () => {
     assert.deepEqual(
-      buildAgySpawnArgs({ resumeSessionId: 'conv-1', permissionMode: 'readonly', model: 'gemini-3.8-flash-high', effort: 'high', capabilities: caps }),
-      ['--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan', '--model', 'gemini-3.8-flash-high', '--effort', 'high', '--conversation', 'conv-1'],
+      buildAgySpawnArgs({ resumeSessionId: 'conv-1', permissionMode: 'readonly', model: 'gemini-3.8-flash', effort: 'high', capabilities: caps }),
+      ['--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan', '--model', 'gemini-3.8-flash', '--effort', 'high', '--conversation', 'conv-1'],
     );
   });
 
@@ -3164,8 +3123,8 @@ describe('agy agents: spawn args', () => {
     assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', capabilities: AGY_CAPS_AGENTS }), [...base, '--agent', 'bojubot', '--mode', 'accept-edits']);
     assert.deepEqual(buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'readonly' }), [...base, '--agent', 'bojubot', '--mode', 'plan']);
     assert.deepEqual(
-      buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'standard', model: 'gemini-3.8-flash-high', effort: 'high', capabilities: AGY_CAPS_AGENTS }),
-      [...base, '--agent', 'bojubot', '--mode', 'accept-edits', '--model', 'gemini-3.8-flash-high', '--effort', 'high'],
+      buildAgySpawnArgs({ agent: 'bojubot', permissionMode: 'standard', model: 'gemini-3.8-flash', effort: 'high', capabilities: AGY_CAPS_AGENTS }),
+      [...base, '--agent', 'bojubot', '--mode', 'accept-edits', '--model', 'gemini-3.8-flash', '--effort', 'high'],
     );
   });
 
@@ -5496,4 +5455,320 @@ describe('parseAgyStream sign-in failures', () => {
     assert.deepEqual(r.apiErrors, []);
     assert.equal(r.results[0].content, 'HTTP 401: Unauthorized');
   });
+});
+
+describe('resolveTurnModel (Claude Code: effort from the CLI list)', () => {
+  const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+  const claude = (sessionEffort: string | undefined, defaultEffort: string, cliLevels: readonly string[] = LEVELS) =>
+    resolveTurnModel({ model: 'claude-sonnet-5-5', sessionEffort, defaultEffort, models: [], cliLevels, effortVariants: false });
+
+  test('session pin wins over the agent default', () => {
+    assert.equal(claude('low', 'high').effort, 'low');
+  });
+
+  test('falls back to the agent default with no pin', () => {
+    assert.equal(claude(undefined, 'high').effort, 'high');
+    assert.equal(claude('', 'high').effort, 'high');
+  });
+
+  test('Default everywhere means no flag', () => {
+    assert.equal(claude(undefined, '').effort, undefined);
+  });
+
+  test('a level the CLI did not list is dropped, never sent', () => {
+    assert.equal(claude('ultra', '').effort, undefined);
+    assert.equal(claude(undefined, 'ultra').effort, undefined);
+  });
+
+  test('an unsupported pin does not fall through to the default', () => {
+    assert.equal(claude('ultra', 'high').effort, undefined);
+  });
+
+  test('nothing is sent when the CLI lists no levels', () => {
+    assert.equal(claude('high', 'high', []).effort, undefined);
+  });
+
+  test('the model is passed through untouched (no variant splitting)', () => {
+    const r = resolveTurnModel({ model: 'my-model-high', sessionEffort: 'low', defaultEffort: '', models: [], cliLevels: LEVELS, effortVariants: false });
+    assert.deepEqual(r, { model: 'my-model-high', effort: 'low', levels: LEVELS });
+  });
+});
+
+describe('agentModelIndicatorText', () => {
+  test('agent, model and the level when one applies', () => {
+    assert.equal(agentModelIndicatorText('Claude', 'Claude Sonnet 5.5', 'high'), 'Claude · Claude Sonnet 5.5 · high');
+  });
+
+  test('just agent and model at Default', () => {
+    assert.equal(agentModelIndicatorText('Gemini', 'Claude Sonnet 5.5', undefined), 'Gemini · Claude Sonnet 5.5');
+    assert.equal(agentModelIndicatorText('Gemini', 'Gemini 3.8 Flash', ''), 'Gemini · Gemini 3.8 Flash');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agent + model picker (#402)
+// ---------------------------------------------------------------------------
+
+const AGY_MODELS_OUTPUT = [
+  'Fetching available models...',
+  'gemini-4-argon-medium\tGemini 4 Argon (Medium)',
+  'gemini-4-argon-high\tGemini 4 Argon (High)',
+  'gemini-4-argon-low\tGemini 4 Argon (Low)',
+  'gemini-3.8-flash-high\tGemini 3.8 Flash (High)',
+  'gemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)',
+  'gemini-3.8-flash-low\tGemini 3.8 Flash (Low)',
+  'claude-sonnet-5-5-low\tClaude Sonnet 5.5 (Low)',
+  'claude-sonnet-5-5-medium\tClaude Sonnet 5.5 (Medium)',
+  'claude-sonnet-5-5-high\tClaude Sonnet 5.5 (High)',
+  'gpt-oss-120b-medium\tGPT-OSS 120B (Medium)',
+  '',
+].join('\n');
+
+const AGY_COLLAPSED = collapseEffortVariants(parseAgyModels(AGY_MODELS_OUTPUT));
+
+describe('collapseEffortVariants', () => {
+  test('agy models list: one entry per base model, with the levels it has in order', () => {
+    assert.deepEqual(AGY_COLLAPSED, [
+      { id: 'gemini-4-argon', displayName: 'Gemini 4 Argon', description: '', effortLevels: ['low', 'medium', 'high'] },
+      { id: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', description: '', effortLevels: ['low', 'medium', 'high'] },
+      { id: 'claude-sonnet-5-5', displayName: 'Claude Sonnet 5.5', description: '', effortLevels: ['low', 'medium', 'high'] },
+      { id: 'gpt-oss-120b', displayName: 'GPT-OSS 120B', description: '', effortLevels: ['medium'] },
+    ]);
+  });
+
+  test('a model whose name does not carry the level is kept as it is', () => {
+    const models = [
+      { id: 'custom-high', displayName: 'My custom model', description: '' },
+      { id: 'plain', displayName: 'Plain', description: 'd' },
+    ];
+    assert.deepEqual(collapseEffortVariants(models), models);
+  });
+
+  test('duplicates are listed once', () => {
+    const out = collapseEffortVariants([
+      { id: 'm-low', displayName: 'M (Low)', description: '' },
+      { id: 'm-low', displayName: 'M (Low)', description: '' },
+      { id: 'x', displayName: 'X', description: '' },
+      { id: 'x', displayName: 'X', description: '' },
+    ]);
+    assert.deepEqual(out.map(m => [m.id, m.effortLevels]), [['m', ['low']], ['x', undefined]]);
+  });
+
+  test('empty list', () => {
+    assert.deepEqual(collapseEffortVariants([]), []);
+  });
+});
+
+describe('splitEffortVariant / migrateVariantModel', () => {
+  test('splits a trailing known level', () => {
+    assert.deepEqual(splitEffortVariant('gemini-3.8-flash-high'), { base: 'gemini-3.8-flash', level: 'high' });
+    assert.deepEqual(splitEffortVariant('gpt-oss-120b-medium'), { base: 'gpt-oss-120b', level: 'medium' });
+    assert.deepEqual(splitEffortVariant('m-xhigh'), { base: 'm', level: 'xhigh' });
+  });
+
+  test('anything else is not a variant', () => {
+    assert.equal(splitEffortVariant('gemini-3.8-flash'), null);
+    assert.equal(splitEffortVariant('claude-opus-5-5'), null);
+    assert.equal(splitEffortVariant('high'), null);
+    assert.equal(splitEffortVariant(''), null);
+  });
+
+  test('a saved variant model becomes base model + level; others are unchanged', () => {
+    assert.deepEqual(migrateVariantModel('gemini-3.8-flash-high'), { model: 'gemini-3.8-flash', level: 'high' });
+    assert.deepEqual(migrateVariantModel('gemini-3.8-flash'), { model: 'gemini-3.8-flash' });
+    assert.deepEqual(migrateVariantModel(''), { model: '' });
+  });
+});
+
+describe('nearestLevel / modelEffortLevels', () => {
+  test('the level itself when the model has it', () => {
+    assert.equal(nearestLevel('high', ['low', 'medium', 'high']), 'high');
+  });
+
+  test('otherwise the closest one, the lower on a tie', () => {
+    assert.equal(nearestLevel('max', ['low', 'medium', 'high']), 'high');
+    assert.equal(nearestLevel('low', ['medium']), 'medium');
+    assert.equal(nearestLevel('medium', ['low', 'high']), 'low');
+  });
+
+  test('nothing for an unknown level or no levels', () => {
+    assert.equal(nearestLevel('ultra', ['low']), undefined);
+    assert.equal(nearestLevel('low', []), undefined);
+  });
+
+  test('a model\'s own levels, limited to what the CLI lists; the CLI list when the model has none', () => {
+    const cli = ['low', 'medium', 'high', 'xhigh', 'max'];
+    assert.deepEqual(modelEffortLevels(AGY_COLLAPSED, 'gpt-oss-120b', cli), ['medium']);
+    assert.deepEqual(modelEffortLevels(AGY_COLLAPSED, 'gemini-3.8-flash', ['low', 'high']), ['low', 'high']);
+    assert.deepEqual(modelEffortLevels(AGY_COLLAPSED, 'unknown', cli), cli);
+    assert.deepEqual(modelEffortLevels(AGY_COLLAPSED, undefined, cli), cli);
+    assert.deepEqual(modelEffortLevels(AGY_COLLAPSED, 'gemini-3.8-flash', []), []);
+  });
+});
+
+describe('resolveTurnModel (Antigravity: per-model levels)', () => {
+  const CLI = ['low', 'medium', 'high', 'xhigh', 'max'];
+  const agy = (model: string | undefined, sessionEffort: string | undefined, defaultEffort: string, opts: { models?: ModelOption[]; cliLevels?: string[] } = {}) =>
+    resolveTurnModel({ model, sessionEffort, defaultEffort, models: opts.models ?? AGY_COLLAPSED, cliLevels: opts.cliLevels ?? CLI, effortVariants: true });
+
+  test('base model + a level it has', () => {
+    assert.deepEqual(agy('gemini-3.8-flash', undefined, 'low'), { model: 'gemini-3.8-flash', effort: 'low', levels: ['low', 'medium', 'high'] });
+  });
+
+  test('a level the model does not have falls back to its nearest', () => {
+    assert.equal(agy('gemini-3.8-flash', undefined, 'max').effort, 'high');
+    assert.equal(agy('gpt-oss-120b', 'low', '').effort, 'medium', 'GPT-OSS 120B has Medium only');
+  });
+
+  test('Default sends the base model with no level', () => {
+    assert.deepEqual(agy('gemini-3.8-flash', undefined, ''), { model: 'gemini-3.8-flash', effort: undefined, levels: ['low', 'medium', 'high'] });
+  });
+
+  test('an old variant model ID is the base model at its level', () => {
+    assert.deepEqual(agy('gemini-3.8-flash-high', undefined, ''), { model: 'gemini-3.8-flash', effort: 'high', levels: ['low', 'medium', 'high'] });
+  });
+
+  test('a session pin wins over the level an old variant ID implied', () => {
+    assert.equal(agy('gemini-3.8-flash-high', 'low', '').effort, 'low');
+    assert.equal(agy('gemini-3.8-flash-high', 'low', '').model, 'gemini-3.8-flash');
+  });
+
+  test('the implied level wins over the agent default', () => {
+    assert.equal(agy('gemini-3.8-flash-low', undefined, 'high').effort, 'low');
+  });
+
+  test('when no level can be sent, an old variant ID goes as it is (it carries the level)', () => {
+    assert.deepEqual(agy('gemini-3.8-flash-high', undefined, 'low', { cliLevels: [] }), { model: 'gemini-3.8-flash-high', effort: undefined, levels: [] });
+  });
+
+  test('before the model list arrives: the CLI levels apply', () => {
+    assert.deepEqual(agy('gemini-3.8-flash', 'xhigh', '', { models: [] }), { model: 'gemini-3.8-flash', effort: 'xhigh', levels: CLI });
+    assert.deepEqual(agy('gemini-3.8-flash-high', undefined, '', { models: [] }), { model: 'gemini-3.8-flash', effort: 'high', levels: CLI });
+  });
+
+  test('a Claude effort default can never reach an Antigravity turn as an invalid level', () => {
+    // Claude's levels include xhigh and max; the agy model only has medium.
+    for (const level of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      assert.equal(agy('gpt-oss-120b', level, '').effort, 'medium', level);
+    }
+  });
+
+  test('no model: the CLI picks, the CLI levels apply', () => {
+    assert.deepEqual(agy(undefined, undefined, 'low'), { model: undefined, effort: 'low', levels: CLI });
+  });
+
+  test('model and effort never disagree: with an effort the model is never a variant ID', () => {
+    const ids = ['gemini-3.8-flash', 'gemini-3.8-flash-low', 'gemini-3.8-flash-high', 'gpt-oss-120b', 'gpt-oss-120b-medium'];
+    for (const id of ids) {
+      for (const pin of [undefined, '', 'low', 'medium', 'high', 'xhigh', 'max']) {
+        for (const def of ['', 'low', 'max']) {
+          for (const models of [AGY_COLLAPSED, []]) {
+            const r = agy(id, pin, def, { models });
+            if (r.effort) assert.equal(splitEffortVariant(r.model ?? ''), null, `${id} ${pin} ${def}`);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('buildAgySpawnArgs never sends a variant model with --effort', () => {
+  const caps = parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n');
+  const base = ['--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'accept-edits'];
+
+  test('base model + effort', () => {
+    assert.deepEqual(buildAgySpawnArgs({ model: 'gemini-3.8-flash', effort: 'low', capabilities: caps }), [...base, '--model', 'gemini-3.8-flash', '--effort', 'low']);
+  });
+
+  test('a variant model with an effort is sent as its base model', () => {
+    assert.deepEqual(buildAgySpawnArgs({ model: 'gemini-3.8-flash-high', effort: 'low', capabilities: caps }), [...base, '--model', 'gemini-3.8-flash', '--effort', 'low']);
+  });
+
+  test('a variant model without an effort that can be sent stays as it is', () => {
+    assert.deepEqual(buildAgySpawnArgs({ model: 'gemini-3.8-flash-high', effort: 'low' }), [...base, '--model', 'gemini-3.8-flash-high']);
+    assert.deepEqual(buildAgySpawnArgs({ model: 'gemini-3.8-flash-high', capabilities: caps }), [...base, '--model', 'gemini-3.8-flash-high']);
+  });
+});
+
+describe('modelPickAction', () => {
+  test('a model of the session\'s agent switches model mid-session', () => {
+    assert.equal(modelPickAction({ sessionBackend: 'claude-code', pickedBackend: 'claude-code', hasConversation: true, busy: true }), 'switch-model');
+    assert.equal(modelPickAction({ sessionBackend: 'antigravity', pickedBackend: 'antigravity', hasConversation: false, busy: false }), 'switch-model');
+  });
+
+  test('another agent\'s model moves a session with no conversation to that agent', () => {
+    assert.equal(modelPickAction({ sessionBackend: 'claude-code', pickedBackend: 'antigravity', hasConversation: false, busy: false }), 'switch-agent');
+  });
+
+  test('another agent\'s model starts a new session when there is a conversation or a first turn running', () => {
+    assert.equal(modelPickAction({ sessionBackend: 'claude-code', pickedBackend: 'antigravity', hasConversation: true, busy: false }), 'new-session');
+    assert.equal(modelPickAction({ sessionBackend: 'antigravity', pickedBackend: 'claude-code', hasConversation: false, busy: true }), 'new-session');
+  });
+});
+
+describe('modeForAgentSwitch', () => {
+  test('the same mode when the agent offers it', () => {
+    for (const mode of ['restricted', 'readonly', 'standard', 'full'] as PermissionMode[]) {
+      assert.equal(modeForAgentSwitch(mode, {}), mode);
+    }
+  });
+
+  test('otherwise the nearest mode with less access, never more', () => {
+    assert.equal(modeForAgentSwitch('full', { full: 'no' }), 'standard');
+    assert.equal(modeForAgentSwitch('standard', { standard: 'no', readonly: 'no' }), 'restricted');
+  });
+
+  test('null when the agent has no mode with the same or less access (Chat only on agy without its agents)', () => {
+    assert.equal(modeForAgentSwitch('restricted', agyUnavailableModes(parseCliCapabilities(AGY_HELP_1_4_0, '1.4.0\n'))), null);
+  });
+});
+
+describe('SessionCoordinator agent switch and per-agent effort (#402)', () => {
+  test('switchBackend moves an empty session, drops the old agent\'s pins and keeps the given mode', withSessionsDir((dir) => {
+    const { host } = twoBackendHost(dir);
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'claude-code', model: 'claude-opus-5-5', effort: 'max', permissionMode: 'readonly' });
+    assert.equal(c.switchBackend('antigravity', 'readonly'), true);
+    assert.equal(c.backendId, 'antigravity');
+    assert.equal(c.sessionModel, undefined);
+    assert.equal(c.sessionEffort, undefined);
+    assert.equal(c.getEffectivePermissionMode(), 'readonly');
+    const stored = loadAllSessions(dir, dir, '.obsidian').find(s => s.id === c.sessionFileId);
+    assert.equal(stored?.backend, 'antigravity');
+    assert.equal(stored?.permissionMode, 'readonly');
+  }));
+
+  test('switchBackend refuses a session with a conversation', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir);
+    const c = new SessionCoordinator(host);
+    await c.loadSession({ id: 's1', title: 'S', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', claudeSessionId: 'conv-1' });
+    assert.equal(c.switchBackend('antigravity', 'standard'), false);
+    assert.equal(c.backendId, 'claude-code');
+  }));
+
+  test('each agent gets its own default effort, and an Antigravity turn sends base model + level', withSessionsDir((dir) => {
+    const { host, agy } = twoBackendHost(dir, {
+      getEffort: (id) => id === 'antigravity' ? 'max' : 'low',
+      getModels: (id) => id === 'antigravity' ? AGY_COLLAPSED : [],
+      getModel: (id) => id === 'antigravity' ? 'gemini-3.8-flash' : '',
+    });
+    const c = new SessionCoordinator(host);
+    c.startNewSession({ backend: 'antigravity' });
+    assert.deepEqual(c.getEffortLevels(), ['low', 'medium', 'high']);
+    c.send('x');
+    assert.equal(agy.spawns[0].model, 'gemini-3.8-flash');
+    assert.equal(agy.spawns[0].effort, 'high', 'max → the model\'s nearest level');
+  }));
+
+  test('a session pinned to an old variant model loads as base model + level pin', withSessionsDir(async (dir) => {
+    const { host, agy } = twoBackendHost(dir, { getModels: (id) => id === 'antigravity' ? AGY_COLLAPSED : [] });
+    const c = new SessionCoordinator(host);
+    await c.loadSession({ id: 's2', title: 'S', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', claudeSessionId: 'conv-2', backend: 'antigravity', model: 'gemini-3.8-flash-high' });
+    assert.equal(c.sessionModel, 'gemini-3.8-flash');
+    assert.equal(c.sessionEffort, 'high');
+    c.switchSessionEffort('low');
+    c.send('x');
+    assert.equal(agy.spawns[0].model, 'gemini-3.8-flash');
+    assert.equal(agy.spawns[0].effort, 'low');
+  }));
 });

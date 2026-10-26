@@ -290,6 +290,48 @@
   font-size: 0.9em;
 }
 
+/* Agent sections in the agent + model picker (#402) */
+.bojubot-model-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px 2px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.bojubot-model-section:first-child {
+  padding-top: 0;
+}
+
+.bojubot-model-section.is-disabled {
+  opacity: 0.5;
+}
+
+.bojubot-model-section-note {
+  font-weight: normal;
+  font-style: italic;
+}
+
+.bojubot-model-section-empty {
+  padding: 6px 12px;
+  font-size: 0.8em;
+  color: var(--text-faint);
+}
+
+.bojubot-model-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bojubot-model-indicator .bojubot-agent-icon,
+.bojubot-model-indicator .bojubot-agent-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* ── About modal ── */
 .bojubot-about-modal {
   padding: 8px 4px 4px;
