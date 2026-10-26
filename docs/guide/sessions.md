@@ -86,7 +86,7 @@ You can have several chat panels open, each running its own session, using Obsid
 - **Opening a session** from the Sessions panel or the recent-sessions list: if it's already open in a tab, BojuBot switches to that tab. A session is never open in two tabs. Otherwise it opens in the chat panel you used last when that panel is free (a new session you haven't typed in, with nothing running), or in a new tab next to it.
 - **Starting a new session while a reply is running** keeps that reply running and opens the new session in a new tab.
 - **Commands** that act on a chat panel (send selection, switch model, show plan usage, export, skills, and so on) use the chat panel you used last. Changing settings, the permission mode or the default model applies to every open chat panel.
-- **Closing a chat tab** while it's replying stops the reply.
+- **Closing a chat tab:** click **✕** at the right of the chat toolbar (sidebar tabs show only an icon, so this is the easy way). The session stays in the Sessions panel. If a reply is running, BojuBot asks first: **Keep waiting**, or **Stop it and close**, which saves the reply so far with its session. Closing a tab some other way (right-click → **Close**) while it's replying stops the reply.
 
 ::: tip Plan limits
 Sessions running at the same time each use your plan or quota, so limits run out faster.

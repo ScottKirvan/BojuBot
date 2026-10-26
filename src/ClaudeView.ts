@@ -47,7 +47,7 @@ import {
   loadHistory,
   sessionBackend,
 } from './utils/sessionStorage';
-import { StopReplyModal } from './modals/StopReplyModal';
+import { StopReplyModal, StopReplyAction } from './modals/StopReplyModal';
 import { relativeTime } from './utils/sessionList';
 import { renderAgentIcon } from './agentIcon';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
@@ -771,6 +771,12 @@ export class ClaudeView extends ItemView {
       this.appInternal.setting.openTabById('bojubot');
     });
 
+    // Sidebar tabs show only an icon, with no close button of their own
+    const closeBtn = toolbarRight.createEl('button', { cls: 'bojubot-icon-btn' });
+    setIcon(closeBtn, 'x');
+    closeBtn.title = 'Close this chat tab (the session stays in the sessions panel)';
+    closeBtn.addEventListener('click', () => this.closeTab());
+
     this.messagesEl = root.createDiv({ cls: 'bojubot-messages' });
 
     const inputArea = root.createDiv({ cls: 'bojubot-input-area' });
@@ -1071,17 +1077,22 @@ export class ClaudeView extends ItemView {
    * `change`; "Keep waiting" does nothing. When nothing is running, `change`
    * runs straight away.
    */
-  private guardSessionChange(change: () => void | Promise<void>): void {
+  private guardSessionChange(change: () => void | Promise<void>, action: StopReplyAction = 'switch'): void {
     if (!this.coordinator.isBusy) {
       void change();
       return;
     }
     new StopReplyModal(this.app, (stop) => {
-      if (stop) void this.stopReplyThen(change);
-    }).open();
+      if (stop) void this.stopReplyThen(change, action);
+    }, action).open();
   }
 
-  private async stopReplyThen(change: () => void | Promise<void>): Promise<void> {
+  /** Close this chat tab (toolbar ✕). Asks first if a reply is still running. */
+  private closeTab(): void {
+    this.guardSessionChange(() => this.leaf.detach(), 'close');
+  }
+
+  private async stopReplyThen(change: () => void | Promise<void>, action: StopReplyAction = 'switch'): Promise<void> {
     this._stoppingForSwitch = true;
     let timer: number | undefined;
     let stopped: boolean;
@@ -1095,7 +1106,7 @@ export class ClaudeView extends ItemView {
       this._stoppingForSwitch = false;
     }
     if (!stopped) {
-      new Notice(`${this.plugin.brand.name}: the reply couldn't be stopped, so the session wasn't switched.`);
+      new Notice(`${this.plugin.brand.name}: the reply couldn't be stopped, so ${action === 'close' ? "the tab wasn't closed" : "the session wasn't switched"}.`);
       return;
     }
     await change();
