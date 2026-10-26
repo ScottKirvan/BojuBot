@@ -30,7 +30,12 @@ export interface CustomSessionOptions {
 /** What the form needs to know about one agent backend. */
 export interface BackendChoice {
   id: BackendId;
-  displayName: string;
+  /** "Claude (Claude Code)" */
+  label: string;
+  /** "Claude" */
+  name: string;
+  /** "Claude Code", "Antigravity CLI" */
+  cliName: string;
   /** False when the CLI wasn't found — listed, but can't be chosen. */
   installed: boolean;
   models: ModelOption[];
@@ -106,10 +111,10 @@ export class CustomSessionModal extends Modal {
     if (this.backends.length > 1) {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Agent', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'The agent CLI this session runs on. A session stays on its agent.', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'The agent this session runs on. A session stays on its agent.', cls: 'bojubot-param-desc' });
       const select = field.createEl('select', { cls: 'bojubot-param-input' });
       for (const b of this.backends) {
-        const opt = select.createEl('option', { text: b.installed ? b.displayName : `${b.displayName} (not installed)`, value: b.id });
+        const opt = select.createEl('option', { text: b.installed ? b.label : `${b.label} (not installed)`, value: b.id });
         opt.disabled = !b.installed;
         if (b.id === this.backend.id) opt.selected = true;
       }
@@ -138,7 +143,7 @@ export class CustomSessionModal extends Modal {
     {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
       field.createEl('label', { text: 'Working directory (cwd)', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'Absolute path Claude runs in. Leave blank to use vault root.', cls: 'bojubot-param-desc' });
+      field.createDiv({ text: 'Absolute path the agent runs in. Leave blank to use vault root.', cls: 'bojubot-param-desc' });
       const row = field.createDiv({ cls: 'bojubot-custom-session-cwd-row' });
       const input = row.createEl('input', {
         cls: 'bojubot-param-input bojubot-custom-session-cwd-input',
@@ -202,7 +207,7 @@ export class CustomSessionModal extends Modal {
       modelField.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
       const modelSelect = modelField.createEl('select', { cls: 'bojubot-param-input' });
       // '' = let the CLI pick (only offered when the backend's default is unset)
-      const models = b.defaultModel === '' ? [{ id: '', displayName: `${b.displayName} default`, description: '' }, ...b.models] : b.models;
+      const models = b.defaultModel === '' ? [{ id: '', displayName: `${b.cliName} default`, description: '' }, ...b.models] : b.models;
       for (const m of models) {
         const opt = modelSelect.createEl('option', { text: m.displayName, value: m.id });
         if (m.id === this.model) opt.selected = true;
@@ -213,7 +218,7 @@ export class CustomSessionModal extends Modal {
       if (b.effortLevels.length > 0) {
         const field = backendFieldsEl.createDiv({ cls: 'bojubot-param-field' });
         field.createEl('label', { text: 'Effort', cls: 'bojubot-param-label' });
-        field.createDiv({ text: `How much thinking the model does per turn. Pre-filled from your global default. Default lets ${b.displayName} decide and follows the global setting.`, cls: 'bojubot-param-desc' });
+        field.createDiv({ text: `How much thinking the model does per turn. Pre-filled from your global default. Default lets ${b.name} decide and follows the global setting.`, cls: 'bojubot-param-desc' });
         const select = field.createEl('select', { cls: 'bojubot-param-input' });
         for (const level of ['', ...b.effortLevels]) {
           const opt = select.createEl('option', { text: level || 'Default', value: level });

@@ -176,7 +176,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .setName('Agent')
       .setDesc('The agent CLI new sessions run on. Existing sessions keep the agent they started with.')
       .addDropdown((drop) => {
-        for (const id of BACKEND_IDS) drop.addOption(id, getBackend(id).displayName);
+        for (const id of BACKEND_IDS) drop.addOption(id, getBackend(id).label);
         drop
           .setValue(this.plugin.settings.backend)
           .onChange(async (value) => {
@@ -187,8 +187,8 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName('Claude binary path')
-      .setDesc(`Path to the Claude CLI binary. Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.getCapabilities('claude-code'))}.`)
+      .setName('Claude Code binary path')
+      .setDesc(`Path to the Claude Code binary (claude). Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.getCapabilities('claude-code'), getBackend('claude-code').cliName)}.`)
       .addText((text) =>
         text
           .setPlaceholder('(Auto-detect)')
@@ -200,8 +200,8 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Antigravity binary path')
-      .setDesc(`Path to the Antigravity CLI (agy). Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.getCapabilities('antigravity'), 'Antigravity')}.`)
+      .setName('Antigravity CLI binary path')
+      .setDesc(`Path to the Antigravity CLI (agy). Leave blank to auto-detect. Detected version: ${formatCliVersion(this.plugin.getCapabilities('antigravity'), getBackend('antigravity').cliName)}.`)
       .addText((text) =>
         text
           .setPlaceholder('(Auto-detect)')
@@ -238,7 +238,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Stream replies as they're written")
-      .setDesc('Show reply text word by word as Claude writes it, instead of a block at a time. Needs a Claude Code version that supports streaming; takes effect on the next message.')
+      .setDesc('Show reply text word by word as the agent writes it, instead of a block at a time. For Claude, needs a Claude Code version that supports streaming. Takes effect on the next message.')
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.streamPartialMessages)
@@ -297,7 +297,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       .setName('Vault tree depth')
       .setDesc(
         'How many levels of your vault folder/file tree to include at the start of each session. ' +
-        'This gives Claude a map of your vault structure (names only — no file contents are read). ' +
+        'This gives the agent a map of your vault structure (names only — no file contents are read). ' +
         'Deeper trees cost more tokens on the first message of each session. ' +
         '"Off" disables the tree entirely.'
       )
@@ -325,7 +325,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     muteIfMinimal(new Setting(containerEl)
       .setName('Autonomous memory')
-      .setDesc(`Claude will autonomously update the context file (${this.plugin.settings.contextFilePath}) as it learns about your vault. Disable if you prefer to manage the context file manually, or if your vault is shared/public.`)
+      .setDesc(`The agent will autonomously update the context file (${this.plugin.settings.contextFilePath}) as it learns about your vault. Disable if you prefer to manage the context file manually, or if your vault is shared/public.`)
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.autonomousMemory)
@@ -339,7 +339,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     muteIfMinimal(new Setting(containerEl)
       .setName('Memory file size limit (tokens)')
       .setDesc(
-        'When your context file exceeds this token count, Claude is instructed to compact it before the session ends — ' +
+        'When your context file exceeds this token count, the agent is instructed to compact it before the session ends — ' +
         'summarizing redundant entries and dropping outdated observations. ' +
         'Set to 0 to disable. Typical context files stay well under 4 000 tokens; set a limit if yours grows large over time.'
       )
@@ -543,7 +543,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('UI bridge')
-      .setDesc('Allow Claude to trigger Obsidian UI actions — open files, show notices, navigate headings. Claude is instructed to use these proactively after completing tasks.')
+      .setDesc('Allow the agent to trigger Obsidian UI actions — open files, show notices, navigate headings. The agent is instructed to use these proactively after completing tasks.')
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.uiBridgeEnabled)
@@ -555,7 +555,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Prompt for unlisted commands')
-      .setDesc('When Claude tries to run a command not in the allowlist, show a prompt offering a one-time allow or the option to add it to the allowlist. If off, unlisted commands are hard-blocked with a notice.')
+      .setDesc('When the agent tries to run a command not in the allowlist, show a prompt offering a one-time allow or the option to add it to the allowlist. If off, unlisted commands are hard-blocked with a notice.')
       .addToggle(toggle =>
         toggle
           .setValue(this.plugin.settings.confirmUnlistedCommands)
@@ -582,7 +582,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     }
 
     containerEl.createEl('p', {
-      text: 'Obsidian commands Claude is allowed to run directly. ' +
+      text: 'Obsidian commands the agent is allowed to run directly. ' +
         'Search and check commands to enable them. Allowlisted commands run immediately; others prompt for approval.',
       cls: 'setting-item-description',
     });
@@ -867,11 +867,11 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     linkSetting('Documentation link', 'About-modal Documentation card. Blank = default.', 'doc', '(default)');
     linkSetting('Community link', 'About-modal community/Discord card. Blank = default.', 'community', '(default)');
     linkSetting('Source link', 'About-modal source-code card. Blank = default upstream repo.', 'source', '(default)');
-    linkSetting('Support link', 'Support URL shown to Claude in the system prompt. Blank = default.', 'support', '(default)', false);
+    linkSetting('Support link', 'Support URL shown to the agent in the system prompt. Blank = default.', 'support', '(default)', false);
 
     new Setting(containerEl)
       .setName('Rebrand assistant identity')
-      .setDesc('Also use the display name in the system prompt Claude receives (how it refers to itself). Off = the assistant identity stays "BojuBot" even with a custom name.')
+      .setDesc('Also use the display name in the system prompt the agent receives (how it refers to itself). Off = the assistant identity stays "BojuBot" even with a custom name.')
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.brand?.applyToAssistantIdentity ?? false)

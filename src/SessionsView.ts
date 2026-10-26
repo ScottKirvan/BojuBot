@@ -179,7 +179,7 @@ export class SessionsView extends ItemView {
     const key = `${backend}|${session.model ?? ''}`;
     let label = this.labelMemo.get(key);
     if (label === undefined) {
-      label = agentModelLabel(this.plugin.getBackend(backend).displayName, this.plugin.modelDisplayName(backend, session.model));
+      label = agentModelLabel(this.plugin.getBackend(backend).label, this.plugin.modelDisplayName(backend, session.model));
       this.labelMemo.set(key, label);
     }
     return label;

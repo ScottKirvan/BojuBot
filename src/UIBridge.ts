@@ -58,7 +58,7 @@ class ConfirmCommandModal extends Modal {
     const { contentEl } = this;
 
     contentEl.createEl('p', {
-      text: `Claude wants to run: "${this.commandName}". This command isn't in your allowlist.`,
+      text: `The agent wants to run: "${this.commandName}". This command isn't in your allowlist.`,
       cls: 'bojubot-confirm-desc',
     });
 
@@ -106,7 +106,7 @@ class RequestPermissionModal extends Modal {
     this.titleEl.setText('Permission request');
     const { contentEl } = this;
     contentEl.createEl('p', {
-      text: `Claude needs permission to use ${this.tool}:`,
+      text: `The agent needs permission to use ${this.tool}:`,
       cls: 'bojubot-confirm-desc',
     });
     if (this.reason) {
@@ -184,7 +184,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     case 'rename-file': {
       if (!canWrite(permissionMode)) {
         warn('UIBridge: rename-file — blocked, permission mode has no write access:', permissionMode);
-        new Notice(`${brandName()}: Claude tried to rename a file, but the current permission mode doesn't allow vault writes.`, 6000);
+        new Notice(`${brandName()}: the agent tried to rename a file, but the current permission mode doesn't allow vault writes.`, 6000);
         break;
       }
       const file = app.vault.getFileByPath(action.path as string);
@@ -201,7 +201,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     case 'move-file': {
       if (!canWrite(permissionMode)) {
         warn('UIBridge: move-file — blocked, permission mode has no write access:', permissionMode);
-        new Notice(`${brandName()}: Claude tried to move a file, but the current permission mode doesn't allow vault writes.`, 6000);
+        new Notice(`${brandName()}: the agent tried to move a file, but the current permission mode doesn't allow vault writes.`, 6000);
         break;
       }
       const file = app.vault.getFileByPath(action.path as string);
@@ -217,7 +217,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     case 'delete-file': {
       if (!canWrite(permissionMode)) {
         warn('UIBridge: delete-file — blocked, permission mode has no write access:', permissionMode);
-        new Notice(`${brandName()}: Claude tried to delete a file, but the current permission mode doesn't allow vault writes.`, 6000);
+        new Notice(`${brandName()}: the agent tried to delete a file, but the current permission mode doesn't allow vault writes.`, 6000);
         break;
       }
       const file = app.vault.getFileByPath(action.path as string);
@@ -317,7 +317,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       } else {
         // Prompting disabled — hard block with notice
         warn('UIBridge: run-command blocked — not in allowlist:', commandId);
-        new Notice(`${brandName()}: Claude wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → ${brandName()} to enable it.`, 8000);
+        new Notice(`${brandName()}: the agent wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → ${brandName()} to enable it.`, 8000);
       }
       break;
     }

@@ -2284,7 +2284,7 @@ describe('SessionCoordinator compact on a backend without compaction', () => {
       let spawned = false;
       const backend = {
         ...claudeCodeBackend,
-        displayName: 'Test CLI',
+        name: 'Test',
         compactPrompt: null,
         spawnTurn: () => { spawned = true; throw new Error('should not spawn'); },
       };
@@ -2295,7 +2295,7 @@ describe('SessionCoordinator compact on a backend without compaction', () => {
       });
       const errors: string[] = [];
       coordinator.compact(() => assert.fail('onDone should not run'), (m) => errors.push(m));
-      assert.deepEqual(errors, ["Test CLI doesn't support compacting a session."]);
+      assert.deepEqual(errors, ["Test sessions can't be compacted."]);
       assert.equal(spawned, false);
     } finally {
       try { rmSync(sessionsDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
@@ -3366,7 +3366,7 @@ describe('agy agent rejection fallback', () => {
     assert.equal(isAgyAgentRejection('quota exhausted'), false);
     assert.equal(agyApiError('error: unknown agent "bojubot-chat" (available: x)').errorCode, 'agy_agent_rejected');
     const display = formatApiError(agyApiError('unknown agent "bojubot-chat" (available: x)'), 'win32');
-    assert.equal(display.title, "Antigravity couldn't start this mode's agent");
+    assert.equal(display.title, "The Antigravity CLI couldn't start this mode's agent");
   });
 
   test('after a rejection, new conversations start with no agent and Chat only is unavailable again', async () => {
@@ -3709,7 +3709,7 @@ describe('agyApiError', () => {
 describe('formatApiError (Antigravity)', () => {
   test('sign-in error points at the terminal', () => {
     const d = formatApiError(agyApiError('authentication required'), 'win32');
-    assert.equal(d.title, "Antigravity isn't signed in");
+    assert.equal(d.title, "The Antigravity CLI isn't signed in");
     assert.match(d.details[0], /run "agy" in a terminal/);
   });
   test('invalid model: first line without the flag echo, plus picker guidance', () => {
@@ -3718,8 +3718,8 @@ describe('formatApiError (Antigravity)', () => {
     assert.equal(d.details[0], 'invalid model selection: model no-such-model is not recognized as a known model or custom model in settings');
     assert.match(d.details[1], /model picker/);
   });
-  test('anything else is shown as-is under an Antigravity title', () => {
-    assert.deepEqual(formatApiError(agyApiError('quota exhausted'), 'win32'), { title: 'Antigravity error', details: ['quota exhausted'] });
+  test('anything else is shown as-is under a Gemini title', () => {
+    assert.deepEqual(formatApiError(agyApiError('quota exhausted'), 'win32'), { title: 'Gemini error', details: ['quota exhausted'] });
   });
   test('Claude API errors are unchanged', () => {
     assert.equal(formatApiError({ status: 529, message: 'Overloaded', errorCode: null, raw: '' }, 'win32').title, 'API error (529)');
@@ -3755,7 +3755,7 @@ describe('parseAgyStream errors', () => {
       proc.emit('close', 0);
     });
     assert.equal(texts.length, 1);
-    assert.match(texts[0], /^Antigravity error: invalid model selection/);
+    assert.match(texts[0], /^Gemini error: invalid model selection/);
   });
 });
 
@@ -4143,7 +4143,7 @@ describe('agent icons', () => {
       if ('svg' in icon) {
         assert.match(icon.svg, /^<svg [^>]*fill="currentColor"/, id);
         assert.ok(!/<script|on\w+=/i.test(icon.svg), `${id}: no script or event handlers`);
-        assert.match(icon.svg, new RegExp(`<title>${getBackend(id).displayName}</title>`), id);
+        assert.ok(icon.svg.includes(`<title>${getBackend(id).label}</title>`), id);
       } else {
         assert.ok(icon.lucide, id);
       }
@@ -5415,10 +5415,10 @@ describe('formatApiError sign-in cards', () => {
   });
   test('Antigravity sign-in cards', () => {
     const d = formatApiError(agyApiError('authentication required'), 'win32');
-    assert.equal(d.title, "Antigravity isn't signed in");
+    assert.equal(d.title, "The Antigravity CLI isn't signed in");
     assert.equal(d.signIn, 'antigravity');
     assert.equal(d.helpUrl, AGY_SIGN_IN_HELP_URL);
-    assert.equal(formatApiError(agyApiError('error: oauth token expired'), 'win32').title, 'Your Antigravity sign-in has expired');
+    assert.equal(formatApiError(agyApiError('error: oauth token expired'), 'win32').title, 'Your Antigravity CLI sign-in has expired');
   });
   test('help links point at the troubleshooting sections', () => {
     assert.match(CLAUDE_SIGN_IN_HELP_URL, /\/guide\/troubleshooting#signing-in-to-claude-code-again$/);

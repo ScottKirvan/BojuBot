@@ -82,7 +82,7 @@
       "Mid-session permission upgrade: if BojuBot needs more access, you can grant it without starting a new session.",
       "BojuBot can look up backlinks, outlinks, tags, or file lists from your live vault on demand — just ask.",
       "Type /usage to see how much of your plan or quota is left — it runs locally and costs nothing.",
-      "Saving your Claude quota for other work? Switch Settings → Agent to Antigravity for everyday notes."
+      "Saving your Claude quota for other work? Switch Settings → Agent to Gemini (Antigravity CLI) for everyday notes."
     ],
     "claudeCodeTips": [
       "The ring gauge in the toolbar shows how full Claude's context window is — click it to compact the session and free up space.",

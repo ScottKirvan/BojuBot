@@ -94,8 +94,8 @@ export class ContextGenerationModal extends Modal {
     contentEl.createEl('h2', { text: 'Set up your context file' });
     contentEl.createEl('p', {
       text: `No context file was found at "${this.contextFilePath}". ` +
-        'This file gives Claude persistent memory of your vault across sessions. ' +
-        'You can have Claude generate one from your vault structure, start with a blank template, or skip for now.',
+        'This file gives the agent persistent memory of your vault across sessions. ' +
+        `You can have ${this.plugin.getBackend().name} generate one from your vault structure, start with a blank template, or skip for now.`,
     });
 
     // The explicit X button is a deliberate "not now" — unlike an accidental Escape
@@ -122,14 +122,14 @@ export class ContextGenerationModal extends Modal {
     const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
 
     const generateBtn = btnRow.createEl('button', {
-      text: 'Generate with Claude',
+      text: `Generate with ${this.plugin.getBackend().name}`,
       cls: 'mod-cta',
     });
     generateBtn.addEventListener('click', () => {
       this.settled = true;
       const openAfter = openAfterCheckbox.checked;
       this.close();
-      new UserIntroModal(this.app, (intro, contextFiles) => {
+      new UserIntroModal(this.app, this.plugin.getBackend().name, (intro, contextFiles) => {
         void this.generateContextFile(intro, contextFiles, openAfter);
       }).open();
     });
@@ -341,7 +341,7 @@ export class ContextGenerationModal extends Modal {
 }
 
 /**
- * Second-step modal shown after "Generate with Claude" is selected.
+ * Second-step modal shown after "Generate with <agent>" is selected.
  * Collects an optional self-description and optional additional context files,
  * then calls back with both.
  */
@@ -350,7 +350,8 @@ class UserIntroModal extends Modal {
   private chipsEl!: HTMLElement;
   private onSubmit: (intro: string, contextFiles: string[]) => void;
 
-  constructor(app: App, onSubmit: (intro: string, contextFiles: string[]) => void) {
+  /** The agent that generates the file, e.g. "Claude". */
+  constructor(app: App, private agentName: string, onSubmit: (intro: string, contextFiles: string[]) => void) {
     super(app);
     this.onSubmit = onSubmit;
   }
@@ -360,7 +361,7 @@ class UserIntroModal extends Modal {
     contentEl.addClass('bojubot-intro-modal');
     contentEl.createEl('h2', { text: 'About you and your vault' });
     contentEl.createEl('p', {
-      text: 'Help Claude generate a more personalised context file. ' +
+      text: `Help ${this.agentName} generate a more personalised context file. ` +
         'Tell it a little about yourself and how you use this vault.',
     });
 
@@ -375,7 +376,7 @@ class UserIntroModal extends Modal {
       cls: 'bojubot-intro-files-label',
     });
     filesSection.createDiv({
-      text: 'Add any files Claude should read before generating — e.g. An existing Claude.md, project notes, or style guides.',
+      text: `Add any files ${this.agentName} should read before generating — e.g. An existing Claude.md, project notes, or style guides.`,
       cls: 'bojubot-intro-files-desc',
     });
 

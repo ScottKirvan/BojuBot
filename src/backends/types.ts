@@ -98,8 +98,17 @@ export interface BackendOrientation {
 
 export interface AgentBackend {
   id: BackendId;
-  /** Product name for the UI, e.g. "Claude Code". */
-  displayName: string;
+  /** Label for pickers, settings and section headers: "Claude (Claude Code)". */
+  label: string;
+  /** The agent in sentences about the conversation: "Claude" ("Chat only needs
+   *  a new Claude session"). */
+  name: string;
+  /** The CLI product, for version lines: "Claude Code", "Antigravity CLI". */
+  cliName: string;
+  /** The CLI mid-sentence, for installing, signing in, the binary and versions:
+   *  "Claude Code", "the Antigravity CLI". Capitalize it at the start of a
+   *  sentence with sentenceStart(). */
+  cliPhrase: string;
   /** Shown next to each session in the session manager and recent-sessions list. */
   icon: AgentIcon;
   findBinary(settingsOverride?: string): string | null;
