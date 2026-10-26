@@ -30,8 +30,12 @@ export interface BojuBotSettings {
   binaryPath: string;
   /** Antigravity (`agy`) binary. Empty = auto-detect. */
   agyBinaryPath: string;
-  /** Antigravity model ID for --model. Empty = Antigravity's own default. */
+  /** Antigravity model ID for --model — a base model ("gemini-3.8-flash"),
+   *  never an effort variant (migrated on load). Empty = Antigravity's own default. */
   agyDefaultModel: string;
+  /** Antigravity's `--effort` default. Separate from Claude's: the levels
+   *  differ per model. '' = Default (flag left off). */
+  agyDefaultEffort: string;
   contextFilePath: string;
   sendOnEnter: boolean;
   resumeLastSession: boolean;
@@ -95,7 +99,7 @@ export interface BojuBotSettings {
   userLabel: string;
   /** Claude model ID passed via --model at spawn time. Empty = Claude default (Sonnet). */
   defaultModel: string;
-  /** `--effort` level for new turns. '' = Default (flag left off, the CLI decides). Only sent if the CLI lists it. */
+  /** Claude Code's `--effort` level for new turns. '' = Default (flag left off, the CLI decides). Only sent if the CLI lists it. */
   defaultEffort: string;
   /** Show reply text as it's generated (--include-partial-messages, when the CLI supports it). */
   streamPartialMessages: boolean;
@@ -123,6 +127,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   binaryPath: '',
   agyBinaryPath: '',
   agyDefaultModel: '',
+  agyDefaultEffort: '',
   contextFilePath: '_claude-context.md',
   sendOnEnter: true,
   resumeLastSession: true,
@@ -173,8 +178,8 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName('Agent')
-      .setDesc('The agent CLI new sessions run on. Existing sessions keep the agent they started with.')
+      .setName('Default agent for new sessions')
+      .setDesc('The agent new sessions run on. Picking a model of another agent in the chat panel changes it too. Existing sessions keep the agent they started with.')
       .addDropdown((drop) => {
         for (const id of BACKEND_IDS) drop.addOption(id, getBackend(id).label);
         drop

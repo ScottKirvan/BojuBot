@@ -76,6 +76,9 @@ export interface ModelOption {
   id: string;
   displayName: string;
   description: string;
+  /** Effort levels this model has, when the CLI lists them per model
+   *  (Antigravity's effort variants). Omitted = whatever the CLI lists. */
+  effortLevels?: string[];
 }
 
 export interface PermissionDescription {
@@ -123,6 +126,10 @@ export interface AgentBackend {
   /** True when BojuBot can read the CLI's own conversation history (Claude Code's
    *  .jsonl files). False → BojuBot keeps its own transcript of the session. */
   readableHistory: boolean;
+  /** True when the CLI lists every model once per effort level ("…-low",
+   *  "…-high"). BojuBot lists the base models and sends `--effort` instead
+   *  (see utils/agentModels.ts). Optional — omitted means false. */
+  effortVariants?: boolean;
   /** Asks the CLI which models it offers. Null when BojuBot keeps the list
    *  itself (Claude Code). Rejects on failure. */
   listModels: ((binaryPath: string, env: Record<string, string>, cwd: string) => Promise<ModelOption[]>) | null;

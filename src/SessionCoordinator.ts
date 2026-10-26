@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import type { ChildProcess } from 'child_process';
-import type { AgentBackend, BackendId, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
+import type { AgentBackend, BackendId, ModelOption, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
 import { killProcess } from './backends/process';
 import { sentenceStart } from './backends';
 import { resolveSpawnCwd } from './backends/modes';
@@ -23,8 +23,8 @@ import {
 } from './utils/sessionStorage';
 import { log } from './utils/logger';
 import type { ApiError } from './utils/apiError';
-import { CliCapabilities, UNKNOWN_CAPABILITIES } from './utils/cliCapabilities';
-import { resolveEffort } from './utils/effort';
+import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './utils/cliCapabilities';
+import { migrateVariantModel, resolveTurnModel, TurnModel } from './utils/agentModels';
 import { needsFreshSessionForChatOnly } from './utils/modeGates';
 import { composeStreamingText } from './utils/streamPreview';
 import { preserveUserFields } from './utils/sessionList';
@@ -49,8 +49,11 @@ export interface SessionCoordinatorHost {
   noteFullAccess?(sessionFileId: string): void;
   /** Global default model for the backend; '' = let the CLI choose. */
   getModel(id: BackendId): string;
-  /** Global default effort level; '' = Default (flag left off). Optional — omitted means ''. */
-  getEffort?(): string;
+  /** The backend's global default effort level; '' = Default (flag left off).
+   *  Optional — omitted means ''. */
+  getEffort?(id: BackendId): string;
+  /** The backend's models, for per-model effort levels. Optional — omitted means none known. */
+  getModels?(id: BackendId): ModelOption[];
   getSessionsDir(): string;
   saveLastActiveSessionId(id: string): Promise<void>;
   isUiBridgeEnabled(): boolean;
@@ -233,10 +236,31 @@ export class SessionCoordinator {
     return this.backend.needsNewConversation?.(this._s.agent, mode) ?? false;
   }
 
-  /** The `--effort` level for the next turn (session pin, then global default),
-   *  or undefined when it's Default or the installed CLI doesn't list it. */
+  /** The `--effort` level for the next turn (session pin, then the agent's
+   *  default), or undefined when it's Default or can't be sent. */
   getEffectiveEffort(): string | undefined {
-    return resolveEffort(this._s.effort, this.host.getEffort?.() ?? '', this.capabilities.effortLevels);
+    return this.getTurnModel().effort;
+  }
+
+  /** Effort levels the session's model offers; [] when the CLI has no --effort. */
+  getEffortLevels(): readonly string[] {
+    return this.getTurnModel().levels;
+  }
+
+  /**
+   * The model and effort the next turn sends, resolved together so they never
+   * disagree (Antigravity's effort variants, #402). See resolveTurnModel().
+   */
+  getTurnModel(): TurnModel {
+    const caps = this.capabilities;
+    return resolveTurnModel({
+      model: this._s.model || this.host.getModel(this._s.backend) || undefined,
+      sessionEffort: this._s.effort,
+      defaultEffort: this.host.getEffort?.(this._s.backend) ?? '',
+      models: this.host.getModels?.(this._s.backend) ?? [],
+      cliLevels: has(caps, '--effort') ? caps.effortLevels : [],
+      effortVariants: this.backend.effortVariants ?? false,
+    });
   }
 
   /** Read fresh on every spawn so a probe that finishes mid-session applies from the next turn. */
@@ -252,7 +276,7 @@ export class SessionCoordinator {
 
   /** The model for the next turn: the session pin, then the backend's global default. */
   getEffectiveModel(): string | undefined {
-    return this._s.model || this.host.getModel(this._s.backend) || undefined;
+    return this.getTurnModel().model;
   }
 
   /**
@@ -396,10 +420,43 @@ export class SessionCoordinator {
     return true;
   }
 
+  /**
+   * Move a session that has no conversation yet to another agent, picked
+   * explicitly (the agent + model picker, #402) — unlike followDefaultBackend,
+   * also a session given its agent by Custom Session. Model and effort pins
+   * belong to the old agent and are dropped; `mode` is the permission mode the
+   * session keeps on the new agent. Returns false when the session has a
+   * conversation or a first turn is running.
+   */
+  switchBackend(id: BackendId, mode: PermissionMode): boolean {
+    const s = this._s;
+    if (this._activeProc || s.sessionId || !s.placeholderId) return false;
+    s.backend = id;
+    s.backendPinned = true;
+    s.model = undefined;
+    s.effort = undefined;
+    s.permissionMode = mode;
+    if (mode === 'full') this.host.noteFullAccess?.(s.placeholderId);
+    this._save(this._storedSession(s, s.placeholderId, '', new Date().toISOString()));
+    return true;
+  }
+
   async loadSession(session: StoredSession): Promise<void> {
     session = this._settleSessionPermissionMode(session);
     this._pendingSystemMessage = null;
     const isNew = !session.claudeSessionId;
+    // A model pinned as an effort variant ("gemini-3.8-flash-high", from before
+    // models were collapsed) is the base model pinned at that level (#402).
+    // Saved that way with the next turn.
+    let model = session.model;
+    let effort = session.effort || undefined;
+    if (model && this.host.getBackend(sessionBackend(session)).effortVariants) {
+      const migrated = migrateVariantModel(model);
+      if (migrated.level) {
+        model = migrated.model;
+        effort ??= migrated.level;
+      }
+    }
     this._s = {
       placeholderId: isNew ? session.id : undefined,
       sessionId: session.claudeSessionId || undefined,
@@ -409,8 +466,8 @@ export class SessionCoordinator {
       cwd: session.cwd || undefined,
       suppressVaultContext: session.suppressVaultContext ?? false,
       permissionMode: session.permissionMode,
-      model: session.model,
-      effort: session.effort || undefined,
+      model,
+      effort,
       rawSession: session.rawSession ?? false,
       backend: sessionBackend(session),
       backendPinned: !!session.backend,
@@ -509,8 +566,7 @@ export class SessionCoordinator {
         env: this.host.getEnv(),
         resumeSessionId: this._s.sessionId,
         permissionMode: this.getEffectivePermissionMode(),
-        model: this.getEffectiveModel(),
-        effort: this.getEffectiveEffort(),
+        ...this._turnModelArgs(),
         capabilities: this.capabilities,
         agent: this._s.agent,
       });
@@ -579,8 +635,7 @@ export class SessionCoordinator {
         env: this.host.getEnv(),
         resumeSessionId: turnSession.sessionId,
         permissionMode: mode,
-        model: this.getEffectiveModel(),
-        effort: this.getEffectiveEffort(),
+        ...this._turnModelArgs(),
         includePartialMessages: streaming,
         capabilities: this.capabilities,
         agent,
@@ -685,6 +740,12 @@ export class SessionCoordinator {
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
+
+  /** --model and --effort for a spawn, resolved together. */
+  private _turnModelArgs(): { model: string | undefined; effort: string | undefined } {
+    const { model, effort } = this.getTurnModel();
+    return { model, effort };
+  }
 
   /**
    * The mode a session opens in, never more than it was saved with: a session

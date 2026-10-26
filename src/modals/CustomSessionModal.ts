@@ -6,6 +6,9 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getElectronDialog } from '../utils/electronUtils';
 import { log } from '../utils/logger';
+import { modelEffortLevels, nearestLevel } from '../utils/agentModels';
+import { renderAgentIcon } from '../agentIcon';
+import { AgentModelPickerModal } from './AgentModelPickerModal';
 
 export interface CustomSessionOptions {
   name: string;
@@ -41,8 +44,11 @@ export interface BackendChoice {
   models: ModelOption[];
   /** The global default model; '' = the CLI's own default. */
   defaultModel: string;
-  /** Levels the CLI lists for --effort. Empty → the effort field is hidden. */
+  /** Levels the CLI lists for --effort. Empty → the effort field is hidden.
+   *  A model may offer fewer (ModelOption.effortLevels). */
   effortLevels: readonly string[];
+  /** The agent's default effort level; '' = Default. */
+  defaultEffort: string;
   unavailableModes: UnavailableModes;
   modeDescriptions: Partial<Record<PermissionMode, string>>;
 }
@@ -79,7 +85,6 @@ export class CustomSessionModal extends Modal {
     private readonly backends: BackendChoice[],
     defaultBackend: BackendId,
     defaultPermissionMode: PermissionMode,
-    private readonly defaultEffort: string,
     private readonly onSubmit: (opts: CustomSessionOptions) => void,
   ) {
     super(app);
@@ -94,8 +99,19 @@ export class CustomSessionModal extends Modal {
    *  mode it can't enforce falls back to Read only (the safer neighbour). */
   private applyBackendDefaults(): void {
     this.model = this.backend.defaultModel;
-    this.effort = this.backend.effortLevels.includes(this.defaultEffort) ? this.defaultEffort : '';
+    this.effort = this.backend.defaultEffort;
+    this.fitEffort();
     if (this.backend.unavailableModes[this.permissionMode]) this.permissionMode = 'readonly';
+  }
+
+  /** Effort levels the chosen model offers. */
+  private effortLevels(): readonly string[] {
+    return modelEffortLevels(this.backend.models, this.model, this.backend.effortLevels);
+  }
+
+  /** Keep the effort level one the chosen model has: its nearest, or Default. */
+  private fitEffort(): void {
+    if (this.effort) this.effort = nearestLevel(this.effort, this.effortLevels()) ?? '';
   }
 
   onOpen() {
@@ -107,22 +123,34 @@ export class CustomSessionModal extends Modal {
     let renderPermissionBtn = () => { /* set by the permission field below */ };
     let renderBackendFields = () => { /* set by the model/effort fields below */ };
 
-    // ── Agent ────────────────────────────────────────────────────────────────
-    if (this.backends.length > 1) {
+    // ── Agent and model (#402) ───────────────────────────────────────────────
+    {
       const field = form.createDiv({ cls: 'bojubot-param-field' });
-      field.createEl('label', { text: 'Agent', cls: 'bojubot-param-label' });
-      field.createDiv({ text: 'The agent this session runs on. A session stays on its agent.', cls: 'bojubot-param-desc' });
-      const select = field.createEl('select', { cls: 'bojubot-param-input' });
-      for (const b of this.backends) {
-        const opt = select.createEl('option', { text: b.installed ? b.label : `${b.label} (not installed)`, value: b.id });
-        opt.disabled = !b.installed;
-        if (b.id === this.backend.id) opt.selected = true;
-      }
-      select.addEventListener('change', () => {
-        this.backend = this.backends.find(b => b.id === select.value) ?? this.backend;
-        this.applyBackendDefaults();
-        renderPermissionBtn();
-        renderBackendFields();
+      field.createEl('label', { text: 'Agent and model', cls: 'bojubot-param-label' });
+      field.createDiv({ text: 'The agent this session runs on (a session stays on its agent) and its model. Pre-filled from your defaults.', cls: 'bojubot-param-desc' });
+      const btn = field.createEl('button', { cls: 'bojubot-param-input bojubot-custom-session-perm-btn', attr: { type: 'button' } });
+      const renderBtn = () => {
+        btn.empty();
+        renderAgentIcon(btn, this.backend.id, 'bojubot-custom-session-perm-btn-icon');
+        const modelName = this.model
+          ? this.backend.models.find(m => m.id === this.model)?.displayName ?? this.model
+          : `${this.backend.cliName} default`;
+        btn.createSpan({ cls: 'bojubot-custom-session-perm-btn-label', text: `${this.backend.label} · ${modelName}` });
+        setIcon(btn.createSpan({ cls: 'bojubot-custom-session-perm-btn-chevron' }), 'chevron-down');
+      };
+      renderBtn();
+      btn.addEventListener('click', () => {
+        new AgentModelPickerModal(this.app, this.backends, { backend: this.backend.id, model: this.model }, (id, model) => {
+          if (id !== this.backend.id) {
+            this.backend = this.backends.find(b => b.id === id) ?? this.backend;
+            this.applyBackendDefaults();
+            renderPermissionBtn();
+          }
+          this.model = model.id;
+          this.fitEffort();
+          renderBtn();
+          renderBackendFields();
+        }).open();
       });
     }
 
@@ -196,31 +224,21 @@ export class CustomSessionModal extends Modal {
       });
     }
 
-    // ── Model + effort (rebuilt when the agent changes) ──────────────────────
+    // ── Effort (rebuilt when the agent or model changes) ──────────────────────
     const backendFieldsEl = form.createDiv();
     renderBackendFields = () => {
       backendFieldsEl.empty();
       const b = this.backend;
 
-      const modelField = backendFieldsEl.createDiv({ cls: 'bojubot-param-field' });
-      modelField.createEl('label', { text: 'Model', cls: 'bojubot-param-label' });
-      modelField.createDiv({ text: 'Applies to this session only. Pre-filled from your global default — change it here to override.', cls: 'bojubot-param-desc' });
-      const modelSelect = modelField.createEl('select', { cls: 'bojubot-param-input' });
-      // '' = let the CLI pick (only offered when the backend's default is unset)
-      const models = b.defaultModel === '' ? [{ id: '', displayName: `${b.cliName} default`, description: '' }, ...b.models] : b.models;
-      for (const m of models) {
-        const opt = modelSelect.createEl('option', { text: m.displayName, value: m.id });
-        if (m.id === this.model) opt.selected = true;
-      }
-      modelSelect.addEventListener('change', () => { this.model = modelSelect.value; });
+      const levels = this.effortLevels();
 
       // Only when the CLI supports --effort
-      if (b.effortLevels.length > 0) {
+      if (levels.length > 0) {
         const field = backendFieldsEl.createDiv({ cls: 'bojubot-param-field' });
         field.createEl('label', { text: 'Effort', cls: 'bojubot-param-label' });
         field.createDiv({ text: `How much thinking the model does per turn. Pre-filled from your global default. Default lets ${b.name} decide and follows the global setting.`, cls: 'bojubot-param-desc' });
         const select = field.createEl('select', { cls: 'bojubot-param-input' });
-        for (const level of ['', ...b.effortLevels]) {
+        for (const level of ['', ...levels]) {
           const opt = select.createEl('option', { text: level || 'Default', value: level });
           if (level === this.effort) opt.selected = true;
         }

@@ -51,7 +51,7 @@ To use Gemini, BojuBot runs Google's Antigravity CLI (`agy`), which runs Gemini.
 
 1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
 2. **Sign in once.** Open a terminal, run `agy`, and sign in with your Google account in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
-3. **Pick it in BojuBot** once the plugin is installed: **Settings → BojuBot → Agent** → **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
+3. **Pick it in BojuBot** once the plugin is installed: **Settings → BojuBot → Default agent for new sessions** → **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 
 The model picker then lists Gemini models (plus the Claude and GPT-OSS models Antigravity offers). See [Choosing an Agent](./agents) for what works differently with Gemini.
 
@@ -59,8 +59,8 @@ The model picker then lists Gemini models (plus the Claude and GPT-OSS models An
 
 ## Switching agents later
 
-- **For new sessions:** change **Settings → BojuBot → Agent**. Sessions you've already used stay on the agent they started with, because a conversation can't move between agent CLIs.
-- **For one session:** Shift+click **+** in the chat panel and pick the agent in the **Agent** field of [Custom Session](./sessions#starting-a-new-session).
+- **For new sessions:** change **Settings → BojuBot → Default agent for new sessions**. Sessions you've already used stay on the agent they started with, because a conversation can't move between agent CLIs.
+- **For one session:** Shift+click **+** in the chat panel and pick the agent in the **Agent and model** field of [Custom Session](./sessions#starting-a-new-session).
 
 ---
 

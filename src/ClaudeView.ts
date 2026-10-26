@@ -15,7 +15,7 @@ import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type BojuBotPlugin from '../main';
-import type { PermissionDenial, PermissionMode } from './backends/types';
+import type { ModelOption, PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
@@ -23,7 +23,6 @@ import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
-import { ClaudeModel } from './settings';
 import { BACKEND_IDS, sentenceStart } from './backends';
 import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
@@ -32,7 +31,9 @@ import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError, claudeAuthReply, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
 import { repairLinks } from './utils/linkRepair';
 import { formatCliVersion, has } from './utils/cliCapabilities';
-import { EFFORT_DESCRIPTIONS, modelIndicatorText } from './utils/effort';
+import { EFFORT_DESCRIPTIONS } from './utils/effort';
+import { agentModelIndicatorText, modeForAgentSwitch, modelPickAction } from './utils/agentModels';
+import { AgentModelPickerModal, AgentModelSection } from './modals/AgentModelPickerModal';
 import { historyKeyAction } from './utils/inputHistory';
 import { isRegularUser, sponsorMilestoneToShow } from './utils/sponsorGate';
 import { pickThanksMessage, thanksCardAllowed, ThanksLink, ThanksMessages } from './utils/thanks';
@@ -190,7 +191,8 @@ export class ClaudeView extends ItemView {
       keepsFullAccess: (id) => this.plugin.keepsFullAccess(id),
       noteFullAccess: (id) => this.plugin.noteFullAccess(id),
       getModel: (id) => this.plugin.getDefaultModel(id),
-      getEffort: () => this.plugin.settings.defaultEffort ?? '',
+      getEffort: (id) => this.plugin.getDefaultEffort(id),
+      getModels: (id) => this.plugin.getModels(id),
       getSessionsDir: () => this.getSessionsDir(),
       saveLastActiveSessionId: async (id) => {
         this.plugin.settings.lastActiveSessionId = id;
@@ -730,13 +732,13 @@ export class ClaudeView extends ItemView {
               models: this.plugin.getModels(id),
               defaultModel: this.plugin.getDefaultModel(id),
               effortLevels: this.supportedEffortLevels(id),
+              defaultEffort: this.plugin.getDefaultEffort(id),
               unavailableModes: backend.unavailableModes(this.plugin.getCapabilities(id)),
               modeDescriptions: backend.modeDescriptions(this.plugin.getCapabilities(id)),
             };
           }),
           this.plugin.settings.backend,
           this.plugin.settings.permissionMode,
-          this.plugin.settings.defaultEffort ?? '',
           (opts) => {
             if (newTab) void this.plugin.newSession({ custom: opts, forceNewTab: true, near: this.leaf });
             else this.startNewSession(opts);
@@ -832,7 +834,7 @@ export class ClaudeView extends ItemView {
     this.updatePermissionIcon();
 
     this.modelIndicatorEl = inputToolbar.createSpan({ cls: 'bojubot-model-indicator' });
-    this.modelIndicatorEl.title = 'Switch model';
+    this.modelIndicatorEl.title = 'Switch agent or model';
     this.modelIndicatorEl.addEventListener('click', () => this.openModelPicker());
 
     // Hidden until the CLI probe reports --effort support (updateModelIndicator).
@@ -1014,9 +1016,10 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  /** Effort levels a backend's CLI lists (default: the open session's), or [] when
-   *  it doesn't support --effort (hides all effort UI). */
-  private supportedEffortLevels(id: BackendId = this.coordinator.backendId): readonly string[] {
+  /** Effort levels a backend's CLI lists, or [] when it doesn't support
+   *  --effort (hides all effort UI). The open session's model may offer fewer:
+   *  see coordinator.getEffortLevels(). */
+  private supportedEffortLevels(id: BackendId): readonly string[] {
     const caps = this.plugin.getCapabilities(id);
     return has(caps, '--effort') ? caps.effortLevels : [];
   }
@@ -2010,7 +2013,7 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-intro',
     });
     card.createEl('p', {
-      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Agent.`,
+      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Default agent for new sessions.`,
       cls: 'bojubot-setup-intro',
     });
 
@@ -2101,7 +2104,7 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-intro',
     });
     card.createEl('p', {
-      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Agent.`,
+      text: `To use another agent, change Settings → ${this.plugin.brand.name} → Default agent for new sessions.`,
       cls: 'bojubot-setup-intro',
     });
     if (id === 'antigravity') {
@@ -2694,12 +2697,18 @@ export class ClaudeView extends ItemView {
   }
 
   private updateModelIndicator() {
+    // The welcome header names the agent and model too (#402)
+    this.messagesEl?.querySelector('.bojubot-welcome-model')?.setText(this.agentAndModelLabel());
     if (!this.modelIndicatorEl) return;
     const effort = this.coordinator.getEffectiveEffort();
-    this.modelIndicatorEl.setText(modelIndicatorText(this.effectiveModelName(), effort));
+    const backend = this.coordinator.backend;
+    this.modelIndicatorEl.empty();
+    renderAgentIcon(this.modelIndicatorEl, this.coordinator.backendId, 'bojubot-model-indicator-icon');
+    this.modelIndicatorEl.createSpan({ text: agentModelIndicatorText(backend.name, this.effectiveModelName(), effort) });
+    this.modelIndicatorEl.title = `${backend.label} — click to switch agent or model`;
 
     if (!this.effortBtnEl) return;
-    if (this.supportedEffortLevels().length === 0) {
+    if (this.coordinator.getEffortLevels().length === 0) {
       this.effortBtnEl.hide();
     } else {
       this.effortBtnEl.show();
@@ -2712,7 +2721,7 @@ export class ClaudeView extends ItemView {
     const backend = this.coordinator.backend;
     const id = this.coordinator.getEffectiveModel();
     if (!id) return `${backend.cliName} default`;
-    return this.plugin.getModels(this.coordinator.backendId).find(m => m.id === id)?.displayName ?? id;
+    return this.plugin.modelDisplayName(this.coordinator.backendId, id) ?? id;
   }
 
   /**
@@ -2744,15 +2753,17 @@ export class ClaudeView extends ItemView {
   }
 
   openEffortPicker() {
-    const levels = this.supportedEffortLevels();
+    const levels = this.coordinator.getEffortLevels();
     if (levels.length === 0) {
       new Notice(`${this.plugin.brand.name}: your ${this.coordinator.backend.cliName} version doesn't support effort levels.`);
       return;
     }
     const current = this.coordinator.getEffectiveEffort() ?? '';
+    // Each agent keeps its own default: the levels differ (per model on Antigravity)
+    const id = this.coordinator.backendId;
     new EffortPickerModal(this.app, current, levels, this.coordinator.backend.cliPhrase, (level) => {
-      const previous = this.plugin.settings.defaultEffort;
-      this.plugin.settings.defaultEffort = level;
+      const previous = this.plugin.getDefaultEffort(id);
+      this.plugin.setDefaultEffort(id, level);
       void this.plugin.saveSettings().then(() => {
         // Same as a model switch: every turn passes --effort alongside --resume
         this.coordinator.switchSessionEffort(level);
@@ -2762,40 +2773,126 @@ export class ClaudeView extends ItemView {
           this.appendMessage('system', `Effort set to ${level || 'default'} — takes effect on your next message.`);
         }
       }).catch((err: unknown) => {
-        this.plugin.settings.defaultEffort = previous;
+        this.plugin.setDefaultEffort(id, previous);
         log('error', 'Failed to save effort setting', err);
         new Notice('Failed to save effort setting. Please try again.');
       });
     }).open();
   }
 
+  /** One picker section per agent, built from the backend list (#402). */
+  private agentModelSections(): AgentModelSection[] {
+    return BACKEND_IDS.map(id => ({
+      id,
+      label: this.plugin.getBackend(id).label,
+      installed: !!this.plugin.getBinaryPath(id),
+      models: this.plugin.getModels(id),
+    }));
+  }
+
+  /** The agent + model picker (#402): toolbar indicator, /model and Switch model. */
   openModelPicker() {
-    // The session is bound to its backend, so only that backend's models are offered.
-    const id = this.coordinator.backendId;
-    const allModels = this.plugin.getModels(id);
-    if (allModels.length === 0) {
-      new Notice(`${this.plugin.brand.name}: ${sentenceStart(this.coordinator.backend.cliPhrase)} hasn't listed its models yet — try again in a moment.`);
+    const current = { backend: this.coordinator.backendId, model: this.coordinator.getEffectiveModel() ?? '' };
+    new AgentModelPickerModal(this.app, this.agentModelSections(), current, (id, model) => {
+      void this.onModelPicked(id, model);
+    }).open();
+  }
+
+  /**
+   * A model was picked. Its agent becomes the default for new sessions and the
+   * model that agent's default. The session: on its own agent, switches model
+   * mid-session; on another agent, moves there when it has no conversation yet,
+   * otherwise a new session starts on it in this tab (modelPickAction).
+   */
+  private async onModelPicked(id: BackendId, model: ModelOption): Promise<void> {
+    const c = this.coordinator;
+    const action = modelPickAction({ sessionBackend: c.backendId, pickedBackend: id, hasConversation: !!c.sessionId, busy: c.isBusy });
+    const backend = this.plugin.getBackend(id);
+
+    // The session's permission mode carries over, or the nearest one with less
+    // access the new agent offers; never one with more access.
+    const oldMode = c.getEffectivePermissionMode();
+    const mode = action === 'switch-model' ? oldMode
+      : modeForAgentSwitch(oldMode, backend.unavailableModes(this.plugin.getCapabilities(id)));
+    if (!mode) {
+      new Notice(`${this.plugin.brand.name}: ${sentenceStart(backend.cliPhrase)} can't run Chat only on this computer, and every other mode gives ${backend.name} more access. Switch this session out of Chat only first, or pick another model.`, 10000);
       return;
     }
 
-    const currentModel = this.coordinator.getEffectiveModel() ?? '';
-    new ModelPickerModal(this.app, currentModel, allModels, (model) => {
-      const previous = this.plugin.getDefaultModel(id);
-      this.plugin.setDefaultModel(id, model.id);
-      void this.plugin.saveSettings().then(() => {
-        // The session continues — every turn passes --model alongside --resume
-        this.coordinator.switchSessionModel(model.id);
-        // The global default changed: other panels that follow it show the new model
-        this.plugin.refreshChatIndicators();
-        if (this.coordinator.sessionId) {
-          this.appendMessage('system', `Switched to ${model.displayName} — takes effect on your next message.`);
-        }
-      }).catch((err: unknown) => {
-        this.plugin.setDefaultModel(id, previous);
-        log('error', 'Failed to save model setting', err);
-        new Notice('Failed to save model setting. Please try again.');
-      });
-    }).open();
+    const prevBackend = this.plugin.settings.backend;
+    const prevModel = this.plugin.getDefaultModel(id);
+    this.plugin.settings.backend = id;
+    this.plugin.setDefaultModel(id, model.id);
+    try {
+      await this.plugin.saveSettings();
+    } catch (err) {
+      this.plugin.settings.backend = prevBackend;
+      this.plugin.setDefaultModel(id, prevModel);
+      log('error', 'Failed to save model setting', err);
+      new Notice('Failed to save model setting. Please try again.');
+      return;
+    }
+
+    if (action === 'switch-model') {
+      // The session continues — every turn passes --model alongside --resume
+      c.switchSessionModel(model.id);
+      if (c.sessionId) this.appendMessage('system', `Switched to ${model.displayName} — takes effect on your next message.`);
+    } else if (action === 'switch-agent') {
+      c.switchBackend(id, mode);
+      log('ClaudeView: empty session moved to', id);
+      if (this.messagesEl.querySelector('.bojubot-welcome')) {
+        this.messagesEl.empty();
+        this.renderWelcomeScreen();
+      }
+      this.tokenGauge.reset();
+      this.updatePermissionIcon();
+      if (mode !== oldMode) new Notice(this.agentSwitchModeNotice(backend.name, mode), 8000);
+    } else {
+      this.startSessionForAgentSwitch(id, model, mode, mode !== oldMode);
+    }
+    // Other panels follow the new defaults: their indicators, and an untouched
+    // new session the new default agent.
+    this.plugin.onDefaultBackendChanged();
+    this.plugin.refreshChatIndicators();
+    this.updateModelIndicator();
+  }
+
+  private agentSwitchModeNotice(agentName: string, mode: PermissionMode): string {
+    const label = PERMISSION_MODES.find(m => m.mode === mode)?.label ?? mode;
+    return `${agentName} doesn't offer this session's permission mode, so the session runs in ${label}.`;
+  }
+
+  /**
+   * Another agent's model was picked in a session with a conversation: start a
+   * new session on that agent in this tab, with the same permission mode (or
+   * `mode`, its safe fallback), working folder and context settings. While a
+   * reply is running it opens in a new tab instead, like any new session (#399).
+   */
+  private startSessionForAgentSwitch(id: BackendId, model: ModelOption, mode: PermissionMode, modeChanged: boolean): void {
+    const c = this.coordinator;
+    const name = this.plugin.getBackend(id).name;
+    const message = `Started a new ${name} session with ${model.displayName}. Your previous session is in the Sessions panel.`
+      + (modeChanged ? ` ${this.agentSwitchModeNotice(name, mode)}` : '');
+    const options: CustomSessionOptions = {
+      name: '',
+      cwd: c.sessionCwd ?? '',
+      initialInstructions: '',
+      suppressVaultContext: c.suppressVaultContext,
+      customAttachments: [],
+      permissionMode: mode,
+      model: '',
+      effort: '',
+      rawSession: c.rawSession,
+      backend: id,
+    };
+    new Notice(message, 8000);
+    if (c.isBusy) {
+      void this.plugin.newSession({ custom: options, forceNewTab: true, near: this.leaf });
+      return;
+    }
+    this.applyNewSession(options);
+    this.appendMessage('system', message);
+    log('ClaudeView: new session for agent switch to', id, model.id);
   }
 
   private buildCommands(): SlashCommand[] {
@@ -2803,10 +2900,10 @@ export class ClaudeView extends ItemView {
       {
         category: 'Session',
         name: 'Switch model',
-        description: 'Choose which model the agent uses',
+        description: 'Choose the agent and model',
         action: () => this.openModelPicker(),
       },
-      ...(this.supportedEffortLevels().length > 0 ? [{
+      ...(this.coordinator.getEffortLevels().length > 0 ? [{
         category: 'Session',
         name: 'Switch effort',
         description: 'Choose how much thinking the model does per turn',
@@ -2899,42 +2996,6 @@ export class ClaudeView extends ItemView {
 // ---------------------------------------------------------------------------
 // Attach modals
 // ---------------------------------------------------------------------------
-
-class ModelPickerModal extends Modal {
-  constructor(
-    app: App,
-    private currentModelId: string,
-    private models: ClaudeModel[],
-    private onSelect: (model: ClaudeModel) => void,
-  ) {
-    super(app);
-  }
-
-  onOpen() {
-    this.titleEl.setText('Switch model');
-    this.contentEl.addClass('bojubot-model-picker');
-
-    for (const model of this.models) {
-      const row = this.contentEl.createDiv({ cls: 'bojubot-model-row' });
-      if (model.id === this.currentModelId) row.addClass('is-active');
-
-      const text = row.createDiv({ cls: 'bojubot-model-text' });
-      text.createDiv({ cls: 'bojubot-model-name', text: model.displayName });
-      text.createDiv({ cls: 'bojubot-model-desc', text: model.description });
-
-      if (model.id === this.currentModelId) {
-        row.createDiv({ cls: 'bojubot-model-check', text: '✓' });
-      }
-
-      row.addEventListener('click', () => {
-        this.onSelect(model);
-        this.close();
-      });
-    }
-  }
-
-  onClose() { this.contentEl.empty(); }
-}
 
 class EffortPickerModal extends Modal {
   constructor(

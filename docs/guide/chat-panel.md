@@ -95,7 +95,15 @@ The change takes effect on the next message. See [Permissions](./permissions.md)
 
 ## Model Indicator
 
-The **model name** shown in the input toolbar (e.g. *Claude Sonnet*) reflects the session's model. Click it to open the model picker and switch to a different model.
+The **model indicator** in the input toolbar shows the session's agent and model, with the agent's icon, e.g. *✳ Claude · Claude Sonnet 5.5*. Click it to open the agent + model picker <Badge type="warning" text="Beta" />. It has one section per agent, headed by its name; an agent that isn't installed is greyed out with *not installed*. The Antigravity CLI also offers Claude models, so the same model name can appear under both agents: they're different choices, run by different agents.
+
+What picking does:
+
+- **A model of the session's agent** switches the model mid-session (see below).
+- **Another agent's model, in a session you haven't sent a message in yet**, moves the session to that agent.
+- **Another agent's model, in a session with messages**, starts a new session on that agent and model in the same tab, with a notice. Your previous session stays in the Sessions panel. The new session keeps the old one's permission mode; if the new agent doesn't offer it, it gets the nearest mode with less access (never more).
+
+Picking a model also makes its agent the default for new sessions (**Settings → BojuBot → Default agent for new sessions**).
 
 For **Claude (Claude Code)** sessions, the built-in models are:
 
@@ -116,13 +124,13 @@ The selected model also becomes the default for new sessions on that agent and p
 On Claude Code, the first message after a switch costs more than usual: prompt caching is per model, so the new model reads the conversation history uncached once. Later messages are cached again.
 :::
 
-You can also switch via `/model` in the slash menu or **BojuBot: Switch model** in the Command Palette.
+You can also open the picker with `/model` in the slash menu or **BojuBot: Switch model** in the Command Palette.
 
 To add Claude Code models not in the built-in list, see [Custom models](./settings.md#custom-models) in Settings.
 
 ### Effort
 
-Effort controls how much thinking the model does on each turn — lower is faster and lighter on your plan or quota, higher reasons more deeply on hard problems. Click the **gauge icon** next to the model name to pick a level. When a level other than **Default** is active, the model indicator shows it, e.g. *Claude Sonnet 5.5 · high*.
+Effort controls how much thinking the model does on each turn — lower is faster and lighter on your plan or quota, higher reasons more deeply on hard problems. Click the **gauge icon** next to the model name to pick a level. When a level other than **Default** is active, the model indicator shows it, e.g. *Claude · Claude Sonnet 5.5 · high*. Each agent keeps its own effort default. On Gemini, the picker offers only the levels the session's model has (GPT-OSS 120B has Medium only); a level the model doesn't have falls back to its nearest one.
 
 | Level       | What it means                                     |
 | ----------- | ------------------------------------------------- |
