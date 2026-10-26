@@ -6,7 +6,7 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 
 | Setting                            | Default | Description                                                                                                                                                                          |
 | ----------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Agent**                          | Claude Code | The agent CLI new sessions run on: **Claude Code** or **Antigravity** (Google's Antigravity CLI, which runs Gemini; in beta builds). Existing sessions keep the agent they started with. See [Choosing an Agent](./agents). |
+| **Agent**                          | Claude (Claude Code) | The agent new sessions run on: **Claude (Claude Code)** or **Gemini (Antigravity CLI)** (Gemini is in beta builds). Existing sessions keep the agent they started with. See [Choosing an Agent](./agents). |
 | **Claude binary path**             | *(auto-detect)* | Full path to the `claude` executable. Leave blank to auto-detect from PATH and common install locations. The description below the field shows the detected Claude Code version (or *unknown* if it couldn't be checked). |
 | **Antigravity binary path**        | *(auto-detect)* | Full path to the `agy` executable (Google's Antigravity CLI, in beta builds). Leave blank to auto-detect from PATH and `%LOCALAPPDATA%\agy\bin`. The description shows the detected Antigravity version. |
 | **Send on Enter**                  | On      | Press Enter to send. Shift+Enter always inserts a newline.                                                                                                                           |
@@ -35,7 +35,7 @@ Open **Settings → BojuBot** to configure. Grouped below to match the sections 
 
 | Setting                                  | Default   | Description                                                                                                                                                                                                                     |
 | ----------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Default permission mode**              | Standard  | The mode new sessions start in: **Chat only** (web only, no file system), **Standard** (files + web, plus read-only shell commands Claude Code classifies as safe; other shell commands are denied, and on Antigravity all shell commands are denied), **Read only** (read + web, no writes), **Full access** (everything, including shell commands). Each session saves its own mode, so changing this doesn't affect existing sessions or the open one. See [Permissions](./permissions). |
+| **Default permission mode**              | Standard  | The mode new sessions start in: **Chat only** (web only, no file system), **Standard** (files + web, plus read-only shell commands Claude Code classifies as safe; other shell commands are denied, and with Gemini (Antigravity CLI) all shell commands are denied), **Read only** (read + web, no writes), **Full access** (everything, including shell commands). Each session saves its own mode, so changing this doesn't affect existing sessions or the open one. See [Permissions](./permissions). |
 | **Persist full access between restarts** | Off       | Only shown while the default or the open session is in Full access. When off, Full access lasts until Obsidian restarts: then the default goes back to Standard and sessions left in Full access reopen in Standard, so an elevated mode never silently survives a reboot. |
 | **Show context file setup prompt**       | On        | Show the setup dialog on launch when no context file is found (see [Context System](./context-system#getting-started)). Disable if you prefer to create the file manually.                                                    |
 
@@ -86,7 +86,7 @@ The file is a JSON array of model objects. Any valid entries are appended to the
 
 The file is read each time the picker opens, so changes take effect immediately with no restart needed. If the file is missing or malformed, it is silently ignored and only the built-in models are shown.
 
-Antigravity sessions don't use this file: their picker lists the models Antigravity itself offers.
+Gemini sessions don't use this file: their models come from the Antigravity CLI.
 
 ## Branding
 

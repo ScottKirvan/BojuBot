@@ -8,7 +8,7 @@ Click the **+** button in the toolbar to start a new session with default settin
 
 | Field | What it does |
 |---|---|
-| **Agent** | Which agent CLI the session runs on (**Claude Code** for Claude, or **Antigravity** for Gemini), pre-filled from the **Agent** setting. Changing it refills the model and effort fields for that agent. Agents that aren't installed are listed but can't be picked. See [Choosing an Agent](./agents). |
+| **Agent** | Which agent CLI the session runs on (**Claude (Claude Code)** or **Gemini (Antigravity CLI)**), pre-filled from the **Agent** setting. Changing it refills the model and effort fields for that agent. Agents that aren't installed are listed but can't be picked. See [Choosing an Agent](./agents). |
 | **Session name** | Pre-fills the title instead of waiting for auto-naming from the first message. Leave blank to use the default. |
 | **Working directory** | Sets the directory the agent runs in (useful for code projects outside the vault). The folder browser opens at your vault root. Leave blank to use the vault root. |
 | **Permission mode** | Pre-filled with your current default (with its colored icon), so you can see exactly what you're starting from. Click a different mode to start the session in it instead. Every session keeps its own mode; see [Permissions](./permissions#the-mode-belongs-to-the-session). |
@@ -50,7 +50,7 @@ Open it by clicking the **session name** in the chat toolbar, **More…** under 
 Each session takes two lines:
 
 - **The title** on top (a pin icon in front when it's pinned).
-- **The agent and model** below, in small text: the agent's icon (the Claude mark for Claude Code, the Gemini sparkle for Antigravity), the agent and model names, and when the session was last active ("5m ago", "yesterday", "Mar 4").
+- **The agent and model** below, in small text: the agent's icon (the Claude mark for Claude, the Gemini sparkle for Gemini), the agent and model names, and when the session was last active ("5m ago", "yesterday", "Mar 4").
 
 Hover a row for the details that don't fit on it: the full last-active date and time, an estimated token count of its saved history (with a "+context" figure: the estimated context a brand-new session would start with under your current settings), and whether it's **New** (no messages yet) or **Remote** (its history isn't on this machine, for example a session from another computer; Remote rows are dimmed).
 
@@ -128,7 +128,7 @@ Dragging is turned off while the filter is active. Filtering shows a subset, so 
 
 ## Token Cost Model
 
-Understanding when tokens are spent helps you use BojuBot efficiently. This table describes Claude Code, which caches the conversation between messages. Antigravity doesn't report cache reads and adds its own instructions to every message; see [Choosing an Agent](./agents#what-s-different-on-antigravity).
+Understanding when tokens are spent helps you use BojuBot efficiently. This table describes Claude (Claude Code), which caches the conversation between messages. For Gemini, the Antigravity CLI doesn't report cache reads and adds its own instructions to every message; see [Choosing an Agent](./agents#what-s-different-with-gemini).
 
 | Action                                    | Token cost     | Notes                                             |
 | ----------------------------------------- | -------------- | ------------------------------------------------- |

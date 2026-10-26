@@ -7,28 +7,28 @@ Gemini support through Antigravity is in [beta builds](beta-builds.md) and will 
 BojuBot can work with Claude or with Gemini. It runs each one through an agent CLI installed on your computer:
 
 - **Claude, through Claude Code**: the default, using your Claude Pro or Max subscription.
-- **Gemini, through Google's Antigravity CLI** (`agy`), which runs Gemini using your Google account's Antigravity quota. Antigravity also offers some Claude and GPT-OSS models on that quota. In BojuBot's settings and menus this agent is called **Antigravity**.
+- **Gemini, through Google's Antigravity CLI** (`agy`), which runs Gemini using your Google account's Antigravity quota. Antigravity also offers some Claude and GPT-OSS models on that quota. In BojuBot's settings and menus it's listed as **Gemini (Antigravity CLI)**, and Claude Code as **Claude (Claude Code)**.
 
 Both work with the same chat panel, sessions, skills, UI Bridge and vault queries.
 
-A common setup is to keep your Claude quota for heavy work, such as programming in Claude Code itself, and use Gemini through Antigravity for everyday note-taking in Obsidian. You can switch any time; each session remembers which agent it started on.
+A common setup is to keep your Claude quota for heavy work, such as programming in Claude Code itself, and use Gemini for everyday note-taking in Obsidian. You can switch any time; each session remembers which agent it started on.
 
 ## Setting up Antigravity (for Gemini)
 
 1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
 2. **Sign in once.** Open a terminal, run `agy`, and sign in in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
-3. **Pick it in BojuBot.** Go to **Settings → BojuBot → Agent** and choose **Antigravity**. If BojuBot doesn't find `agy` on its own, set **Antigravity binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
+3. **Pick it in BojuBot.** Go to **Settings → BojuBot → Agent** and choose **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 
 The **Agent** setting applies to new sessions. An empty new session that you haven't sent a message in yet switches straight away. Sessions you've already used stay on the agent they started with, because a conversation can't move between CLIs.
 
 To start a single session on the other agent without changing the setting, Shift+click **+** and choose it in the **Agent** field of [Custom Session](./sessions#starting-a-new-session).
 
-## What's different on Antigravity
+## What's different with Gemini
 
-| | Claude Code | Antigravity |
+| | Claude (Claude Code) | Gemini (Antigravity CLI) |
 | --- | --- | --- |
-| Models | Claude models, plus your `custom-models.json` | Whatever `agy models` lists: Gemini Flash variants, plus Claude and GPT-OSS models through Antigravity |
-| Model picker default | Claude Sonnet | "Antigravity default", which lets Antigravity choose |
+| Models | Claude models, plus your `custom-models.json` | The models the Antigravity CLI offers: Gemini, plus some Claude and GPT-OSS models |
+| Model picker default | Claude Sonnet | Lets the Antigravity CLI choose |
 | Effort levels | When your Claude Code version supports them | Low to max |
 | Chat only mode | Available | Available; switching into or out of it starts a new session |
 | Standard mode | File edits allowed; read-only shell commands like `ls` allowed | File edits allowed; **all** shell commands denied |
@@ -60,14 +60,14 @@ BojuBot runs Antigravity as one of its own Antigravity agents, which carry BojuB
 
 ## Troubleshooting
 
-**"Antigravity not found" when the panel opens.** Your default agent is Antigravity but BojuBot can't find `agy`. Install it, set **Antigravity binary path**, or switch **Agent** back to Claude Code, then click **Check again**.
+**"Gemini (Antigravity CLI) not found" when the panel opens.** Your default agent is Gemini but BojuBot can't find the Antigravity CLI (`agy`). Install it, set **Antigravity binary path**, or switch **Agent** back to **Claude (Claude Code)**, then click **Check again**.
 
-**"Antigravity isn't signed in" or "Your Antigravity sign-in has expired."** Click **Open terminal** in the error card, or run `agy` in a terminal yourself, and sign in. Then send your message again. See [Signing in to Antigravity again](./troubleshooting#signing-in-to-antigravity-again).
+**"The Antigravity CLI isn't signed in" or "Your Antigravity CLI sign-in has expired."** Click **Open terminal** in the error card, or run `agy` in a terminal yourself, and sign in. Then send your message again. See [Signing in to Antigravity again](./troubleshooting#signing-in-to-antigravity-again).
 
-**"Model not available."** The model saved for the session isn't in Antigravity's list any more. Pick another one from the model picker.
+**"Model not available."** The model saved for the session isn't offered by the Antigravity CLI any more. Pick another one from the model picker.
 
 **It asks for full access to create a note.** Standard should allow file edits. If you still see this, check that you're in Standard mode, not Read only, and that you're on the latest BojuBot.
 
-**"Chat only needs a new Antigravity session."** Antigravity can't add or remove a conversation's tools once it has started, so moving into or out of Chat only starts a new session. Your previous session is in the Sessions panel. See [Permissions on each agent](./permissions#changing-mode-on-antigravity).
+**"Chat only needs a new Gemini session."** The Antigravity CLI can't add or remove a conversation's tools once it has started, so moving into or out of Chat only starts a new session. Your previous session is in the Sessions panel. See [Permissions on each agent](./permissions#changing-mode-on-antigravity).
 
 **"Antigravity couldn't start this mode's agent."** Your Antigravity version doesn't accept one of BojuBot's agents, or an agent file was removed. Until Obsidian restarts, new Antigravity sessions start without BojuBot's agents and Chat only isn't available; send your message again. Updating BojuBot and `agy` usually fixes it.

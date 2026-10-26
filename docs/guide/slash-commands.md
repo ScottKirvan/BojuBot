@@ -24,7 +24,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Session** | Export session    | Save the current session to your vault   |
 | **Session** | Switch model      | Change model; the session continues     |
 | **Session** | Switch effort     | Change effort level (`/effort`); shown only when the session's agent CLI supports it |
-| **Session** | Usage             | Show how much of your plan or quota you've used (`/usage`): Claude plan limits on Claude Code, model-group quota on Antigravity. Free, and not sent to the model |
+| **Session** | Usage             | Show how much of your plan or quota you've used (`/usage`): Claude plan limits for Claude, Antigravity quota per model group for Gemini. Free, and not sent to the model |
 | **Context** | Attach file       | Add a file, image, or URL to the prompt  |
 | **Context** | Open context file | Edit your persistent vault context       |
 | **Context** | Refresh context   | Re-inject vault context into the session |

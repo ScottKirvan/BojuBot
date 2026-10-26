@@ -6,13 +6,13 @@
 
 BojuBot couldn't find the CLI for the agent new sessions use (**Settings → BojuBot → Agent**).
 
-- **Claude Code:** follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
-- **Antigravity (Gemini):** install Google's Antigravity CLI (`agy`) and sign in, or set **Antigravity binary path**. See [Choosing an Agent](./agents#troubleshooting).
-- **Using Gemini but seeing the Claude Code panel?** Switch **Settings → BojuBot → Agent** to **Antigravity**, then click **Check again**.
+- **Claude (Claude Code):** follow the on-screen steps, or if Claude Code is already installed, enter the full path to the binary in the path field. See the [Claude Code install guide](https://code.claude.com/docs/en/overview#native-install-recommended).
+- **Gemini (Antigravity CLI):** install Google's Antigravity CLI (`agy`) and sign in, or set **Antigravity binary path**. See [Choosing an Agent](./agents#troubleshooting).
+- **Using Gemini but seeing the Claude Code panel?** Switch **Settings → BojuBot → Agent** to **Gemini (Antigravity CLI)**, then click **Check again**.
 
 ---
 
-**"Your Claude Code login has expired" or "Antigravity isn't signed in" error card**
+**"Your Claude Code login has expired" or "The Antigravity CLI isn't signed in" error card**
 
 The agent's sign-in is missing, has expired, or was rejected. See [Signing in again](#signing-in-again) below.
 
@@ -38,7 +38,7 @@ Click the **Stop** button (square icon in the input bar) to interrupt immediatel
 
 **The agent seems to be running but nothing is happening**
 
-If the status indicator has been showing for a long time with no output, the agent may be stuck. Click **Stop**, then try again. Run `claude --version` (Claude Code) or `agy --version` (Antigravity) in a terminal to confirm the install is visible to your shell.
+If the status indicator has been showing for a long time with no output, the agent may be stuck. Click **Stop**, then try again. Run `claude --version` (Claude Code) or `agy --version` (the Antigravity CLI) in a terminal to confirm the install is visible to your shell.
 
 ---
 
@@ -100,7 +100,7 @@ You can also sign in from any terminal without opening Claude Code: run `claude 
 
 ### Signing in to Antigravity again
 
-You'll see **Antigravity isn't signed in** or **Your Antigravity sign-in has expired**.
+You'll see **The Antigravity CLI isn't signed in** or **Your Antigravity CLI sign-in has expired**.
 
 To sign in:
 
