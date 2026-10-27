@@ -5,12 +5,12 @@ After enabling the plugin:
 - A **brain-circuit icon** appears in the left ribbon — click it to open the BojuBot chat panel
 - Or use the Command Palette (`Ctrl+P` / `Cmd+P`): **BojuBot: Open agent panel**
 
-BojuBot uses Claude (through Claude Code) unless you pick another agent. To use Gemini instead, click the model name below the message box and pick a Gemini model under **Gemini (Antigravity CLI)** (see [Requirements & Installation](./getting-started#installing-antigravity-for-gemini)). The welcome screen shows which agent and model a session uses.
+BojuBot uses the agent you installed. If you installed both Claude Code and the Antigravity CLI, switch between Claude and Gemini by clicking the model name below the message box and picking a model under the agent you want (see [Choosing an Agent](./agents)). The welcome screen shows which agent and model a session uses.
 
 ::: tip Agent not found?
-If BojuBot can't find your agent's CLI, a setup panel appears instead of the chat. For Claude Code, follow the on-screen steps to install it, or enter the full path to your `claude` binary in **Settings → BojuBot → Claude Code binary path**. For Gemini, install Google's Antigravity CLI (`agy`) or set **Antigravity CLI binary path**. Then click **Check again**.
+If BojuBot finds no agent, a setup panel appears instead of the chat, with the steps to install Claude Code or the Antigravity CLI. Install either one and sign in, then click **Check again**. If it's installed but BojuBot still doesn't find it, enter its full path in **Settings → BojuBot** (**Claude Code binary path** or **Antigravity CLI binary path**).
 
-If you only installed the Antigravity CLI, you'll see the Claude Code setup panel at first. Click **Use Gemini (Antigravity CLI) instead** in it.
+If the agent you picked for new sessions goes missing later, the setup panel names it. When the other agent is installed, the panel offers **Use … instead**.
 :::
 
 The first time BojuBot doesn't find a context file, a setup dialog offers to have your agent generate one, start from a blank template, or skip — see [Context File](./context-system#3-context-file-persistent-memory) for details.
