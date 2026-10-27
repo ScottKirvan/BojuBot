@@ -29,7 +29,7 @@ With **Persist full access between restarts** off (the default), Full access las
 Turn the setting on if you want sessions to keep Full access after a restart.
 
 ::: info With Gemini
-Each mode allows slightly different things with Gemini (Antigravity CLI), and switching out of Chat only also starts a new Gemini session (switching into it does on [both agents](#chat-only)). The picker shows each mode's behavior for the session's agent. See [Permissions on each agent](#permissions-on-each-agent).
+Each mode allows slightly different things with Gemini (Antigravity CLI). Switching into or out of Chat only starts a new session on [both agents](#chat-only). The picker shows each mode's behavior for the session's agent. See [Permissions on each agent](#permissions-on-each-agent).
 :::
 
 ::: info Claude Code version detection
@@ -59,7 +59,7 @@ What the agent *can* still do through BojuBot in Chat only: open a note you name
 
 Anything you hand the agent yourself still reaches it: @-mentioned notes, attachments, selections you send, and notes you pick in a skill's form.
 
-**Switching into Chat only starts a new session** if the current one already has messages, on both agents, because the earlier messages may hold vault information. The new session opens in the same tab, on the same agent with the same settings, and is saved in Chat only. BojuBot shows a notice, and your previous session stays in the [Sessions panel](./sessions#sessions-panel), in the mode it had. If a reply is still running, the new session starts when you send your next message. A session with no messages just switches. A session that's already in Chat only stays as it is.
+**Switching into or out of Chat only starts a new session** if the current one already has messages, on both agents. Going in, the earlier messages may hold vault information. Coming out, the conversation never had your vault's context, and Claude Code can't continue it from your vault (Chat only runs it from a temporary folder, so the agent never learns where your vault is). The new session opens in the same tab, on the same agent with the same settings, and is saved in the mode you picked. BojuBot shows a notice, and your previous session stays in the [Sessions panel](./sessions#sessions-panel), in the mode it had. If a reply is still running, the new session starts when you send your next message. A session with no messages just switches. A session that's already in Chat only stays as it is.
 
 ### Read only and Obsidian commands
 
@@ -82,8 +82,8 @@ The four modes mean the same thing on both agents, but each agent CLI enforces t
 | **Standard** | Reads and edits files, web search and web pages. Safe read-only shell commands like `ls` run; other shell commands are blocked. | Reads and edits files, web search. Every shell command is blocked. |
 | **Full access** | Everything. | Everything, in a session that started in Full access. A session switched to Full access later has no browser or MCP tools ([why](#why-antigravity-works-differently)). |
 | **Reading a web page** | Allowed in every mode. | Allowed in Chat only and Full access. In Read only and Standard it's blocked, and the denial card offers full access. |
-| **Changing mode during a session** | Takes effect from your next message. Switching into Chat only starts a new session instead. | Takes effect from your next message. Switching into or out of Chat only starts a new session instead. |
-| **Denial card** | From Chat only: offers standard access. From Read only or Standard: offers full access. | From Read only or Standard: offers full access. Never shown in Chat only: nothing there asks for permission. |
+| **Changing mode during a session** | Takes effect from your next message. Switching into or out of Chat only starts a new session instead. | Takes effect from your next message. Switching into or out of Chat only starts a new session instead. |
+| **Denial card** | From Read only or Standard: offers full access. In Chat only it lists what was blocked and points you to the mode picker, which starts a new session. | From Read only or Standard: offers full access. Never shown in Chat only: nothing there asks for permission. |
 
 ### Changing mode on Antigravity
 
@@ -111,8 +111,8 @@ When the agent attempts a blocked operation, a **denial card** appears in the ch
 
 The upgrade option in the denial card depends on the current mode:
 
-- **Chat only** → offers **Allow standard access for this session** (Claude only; in a Gemini session, Chat only has nothing that could be denied)
 - **Standard / Read only** → offers **Allow full access for this session**
+- **Chat only** → no upgrade button: leaving Chat only needs a new session, so the card says to pick another mode in the toolbar. (In a Gemini session, Chat only has nothing that could be denied.)
 
 Allowing upgrades the session the card was shown in, and only that one: the new mode is saved with the session, so it's still there when you come back to it (see [Full access and restarts](#full-access-and-restarts)). Other sessions, and new ones, aren't affected. You can lower the mode again at any time with the picker. A card left over from a session that's no longer open does nothing.
 

@@ -5100,10 +5100,18 @@ describe('needsFreshSessionForChatOnly', () => {
     assert.equal(needsFreshSessionForChatOnly('restricted', true, 'restricted'), false);
   });
 
-  test('switching to any other mode never starts over', () => {
+  test('leaving Chat only with a conversation starts over', () => {
     for (const m of ['readonly', 'standard', 'full'] as const) {
-      assert.equal(needsFreshSessionForChatOnly(m, true, 'restricted'), false, m);
-      assert.equal(needsFreshSessionForChatOnly(m, true, 'standard'), false, m);
+      assert.equal(needsFreshSessionForChatOnly(m, true, 'restricted'), true, m);
+      assert.equal(needsFreshSessionForChatOnly(m, false, 'restricted'), false, `${m}: no messages, just switches`);
+    }
+  });
+
+  test('moves between the other modes never start over', () => {
+    for (const from of ['readonly', 'standard', 'full'] as const) {
+      for (const to of ['readonly', 'standard', 'full'] as const) {
+        assert.equal(needsFreshSessionForChatOnly(to, true, from), false, `${from} -> ${to}`);
+      }
     }
   });
 
@@ -5174,13 +5182,16 @@ describe('SessionCoordinator.modeNeedsNewSession on Claude Code (#406)', () => {
     assert.equal(c.modeNeedsNewSession(), false, 'its own mode never needs a new session');
   }));
 
-  test('leaving Chat only on Claude Code continues the conversation (the denial card can still offer Standard)', withSessionsDir((dir) => {
+  test('leaving Chat only on Claude Code needs a new session: the conversation ran from the temp folder', withSessionsDir((dir) => {
     const { host, claude } = twoBackendHost(dir);
     const c = new SessionCoordinator(host);
     c.startNewSession({ backend: 'claude-code', permissionMode: 'restricted' });
+    for (const m of ['readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), false, `${m}: no conversation yet`);
     c.send('hello', 'hello');
+    assert.equal(claude.spawns[0].cwd, resolveSpawnCwd('restricted', undefined, host.getVaultRoot()));
     claude.streams[0].onDone('sess-1', true);
-    for (const m of ['restricted', 'readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), false, m);
+    assert.equal(c.modeNeedsNewSession(), false, 'its own mode continues');
+    for (const m of ['readonly', 'standard', 'full'] as const) assert.equal(c.modeNeedsNewSession(m), true, m);
   }));
 });
 

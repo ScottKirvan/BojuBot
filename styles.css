@@ -1415,6 +1415,12 @@
   font-size: 0.9em;
 }
 
+.bojubot-permission-hint {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
 .bojubot-permission-btn-row {
   display: flex;
   align-items: center;

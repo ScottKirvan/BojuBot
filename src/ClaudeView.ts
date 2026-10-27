@@ -2243,14 +2243,19 @@ export class ClaudeView extends ItemView {
     }
 
     const currentMode = this.coordinator.getEffectivePermissionMode();
-    const upgradeTarget = currentMode === 'restricted' ? 'standard' : 'full';
+    const upgradeTarget = 'full';
     // No upgrade offer when this conversation can't continue in the wider
-    // mode (Antigravity Chat only, #403): switching modes starts a new session.
-    if (currentMode !== 'full' && !this.coordinator.modeNeedsNewSession(upgradeTarget)) {
-      const upgradeLabel = currentMode === 'restricted' ? 'Allow standard access for this session' : 'Allow full access for this session';
-      const upgradeMsg = currentMode === 'restricted'
-        ? (toolList: string) => `[Retrying with standard access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Standard access is now enabled for this session. Please resume and complete the task.`
-        : (toolList: string) => `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
+    // mode: leaving Chat only starts a new session on every backend (#406).
+    const needsNewSession = currentMode !== 'full' && this.coordinator.modeNeedsNewSession(upgradeTarget);
+    if (needsNewSession) {
+      card.createEl('p', {
+        cls: 'bojubot-permission-hint',
+        text: "Chat only can't give this conversation more access. Pick another mode in the toolbar to start a new session in it.",
+      });
+    }
+    if (currentMode !== 'full' && !needsNewSession) {
+      const upgradeLabel = 'Allow full access for this session';
+      const upgradeMsg = (toolList: string) => `[Retrying with full access] The previous response was blocked because these tools required permission that wasn't granted: ${toolList}. Full access is now enabled for this session. Please resume and complete the task.`;
       // The card offers a choice: the session is waiting for the user until it's answered
       this.applyStatus({ type: 'denial-shown' });
       const btnRow = card.createDiv({ cls: 'bojubot-permission-btn-row' });
