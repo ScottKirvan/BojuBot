@@ -11,6 +11,8 @@ import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId, sentenceStart } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
+import { fileStamp } from './src/utils/fileStamp';
+import { resetAgyAgentRejection } from './src/backends/antigravity';
 import { migrateVariantModel, newSessionBackend } from './src/utils/agentModels';
 import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
 import type { ReportType } from './src/utils/report';
@@ -36,6 +38,8 @@ interface BackendRuntime {
   caps: CliCapabilities;
   models: ModelOption[];
   probeSeq: number;
+  /** fileStamp() of the binary when it was last probed: a change means it was updated. */
+  stamp: string | null;
 }
 
 export default class BojuBotPlugin extends Plugin {
@@ -46,7 +50,7 @@ export default class BojuBotPlugin extends Plugin {
   /** Per-backend detection results. Capabilities and the model list stay
    *  unknown/empty until the async probe finishes (or if it fails). */
   private runtime: Record<BackendId, BackendRuntime> = Object.fromEntries(
-    BACKEND_IDS.map(id => [id, { binaryPath: null, caps: UNKNOWN_CAPABILITIES, models: [], probeSeq: 0 }]),
+    BACKEND_IDS.map(id => [id, { binaryPath: null, caps: UNKNOWN_CAPABILITIES, models: [], probeSeq: 0, stamp: null }]),
   ) as Record<BackendId, BackendRuntime>;
   private skillCommandIds = new Set<string>();
   /** When each chat panel was last used, for picking the panel commands act on (#399). */
@@ -822,6 +826,27 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   /**
+   * Before a turn: when the agent CLI was updated, reinstalled or removed since
+   * it was last probed, find and probe it again so the turn uses what's
+   * installed now, with no Obsidian restart. A stat call when nothing changed.
+   */
+  async refreshIfCliChanged(id: BackendId): Promise<void> {
+    const rt = this.runtime[id];
+    if (!rt.binaryPath || fileStamp(rt.binaryPath) === rt.stamp) return;
+    log(`${getBackend(id).cliName} changed on disk: probing it again`);
+    await this.redetectBinary(id);
+  }
+
+  /** detectBinary() that waits for the probe. A newly updated agy gets another try at BojuBot's agents. */
+  async redetectBinary(id: BackendId): Promise<string | null> {
+    const binary = getBackend(id).findBinary(this.binaryOverride(id));
+    this.runtime[id].binaryPath = binary;
+    if (id === 'antigravity') resetAgyAgentRejection();
+    await this.refreshCliCapabilities(id);
+    return binary;
+  }
+
+  /**
    * Open the Report a problem form (#382) with everything pre-filled: the
    * version line, the open session's agent and model, and an error when the
    * form was opened from an error card. All of it stays editable.
@@ -879,6 +904,7 @@ export default class BojuBotPlugin extends Plugin {
     const seq = ++rt.probeSeq;
     rt.caps = UNKNOWN_CAPABILITIES;
     const binary = rt.binaryPath;
+    rt.stamp = binary ? fileStamp(binary) : null;
     if (!binary) return;
     const backend = getBackend(id);
     const env = Object.keys(this.shellEnv).length ? this.shellEnv : { ...process.env } as Record<string, string>;

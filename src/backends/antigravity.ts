@@ -54,7 +54,8 @@ export function agyPermissionArgs(mode: PermissionMode): string[] {
 /**
  * Set when agy refuses to start one of BojuBot's agents (it names a tool this
  * agy doesn't have, or the definition file has gone). From then on, until
- * Obsidian reloads the plugin, new conversations start without an agent.
+ * agy is re-detected (it changed on disk, or its path changed) or Obsidian
+ * reloads the plugin, new conversations start without an agent.
  */
 let agentsRejected = false;
 

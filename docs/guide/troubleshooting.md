@@ -60,7 +60,7 @@ claude update
 
 :::
 
-Run `claude --version` afterwards to check, then restart Obsidian so BojuBot picks up the new version. The detected version is shown in the [Help & resources dialog](./chat-panel#about-dialog) and under **Claude Code binary path** in settings.
+Run `claude --version` afterwards to check. BojuBot notices the update the next time you send a message, with no restart. The detected version is shown in the [Help & resources dialog](./chat-panel#about-dialog) and under **Claude Code binary path** in settings.
 
 ---
 
