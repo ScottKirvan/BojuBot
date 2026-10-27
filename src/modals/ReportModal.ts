@@ -1,7 +1,7 @@
 import { App, Modal, Notice, requestUrl } from 'obsidian';
 import { existsSync, readFileSync } from 'fs';
 import { PRIVACY_URL } from '../constants';
-import { RELAY_UNREACHABLE, ReportType, SendResult, readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportTitle, tailLines } from '../utils/report';
+import { RELAY_UNREACHABLE, ReportType, TITLE_MAX, SendResult, readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportTitle, tailLines } from '../utils/report';
 
 /** Lines of the debug log offered when the user ticks "Include recent log". */
 const LOG_LINES = 80;
@@ -23,9 +23,15 @@ export interface ReportModalOptions {
 }
 
 const PLACEHOLDER: Record<ReportType, string> = {
-  bug: 'What went wrong? What did you expect to happen?',
+  bug: 'What went wrong? What did you expect to happen?\n\nSteps to reproduce:\n1. \n2. \n3. ',
   feature: 'What would you like BojuBot to do?',
   feedback: "What's on your mind?",
+};
+
+const TITLE_PLACEHOLDER: Record<ReportType, string> = {
+  bug: 'A short summary of the problem',
+  feature: 'A short summary of the idea',
+  feedback: 'A short summary',
 };
 
 /**
@@ -54,14 +60,19 @@ export class ReportModal extends Modal {
       if (value === type) opt.selected = true;
     }
 
+    const titleField = contentEl.createDiv({ cls: 'bojubot-param-field' });
+    titleField.createEl('label', { text: 'Title', cls: 'bojubot-param-label' });
+    const title = titleField.createEl('input', { cls: 'bojubot-param-input', attr: { type: 'text', placeholder: TITLE_PLACEHOLDER[type], maxlength: String(TITLE_MAX) } });
+
     const descField = contentEl.createDiv({ cls: 'bojubot-param-field' });
     descField.createEl('label', { text: 'Description', cls: 'bojubot-param-label' });
-    const desc = descField.createEl('textarea', { cls: 'bojubot-param-textarea', attr: { placeholder: PLACEHOLDER[type], rows: '5' } });
+    const desc = descField.createEl('textarea', { cls: 'bojubot-param-textarea', attr: { placeholder: PLACEHOLDER[type], rows: '7' } });
     typeSelect.addEventListener('change', () => {
       type = typeSelect.value as ReportType;
+      title.placeholder = TITLE_PLACEHOLDER[type];
       desc.placeholder = PLACEHOLDER[type];
     });
-    window.setTimeout(() => desc.focus(), 50);
+    window.setTimeout(() => title.focus(), 50);
 
     const detailsField = contentEl.createDiv({ cls: 'bojubot-param-field' });
     detailsField.createEl('label', { text: 'Details', cls: 'bojubot-param-label' });
@@ -106,15 +117,18 @@ export class ReportModal extends Modal {
 
     const current = () => ({
       type,
+      title: title.value,
       description: desc.value,
       details: details.value,
       log: logCheck.checked ? logText.value : undefined,
     });
 
-    const needsDescription = (): boolean => {
-      if (desc.value.trim()) return false;
-      new Notice('Add a short description first.', 3000);
-      desc.focus();
+    /** Send and Open on GitHub need both; Copy report takes whatever is there. */
+    const incomplete = (): boolean => {
+      const missing = !title.value.trim() ? title : !desc.value.trim() ? desc : null;
+      if (!missing) return false;
+      new Notice(missing === title ? 'Add a title first.' : 'Add a description first.', 3000);
+      missing.focus();
       return true;
     };
 
@@ -125,7 +139,7 @@ export class ReportModal extends Modal {
     const copyBtn = btnRow.createEl('button', { text: 'Copy report', attr: { type: 'button' } });
     copyBtn.addEventListener('click', () => {
       const r = current();
-      const text = `${reportTitle(r.type, r.description)}\n\n${reportBody(r)}`;
+      const text = `${reportTitle(r.type, r.title)}\n\n${reportBody(r)}`;
       navigator.clipboard.writeText(text)
         .then(() => new Notice('Report copied. Paste it wherever you want to send it.', 4000))
         .catch(() => new Notice("Couldn't copy the report.", 4000));
@@ -133,7 +147,7 @@ export class ReportModal extends Modal {
     if (options.sourceRepoUrl) {
       const openBtn = btnRow.createEl('button', { text: 'Open on GitHub', cls: options.relayUrl ? '' : 'mod-cta', attr: { type: 'button' } });
       openBtn.addEventListener('click', () => {
-        if (needsDescription()) return;
+        if (incomplete()) return;
         window.open(reportIssueUrl(options.sourceRepoUrl, current()), '_blank');
         this.close();
       });
@@ -141,7 +155,7 @@ export class ReportModal extends Modal {
     if (options.relayUrl) {
       const sendBtn = btnRow.createEl('button', { text: 'Send', cls: 'mod-cta', attr: { type: 'button' } });
       sendBtn.addEventListener('click', () => {
-        if (needsDescription()) return;
+        if (incomplete()) return;
         error.hide();
         sendBtn.disabled = true;
         sendBtn.setText('Sending…');
