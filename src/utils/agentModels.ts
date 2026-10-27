@@ -194,3 +194,14 @@ export function modeForAgentSwitch(mode: PermissionMode, unavailable: Partial<Re
 export function agentModelIndicatorText(agentName: string, modelName: string, effort: string | undefined): string {
   return effort ? `${agentName} · ${modelName} · ${effort}` : `${agentName} · ${modelName}`;
 }
+
+/**
+ * The agent new sessions use. Once the user has picked or used one it stays,
+ * installed or not. Until then BojuBot follows what's installed: the current
+ * agent when it is, else the first installed one (`installed` in BACKEND_IDS
+ * order), else the current agent.
+ */
+export function newSessionBackend(current: BackendId, installed: readonly BackendId[], chosen: boolean): BackendId {
+  if (chosen || installed.includes(current)) return current;
+  return installed[0] ?? current;
+}

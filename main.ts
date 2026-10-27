@@ -11,7 +11,7 @@ import { ResolvedBrand, resolveBrand, setActiveBrand } from './src/brand';
 import { BACKEND_IDS, DEFAULT_BACKEND_ID, getBackend, isBackendId, sentenceStart } from './src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode } from './src/backends/types';
 import { loadCustomModels } from './src/utils/customModels';
-import { migrateVariantModel } from './src/utils/agentModels';
+import { migrateVariantModel, newSessionBackend } from './src/utils/agentModels';
 import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
 import type { ReportType } from './src/utils/report';
 import { ReportModal } from './src/modals/ReportModal';
@@ -94,7 +94,10 @@ export default class BojuBotPlugin extends Plugin {
       for (const id of BACKEND_IDS) void this.refreshCliCapabilities(id);
     });
 
-    if (!this.getBinaryPath(this.settings.backend)) {
+    await this.settleNewSessionBackend();
+    if (BACKEND_IDS.every(id => !this.getBinaryPath(id))) {
+      new Notice(`${this.brand.name}: no agent found. Install ${BACKEND_IDS.map(id => getBackend(id).cliPhrase).join(' or ')}.`);
+    } else if (!this.getBinaryPath(this.settings.backend)) {
       new Notice(`${this.brand.name}: ${sentenceStart(this.getBackend().cliPhrase)} wasn't found. Check plugin settings.`);
     }
 
@@ -690,6 +693,11 @@ export default class BojuBotPlugin extends Plugin {
     // sibling defaults.
     this.refreshBrand();
     if (!isBackendId(this.settings.backend)) this.settings.backend = DEFAULT_BACKEND_ID;
+    // Installs from before backendChosen: a non-default agent was picked in the
+    // model picker, and sessions with replies mean the agent was in use
+    if (saved && saved.backendChosen === undefined) {
+      this.settings.backendChosen = this.settings.backend !== DEFAULT_BACKEND_ID || this.settings.startedSessionCount > 0;
+    }
     // Antigravity models used to be saved as effort variants ("gemini-3.8-flash-high"):
     // keep the base model and carry the level over as Antigravity's default effort (#402)
     const agyModel = migrateVariantModel(this.settings.agyDefaultModel ?? '');
@@ -813,6 +821,20 @@ export default class BojuBotPlugin extends Plugin {
     return BACKEND_IDS
       .filter(id => this.runtime[id].binaryPath && this.runtime[id].caps.version)
       .map(id => ({ name: getBackend(id).cliName, version: this.runtime[id].caps.version ?? "" }));
+  }
+
+  /**
+   * Until the user picks or uses an agent, new sessions use one that's
+   * installed (newSessionBackend()). Call after (re-)detecting binaries.
+   */
+  async settleNewSessionBackend(): Promise<void> {
+    const installed = BACKEND_IDS.filter(id => this.getBinaryPath(id));
+    const id = newSessionBackend(this.settings.backend, installed, this.settings.backendChosen);
+    if (id === this.settings.backend) return;
+    log('New sessions use', id, '- the previous agent is not installed');
+    this.settings.backend = id;
+    await this.saveSettings();
+    this.onDefaultBackendChanged();
   }
 
   /** Settings changed the backend for new sessions. */

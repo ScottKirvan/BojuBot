@@ -38,6 +38,9 @@ export const DEFAULT_MODEL_ID = 'claude-sonnet-5-5';
 export interface BojuBotSettings {
   /** Agent CLI for new sessions. Existing sessions keep the backend they started on. */
   backend: BackendId;
+  /** The user picked `backend` (model picker, setup card) or got a reply from it. Until then
+   *  BojuBot moves new sessions to an installed agent when `backend` isn't (newSessionBackend()). */
+  backendChosen: boolean;
   /** Claude Code binary. Empty = auto-detect. */
   binaryPath: string;
   /** Antigravity (`agy`) binary. Empty = auto-detect. */
@@ -136,6 +139,7 @@ export interface BojuBotSettings {
 
 export const DEFAULT_SETTINGS: BojuBotSettings = {
   backend: 'claude-code',
+  backendChosen: false,
   binaryPath: '',
   agyBinaryPath: '',
   agyDefaultModel: '',

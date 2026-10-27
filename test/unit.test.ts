@@ -35,7 +35,7 @@ import { reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
 import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
-import { agentModelIndicatorText, collapseEffortVariants, migrateVariantModel, modeForAgentSwitch, modelEffortLevels, modelPickAction, nearestLevel, resolveTurnModel, splitEffortVariant } from '../src/utils/agentModels';
+import { agentModelIndicatorText, collapseEffortVariants, migrateVariantModel, modeForAgentSwitch, modelEffortLevels, modelPickAction, nearestLevel, newSessionBackend, resolveTurnModel, splitEffortVariant } from '../src/utils/agentModels';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
@@ -5716,6 +5716,25 @@ describe('modelPickAction', () => {
   test('another agent\'s model starts a new session when there is a conversation or a first turn running', () => {
     assert.equal(modelPickAction({ sessionBackend: 'claude-code', pickedBackend: 'antigravity', hasConversation: true, busy: false }), 'new-session');
     assert.equal(modelPickAction({ sessionBackend: 'antigravity', pickedBackend: 'claude-code', hasConversation: false, busy: true }), 'new-session');
+  });
+});
+
+describe('newSessionBackend', () => {
+  test('keeps the current agent when it is installed', () => {
+    assert.equal(newSessionBackend('claude-code', ['claude-code', 'antigravity'], false), 'claude-code');
+    assert.equal(newSessionBackend('antigravity', ['claude-code', 'antigravity'], false), 'antigravity');
+  });
+  test('before the user picks an agent, uses the one that is installed', () => {
+    assert.equal(newSessionBackend('claude-code', ['antigravity'], false), 'antigravity');
+    assert.equal(newSessionBackend('antigravity', ['claude-code'], false), 'claude-code');
+  });
+  test('never replaces an agent the user picked or used', () => {
+    assert.equal(newSessionBackend('claude-code', ['antigravity'], true), 'claude-code');
+    assert.equal(newSessionBackend('antigravity', ['claude-code'], true), 'antigravity');
+  });
+  test('with nothing installed, stays put', () => {
+    assert.equal(newSessionBackend('claude-code', [], false), 'claude-code');
+    assert.equal(newSessionBackend('antigravity', [], true), 'antigravity');
   });
 });
 
