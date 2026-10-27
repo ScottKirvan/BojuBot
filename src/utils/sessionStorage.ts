@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, appendFileSync } from 'fs';
-import { join, isAbsolute } from 'path';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, appendFileSync, renameSync, copyFileSync } from 'fs';
+import { join, isAbsolute, resolve } from 'path';
 import { homedir } from 'os';
 import { estimateTokens } from './logger';
 import type { BackendId, PermissionMode } from '../backends/types';
@@ -126,6 +126,62 @@ export function resolveSessionsDir(vaultRoot: string, customPath: string | undef
   if (!p) return getSessionsDir(vaultRoot, configDir);
   if (isAbsolute(p)) return p;
   return join(vaultRoot, p);
+}
+
+/** A folder's session files: each session's JSON and its transcript. */
+export function sessionFilesIn(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir).filter(f => f.endsWith('.json') || f.endsWith('.transcript.jsonl'));
+  } catch {
+    return [];
+  }
+}
+
+/** Sessions saved in a folder. */
+export function countSessionsIn(dir: string): number {
+  return sessionFilesIn(dir).filter(f => f.endsWith('.json')).length;
+}
+
+export interface MoveSessionsResult {
+  /** Sessions moved (their JSON files). */
+  moved: number;
+  /** Files left in the old folder: one with the same name was already in the new folder, or the move failed. */
+  skipped: string[];
+}
+
+/**
+ * Move every session file from one folder to another, after the session
+ * storage path changed. Never overwrites: a file already in the new folder
+ * wins, and the old one stays where it was. Works across drives.
+ */
+export function moveSessionFiles(fromDir: string, toDir: string): MoveSessionsResult {
+  const result: MoveSessionsResult = { moved: 0, skipped: [] };
+  if (resolve(fromDir) === resolve(toDir)) return result;
+  const files = sessionFilesIn(fromDir);
+  if (!files.length) return result;
+  mkdirSync(toDir, { recursive: true });
+  for (const f of files) {
+    const from = join(fromDir, f);
+    const to = join(toDir, f);
+    if (existsSync(to)) {
+      result.skipped.push(f);
+      continue;
+    }
+    try {
+      try {
+        renameSync(from, to);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EXDEV') throw e;
+        copyFileSync(from, to);
+        unlinkSync(from);
+      }
+      if (f.endsWith('.json')) result.moved++;
+    } catch {
+      result.skipped.push(f);
+    }
+  }
+  return result;
 }
 
 /** Legacy paths from previous project names (Cortex → ObsidiBot → BojuBot). */

@@ -17,7 +17,7 @@ import { join, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EventEmitter } from 'node:events';
 
-import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, loadSessionFile, updateStoredSession, ChatMessage, StoredSession } from '../src/utils/sessionStorage';
+import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, deleteSession, loadSessionMessages, getSessionsDir, resolveSessionsDir, estimateSessionTokens, hasReadableHistory, loadHistory, sessionBackend, appendTranscript, loadTranscript, transcriptEntries, transcriptPath, loadSessionFile, updateStoredSession, countSessionsIn, moveSessionFiles, sessionFilesIn, ChatMessage, StoredSession } from '../src/utils/sessionStorage';
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
@@ -1613,6 +1613,64 @@ describe('saveSessionAtTop sort order', () => {
 // ---------------------------------------------------------------------------
 // resolveSessionsDir — path resolution branches
 // ---------------------------------------------------------------------------
+
+describe('moveSessionFiles', () => {
+  function folders() {
+    const root = mkdtempSync(join(tmpdir(), 'bojubot-move-test-'));
+    const from = join(root, 'old');
+    mkdirSync(from);
+    return { root, from, to: join(root, 'new', 'sessions') };
+  }
+
+  test('lists and counts session files only', () => {
+    const { root, from } = folders();
+    writeFileSync(join(from, 'a.json'), '{}');
+    writeFileSync(join(from, 'a.transcript.jsonl'), '');
+    writeFileSync(join(from, 'b.json'), '{}');
+    writeFileSync(join(from, 'notes.md'), '');
+    assert.deepEqual(sessionFilesIn(from).sort(), ['a.json', 'a.transcript.jsonl', 'b.json']);
+    assert.equal(countSessionsIn(from), 2);
+    assert.deepEqual(sessionFilesIn(join(root, 'missing')), []);
+    assert.equal(countSessionsIn(join(root, 'missing')), 0);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('moves sessions and transcripts, creating the new folder', () => {
+    const { root, from, to } = folders();
+    writeFileSync(join(from, 'a.json'), '{"id":"a"}');
+    writeFileSync(join(from, 'a.transcript.jsonl'), 'line\n');
+    writeFileSync(join(from, 'b.json'), '{"id":"b"}');
+    writeFileSync(join(from, 'notes.md'), 'keep');
+    assert.deepEqual(moveSessionFiles(from, to), { moved: 2, skipped: [] });
+    assert.equal(readFileSync(join(to, 'a.json'), 'utf8'), '{"id":"a"}');
+    assert.equal(readFileSync(join(to, 'a.transcript.jsonl'), 'utf8'), 'line\n');
+    assert.equal(existsSync(join(from, 'a.json')), false);
+    assert.equal(existsSync(join(from, 'notes.md')), true);
+    assert.equal(existsSync(join(to, 'notes.md')), false);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('never overwrites a file already in the new folder', () => {
+    const { root, from, to } = folders();
+    mkdirSync(to, { recursive: true });
+    writeFileSync(join(from, 'a.json'), 'old');
+    writeFileSync(join(from, 'b.json'), 'b');
+    writeFileSync(join(to, 'a.json'), 'new');
+    assert.deepEqual(moveSessionFiles(from, to), { moved: 1, skipped: ['a.json'] });
+    assert.equal(readFileSync(join(to, 'a.json'), 'utf8'), 'new');
+    assert.equal(readFileSync(join(from, 'a.json'), 'utf8'), 'old');
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test('does nothing for the same folder or an empty one', () => {
+    const { root, from, to } = folders();
+    writeFileSync(join(from, 'a.json'), '{}');
+    assert.deepEqual(moveSessionFiles(from, join(from, '.')), { moved: 0, skipped: [] });
+    assert.deepEqual(moveSessionFiles(join(root, 'missing'), to), { moved: 0, skipped: [] });
+    assert.equal(existsSync(to), false);
+    rmSync(root, { recursive: true, force: true });
+  });
+});
 
 describe('resolveSessionsDir', () => {
   const CONFIG = '.obsidian/plugins/bojubot';

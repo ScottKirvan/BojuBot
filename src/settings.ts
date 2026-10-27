@@ -303,6 +303,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
   hide(): void {
     this.runFallbackCleanups();
     super.hide();
+    this.plugin.checkSessionsDirChanged();
   }
 
   // ── Re-rendering ──────────────────────────────────────────────────────────
@@ -676,7 +677,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
             'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
             'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
             'or an absolute path to store them outside the vault entirely. ' +
-            `Restart ${brandName()} after changing this.`;
+            `When you close settings after changing it, ${brandName()} offers to move your existing sessions.`;
         },
         control: { type: 'folder', key: 'sessionStoragePath', placeholder: 'Default (Obsidian config folder/BojuBot/sessions)' },
       },

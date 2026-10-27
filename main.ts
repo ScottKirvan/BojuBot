@@ -17,7 +17,8 @@ import type { ReportType } from './src/utils/report';
 import { ReportModal } from './src/modals/ReportModal';
 import { isWhiteLabeled } from './src/brand';
 import * as os from 'os';
-import { loadAllSessions, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
+import { countSessionsIn, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
+import { MoveSessionsModal } from './src/modals/MoveSessionsModal';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
@@ -65,6 +66,7 @@ export default class BojuBotPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+    this.sessionsDirInUse = this.getSessionsDir();
 
     if (this.settings.permissionMode === 'full' && !this.settings.persistFullAccess) {
       this.settings.permissionMode = 'standard';
@@ -526,6 +528,31 @@ export default class BojuBotPlugin extends Plugin {
       if (leaf.view instanceof SessionsView) leaf.view.refresh();
     }
   }, 150, true);
+
+  /** The sessions folder before the storage path setting was last edited. */
+  private sessionsDirInUse = '';
+
+  /**
+   * Settings closed: if the session storage path changed and the old folder
+   * still has sessions, offer to move them so they don't drop out of the
+   * Sessions panel.
+   */
+  checkSessionsDirChanged(): void {
+    const from = this.sessionsDirInUse;
+    const to = this.getSessionsDir();
+    this.sessionsDirInUse = to;
+    if (!from || from === to) return;
+    const count = countSessionsIn(from);
+    if (!count) return;
+    new MoveSessionsModal(this.app, count, from, to, () => {
+      const { moved, skipped } = moveSessionFiles(from, to);
+      log('Sessions moved', from, '->', to, moved, 'moved,', skipped.length, 'files left');
+      new Notice(skipped.length
+        ? `${this.brand.name}: moved ${moved} of ${count} sessions. ${skipped.length} files stayed in the old folder because the new one already has files with those names.`
+        : `${this.brand.name}: moved ${moved} sessions.`, 8000);
+      this.refreshSessionsViews();
+    }).open();
+  }
 
   /** Resolved sessions directory, honoring the sessionStoragePath setting. */
   getSessionsDir(): string {
