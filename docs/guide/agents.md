@@ -6,7 +6,7 @@ Gemini support through Antigravity is in [beta builds](beta-builds.md) and will 
 
 BojuBot can work with Claude or with Gemini. It runs each one through an agent CLI installed on your computer:
 
-- **Claude, through Claude Code**: the default, using your Claude Pro or Max subscription.
+- **Claude, through Claude Code**, using your Claude Pro or Max subscription.
 - **Gemini, through Google's Antigravity CLI** (`agy`), which runs Gemini using your Google account's Antigravity quota. Antigravity also offers some Claude and GPT-OSS models on that quota. In BojuBot's settings and menus it's listed as **Gemini (Antigravity CLI)**, and Claude Code as **Claude (Claude Code)**.
 
 Both work with the same chat panel, sessions, skills, UI Bridge and vault queries.
@@ -17,7 +17,7 @@ A common setup is to keep your Claude quota for heavy work, such as programming 
 
 1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
 2. **Sign in once.** Open a terminal, run `agy`, and sign in in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
-3. **Pick it in BojuBot.** In the chat panel, click the model name below the message box and pick a Gemini model under **Gemini (Antigravity CLI)**. If Claude Code isn't installed, the chat shows a setup panel instead: click **Use Gemini (Antigravity CLI) instead** there. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
+3. **Pick it in BojuBot.** If the Antigravity CLI is the only agent you installed, BojuBot uses it on its own. If you also have Claude Code, click the model name below the message box in the chat panel and pick a Gemini model under **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 
 You switch agents in the [model picker](./chat-panel#model-indicator) <Badge type="warning" text="Beta" />: pick a model under the other agent. An empty new session that you haven't sent a message in yet switches straight away; a session with messages starts a new session on the other agent, because a conversation can't move between CLIs. The agent you picked last is the one new sessions start with.
 
@@ -60,7 +60,7 @@ BojuBot runs Antigravity as one of its own Antigravity agents, which carry BojuB
 
 ## Troubleshooting
 
-**"Gemini (Antigravity CLI) not found" when the panel opens.** Your default agent is Gemini but BojuBot can't find the Antigravity CLI (`agy`). Install it and set **Antigravity CLI binary path**, then click **Check again**. Or, if Claude Code is installed, click **Use Claude (Claude Code) instead** in the panel.
+**"Gemini (Antigravity CLI) not found" when the panel opens.** You picked Gemini for new sessions, but BojuBot can't find the Antigravity CLI (`agy`). Install it and set **Antigravity CLI binary path**, then click **Check again**. Or, if Claude Code is installed, click **Use Claude (Claude Code) instead** in the panel.
 
 **"The Antigravity CLI isn't signed in" or "Your Antigravity CLI sign-in has expired."** Click **Open terminal** in the error card, or run `agy` in a terminal yourself, and sign in. Then send your message again. See [Signing in to Antigravity again](./troubleshooting#signing-in-to-antigravity-again).
 

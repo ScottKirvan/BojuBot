@@ -58,7 +58,7 @@ Or find it at **[community.obsidian.md/plugins/bojubot](https://community.obsidi
 ---
 ## Quick Start
 
-1. Using Gemini (beta builds)? Click the model name below the message box and pick a Gemini model (Claude is the default). If Claude Code isn't installed, click **Use Gemini (Antigravity CLI) instead** in the setup panel
+1. Using Gemini (beta builds)? BojuBot uses whichever agent you installed. With both Claude Code and the Antigravity CLI installed, click the model name below the message box to switch
 2. Open the BojuBot panel from the ribbon (brain/circuit icon) or Command Palette: `BojuBot: Open agent panel`
 3. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
 4. See the [User Guide](https://www.scottkirvan.com/BojuBot/) for details on Skills, session management, and settings
