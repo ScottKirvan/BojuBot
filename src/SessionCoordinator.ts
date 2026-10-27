@@ -225,10 +225,10 @@ export class SessionCoordinator {
   /**
    * True when the session's conversation can't continue in `mode` (default:
    * the session's own mode) and switching to it needs a new session: moving
-   * into Chat only from any other mode on any backend (the earlier turns hold
-   * vault information, #406), and on Antigravity also moving out of Chat only
-   * (agy fixes a conversation's tools when it starts, #403). Never true before
-   * the first turn: a session with no conversation just switches.
+   * into or out of Chat only on any backend (`needsFreshSessionForChatOnly`,
+   * #406), and whatever the backend adds (`needsNewConversation`: agy fixes a
+   * conversation's agent when it starts, #403). Never true before the first
+   * turn: a session with no conversation just switches.
    */
   modeNeedsNewSession(mode: PermissionMode = this.getEffectivePermissionMode()): boolean {
     if (!this._s.sessionId) return false;

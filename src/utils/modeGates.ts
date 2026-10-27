@@ -55,11 +55,13 @@ export function bridgeActionAllowed(action: string, mode: PermissionMode | undef
 }
 
 /**
- * Switching into Chat only would keep the earlier turns (vault tree, context
- * file, whatever the agent read) in the conversation, so a session with
- * messages starts over, on every backend. `sessionMode` is the open session's
- * own saved mode: a session already in Chat only has never had vault access
- * and just continues. One of the rules behind
+ * Moving into or out of Chat only starts a new session when the session has
+ * messages, on every backend. Into Chat only: the earlier turns (vault tree,
+ * context file, whatever the agent read) would stay in the conversation.
+ * Out of Chat only: the conversation never had the vault context, and on
+ * Claude Code it ran from the temp folder (`resolveSpawnCwd()`), so
+ * `--resume` from the vault can't find it. `sessionMode` is the open
+ * session's own saved mode. One of the rules behind
  * `SessionCoordinator.modeNeedsNewSession()`.
  */
 export function needsFreshSessionForChatOnly(
@@ -67,7 +69,7 @@ export function needsFreshSessionForChatOnly(
   hasConversation: boolean,
   sessionMode: PermissionMode,
 ): boolean {
-  return newMode === 'restricted' && hasConversation && sessionMode !== 'restricted';
+  return hasConversation && (newMode === 'restricted') !== (sessionMode === 'restricted');
 }
 
 /**
