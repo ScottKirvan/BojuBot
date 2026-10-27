@@ -79,6 +79,33 @@ export function reportIssueUrl(sourceRepoUrl: string, input: ReportInput, maxLen
   return make(body + note);
 }
 
+/** Longest description the agent's report-problem action may pre-fill. */
+export const PREFILL_DESCRIPTION_MAX = 20000;
+
+/** What the agent may pre-fill in the form; the user reviews it and decides whether to send. */
+export interface ReportPrefill {
+  type?: ReportType;
+  title?: string;
+  description?: string;
+}
+
+/**
+ * Check the agent's `report-problem` action: an unknown type and non-string
+ * fields are dropped, and the text is capped. Never sends anything; the caller
+ * only opens the form with these values.
+ */
+export function reportPrefill(action: Record<string, unknown>): ReportPrefill {
+  const prefill: ReportPrefill = {};
+  if (action.type === 'bug' || action.type === 'feature' || action.type === 'feedback') prefill.type = action.type;
+  if (typeof action.title === 'string' && action.title.trim()) {
+    prefill.title = action.title.trim().split(/\r?\n/)[0].replace(/\s+/g, ' ').slice(0, TITLE_MAX);
+  }
+  if (typeof action.description === 'string' && action.description.trim()) {
+    prefill.description = action.description.trim().slice(0, PREFILL_DESCRIPTION_MAX);
+  }
+  return prefill;
+}
+
 /** The relay's name for BojuBot; it picks the repo the issue goes to. */
 export const RELAY_APP = 'bojubot';
 /** The relay's limit on `body`. */

@@ -16,6 +16,9 @@ export interface ReportModalOptions {
   /** Pre-filled, editable details: version line, agent and model, error text. */
   details: string;
   type?: ReportType;
+  /** Pre-filled by the agent's report-problem action; editable like everything else. */
+  title?: string;
+  description?: string;
   /** Absolute path of the debug log, or '' when logging is off. */
   logPath: string;
   /** Show the privacy policy link (stock builds only). */
@@ -67,12 +70,14 @@ export class ReportModal extends Modal {
     const descField = contentEl.createDiv({ cls: 'bojubot-param-field' });
     descField.createEl('label', { text: 'Description', cls: 'bojubot-param-label' });
     const desc = descField.createEl('textarea', { cls: 'bojubot-param-textarea', attr: { placeholder: PLACEHOLDER[type], rows: '7' } });
+    title.value = options.title ?? '';
+    desc.value = options.description ?? '';
     typeSelect.addEventListener('change', () => {
       type = typeSelect.value as ReportType;
       title.placeholder = TITLE_PLACEHOLDER[type];
       desc.placeholder = PLACEHOLDER[type];
     });
-    window.setTimeout(() => title.focus(), 50);
+    window.setTimeout(() => (title.value ? desc : title).focus(), 50);
 
     const detailsField = contentEl.createDiv({ cls: 'bojubot-param-field' });
     detailsField.createEl('label', { text: 'Details', cls: 'bojubot-param-label' });

@@ -11,7 +11,7 @@ Cannot: {{PERMISSION_CANNOT}}.
 Emit on own line — intercepted by {{BRAND}}, never shown to user:
 @@BOJU {"action":"<name>"[,...params]}
 
-Immediate (no confirm): open-file(path) · open-file-split(path,direction) · open-file-new-tab(path) · navigate-heading(path,heading) · show-notice(message[,duration]) · set-label(user,assistant) · request-permission(tool,reason)
+Immediate (no confirm): open-file(path) · open-file-split(path,direction) · open-file-new-tab(path) · navigate-heading(path,heading) · show-notice(message[,duration]) · set-label(user,assistant) · request-permission(tool,reason) · report-problem(type,title,description)
 File ops (immediate; require Standard/Full permission mode — no-op otherwise): rename-file(path,newName) · move-file(path,newPath) · delete-file(path) — moves to trash per vault preference, not permanent
 {{IF_COMMANDS}}Confirm-first (ask in text → user says yes → emit next turn): open-settings([tab]) · focus-search · run-command(commandId)
 {{IF_NO_COMMANDS}}Confirm-first (ask in text → user says yes → emit next turn): open-settings([tab]) · focus-search

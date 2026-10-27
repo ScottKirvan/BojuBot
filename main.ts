@@ -15,7 +15,7 @@ import { fileStamp } from './src/utils/fileStamp';
 import { resetAgyAgentRejection } from './src/backends/antigravity';
 import { migrateVariantModel, newSessionBackend } from './src/utils/agentModels';
 import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
-import type { ReportType } from './src/utils/report';
+import type { ReportPrefill } from './src/utils/report';
 import { ReportModal } from './src/modals/ReportModal';
 import { REPORT_RELAY_URL } from './src/constants';
 import { isWhiteLabeled } from './src/brand';
@@ -850,9 +850,10 @@ export default class BojuBotPlugin extends Plugin {
   /**
    * Open the Report a problem form (#382) with everything pre-filled: the
    * version line, the open session's agent and model, and an error when the
-   * form was opened from an error card. All of it stays editable.
+   * form was opened from an error card. The agent's report-problem action can
+   * add a title and description. All of it stays editable.
    */
-  openReportForm(extra: { type?: ReportType; errorText?: string } = {}): void {
+  openReportForm(extra: ReportPrefill & { errorText?: string } = {}): void {
     const session = this.targetChatView()?.sessionSummary() ?? '';
     const details = [
       formatVersionInfo(this.brand.name, this.manifest.version, __BUILD_INFO__, this.installedAgentVersions(), osLabel(process.platform, os.release())),
@@ -865,6 +866,8 @@ export default class BojuBotPlugin extends Plugin {
       relayUrl: isWhiteLabeled(this.brand) ? '' : REPORT_RELAY_URL,
       details,
       type: extra.type,
+      title: extra.title,
+      description: extra.description,
       logPath: currentLogPath(),
       showPrivacyLink: !isWhiteLabeled(this.brand),
     }).open();

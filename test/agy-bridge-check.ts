@@ -21,7 +21,7 @@ import { BOJU_PREFIX } from '../src/constants';
 
 (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
 
-const ACTIONS = new Set(['open-file', 'open-file-split', 'open-file-new-tab', 'navigate-heading', 'show-notice', 'set-label',
+const ACTIONS = new Set(['open-file', 'open-file-split', 'open-file-new-tab', 'navigate-heading', 'show-notice', 'set-label', 'report-problem',
   'request-permission', 'rename-file', 'move-file', 'delete-file', 'open-settings', 'focus-search', 'run-command']);
 const QUERIES = new Set(['backlinks', 'outlinks', 'tags', 'file-list', 'help']);
 

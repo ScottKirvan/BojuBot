@@ -50,8 +50,12 @@ The **Details** are filled in for you: BojuBot's version and build, your install
 
 Reports are public GitHub issues, so anyone can read them. Nothing is sent until you click **Send**. If sending fails (you're offline, or too many reports came from your network in the last minute), the form says why and keeps your report, so you can try again or use **Open on GitHub** or **Copy report** instead. See the [privacy policy](../privacy#network-requests-bojubot-makes) for what Send shares.
 
+### Asking the agent to report it <Badge type="warning" text="Beta" />
+
+You can also ask the agent, for example "file a bug: the gauge doesn't update after compacting". It opens the form with the type, title and description filled in, including steps to reproduce when it knows them. Check and edit it, then click **Send** yourself: the agent can open the form but never send it. This works in every permission mode, and a [skill](./skills) can ask for it too.
+
 ::: warning Not released yet
-**Send** is only in [beta builds](./beta-builds) so far. Released versions have **Open on GitHub** and **Copy report**.
+**Send** and asking the agent are only in [beta builds](./beta-builds) so far. Released versions have **Open on GitHub** and **Copy report**.
 :::
 
 White-labeled installs don't have **Send**; their reports go to the brand's own repository through **Open on GitHub**.

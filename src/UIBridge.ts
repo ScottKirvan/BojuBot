@@ -4,6 +4,7 @@ import { brandName } from './brand';
 import { canWrite } from './backends/modes';
 import { bridgeActionAllowed } from './utils/modeGates';
 import type { PermissionMode } from './backends/types';
+import { ReportPrefill, reportPrefill } from './utils/report';
 export { BOJU_PREFIX } from './constants';
 export { BojuBotAction, extractActions } from './utils/actionParser';
 import type { BojuBotAction } from './utils/actionParser';
@@ -31,6 +32,8 @@ export interface UIBridgeOptions {
   onSetLabel?: (userLabel: string, assistantLabel: string) => void;
   /** The user thanked the agent (#385). */
   onThanked?: () => void;
+  /** Open Report a problem pre-filled by the agent (#382); the user reviews and sends it. */
+  onReportProblem?: (prefill: ReportPrefill) => void;
   /** A dialog asking the user opened (true) or closed (false), for the session's live status (#399). */
   onAwaitUser?: (waiting: boolean) => void;
 }
@@ -326,6 +329,12 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       const userLabel = ((action.user as string) ?? '').trim() || 'User';
       const assistantLabel = ((action.assistant as string) ?? '').trim() || brandName();
       options.onSetLabel?.(userLabel, assistantLabel);
+      break;
+    }
+
+    case 'report-problem': {
+      // Only opens the form; nothing is sent until the user clicks Send.
+      options.onReportProblem?.(reportPrefill(action));
       break;
     }
 

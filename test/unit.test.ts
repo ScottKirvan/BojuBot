@@ -31,7 +31,7 @@ import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
-import { readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils/report';
+import { PREFILL_DESCRIPTION_MAX, TITLE_MAX, readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportPrefill, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
 import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
@@ -4189,6 +4189,23 @@ describe('relayRequest', () => {
   });
 });
 
+describe('reportPrefill', () => {
+  test('type, title and description from the agent\'s action', () => {
+    assert.deepEqual(reportPrefill({ action: 'report-problem', type: 'bug', title: '  Gauge   stuck ', description: ' It stays full.\n\n1. Compact ' }),
+      { type: 'bug', title: 'Gauge stuck', description: 'It stays full.\n\n1. Compact' });
+  });
+  test('an unknown type and non-string or blank fields are dropped', () => {
+    assert.deepEqual(reportPrefill({ action: 'report-problem', type: 'urgent', title: 42, description: '   ' }), {});
+    assert.deepEqual(reportPrefill({ action: 'report-problem' }), {});
+  });
+  test('the title is one line within the form\'s limit; the description is capped', () => {
+    const p = reportPrefill({ action: 'report-problem', title: 'First line\nsecond', description: 'd'.repeat(30000) });
+    assert.equal(p.title, 'First line');
+    assert.equal(reportPrefill({ action: 'report-problem', title: 't'.repeat(300) }).title!.length, TITLE_MAX);
+    assert.equal(p.description!.length, PREFILL_DESCRIPTION_MAX);
+  });
+});
+
 describe('readRelayResponse', () => {
   test('201 with an issue link is a success', () => {
     assert.deepEqual(readRelayResponse(201, { url: 'https://github.com/ScottKirvan/BojuBot/issues/500', number: 500 }),
@@ -5204,7 +5221,7 @@ describe('bridgeActionAllowed', () => {
   });
 
   test('UI-only actions run in every mode', () => {
-    const uiOnly = ['open-file', 'open-file-split', 'open-file-new-tab', 'navigate-heading', 'show-notice', 'focus-search', 'open-settings', 'set-label', 'thanked', 'request-permission'];
+    const uiOnly = ['open-file', 'open-file-split', 'open-file-new-tab', 'navigate-heading', 'show-notice', 'focus-search', 'open-settings', 'set-label', 'thanked', 'request-permission', 'report-problem'];
     for (const m of ALL_MODES) {
       for (const a of uiOnly) assert.equal(bridgeActionAllowed(a, m), true, `${m} ${a}`);
     }
