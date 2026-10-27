@@ -31,7 +31,7 @@ import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
-import { reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils/report';
+import { readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
 import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
 import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
@@ -4162,6 +4162,54 @@ describe('reportIssueUrl', () => {
     const url = reportIssueUrl(repo, { type: 'bug', description: 'y'.repeat(9000), details: 'v' }, 2000);
     assert.ok(url.length <= 2000, String(url.length));
     assert.match(new URL(url).searchParams.get('body')!, /Copy report/);
+  });
+});
+
+describe('relayRequest', () => {
+  test('app, type, title and body, without our footer (the relay adds its own)', () => {
+    const req = relayRequest({ type: 'bug', description: 'It broke', details: 'v1' });
+    assert.deepEqual(req, { app: 'bojubot', type: 'bug', title: '[BUG] It broke', body: '## Description\n\nIt broke\n\n## Environment\n\nv1' });
+  });
+  test('reportBody keeps the footer by default', () => {
+    assert.match(reportBody({ type: 'bug', description: 'd', details: '' }), /Sent from BojuBot/);
+    assert.doesNotMatch(reportBody({ type: 'bug', description: 'd', details: '' }, false), /Sent from|---/);
+  });
+  test('too long: the log goes first, with a note', () => {
+    const req = relayRequest({ type: 'bug', description: 'd', details: 'v', log: 'x'.repeat(500) }, 300);
+    assert.ok(req.body.length <= 300);
+    assert.ok(!req.body.includes('## Recent log'));
+    assert.match(req.body, /log was too long/);
+  });
+  test('still too long: the body is cut to the limit with a note', () => {
+    const req = relayRequest({ type: 'feature', description: 'y'.repeat(500), details: 'v' }, 200);
+    assert.equal(req.body.length, 200);
+    assert.ok(req.body.endsWith('_…cut to fit._'));
+    assert.equal(req.title, '[FEATURE] ' + 'y'.repeat(79) + '…');
+  });
+});
+
+describe('readRelayResponse', () => {
+  test('201 with an issue link is a success', () => {
+    assert.deepEqual(readRelayResponse(201, { url: 'https://github.com/ScottKirvan/BojuBot/issues/500', number: 500 }),
+      { ok: true, url: 'https://github.com/ScottKirvan/BojuBot/issues/500', number: 500 });
+  });
+  test('201 without a GitHub link is not trusted', () => {
+    assert.equal(readRelayResponse(201, { url: 'https://example.com/x', number: 1 }).ok, false);
+    assert.equal(readRelayResponse(201, null).ok, false);
+  });
+  test('rate limit, size, switched off and title errors get their own messages', () => {
+    const msg = (status: number, json: unknown) => { const r = readRelayResponse(status, json); return 'message' in r ? r.message : ''; };
+    assert.match(msg(429, { error: 'rate_limited' }), /^Too many reports.*Try again shortly, or use Open on GitHub or Copy report instead\.$/);
+    assert.match(msg(413, { error: 'payload_too_large' }), /too long to send/);
+    assert.match(msg(503, { error: 'disabled' }), /switched off/);
+    assert.match(msg(503, { error: 'not_configured' }), /switched off/);
+    assert.match(msg(400, { error: 'invalid_report', field: 'title' }), /first line/);
+    assert.match(msg(400, { error: 'invalid_report', field: 'body' }), /couldn't be sent as it is/);
+  });
+  test('anything else names the status and points at the fallbacks', () => {
+    const r = readRelayResponse(502, { error: 'upstream_error' });
+    assert.deepEqual(r, { ok: false, message: "The report couldn't be sent (error 502). Use Open on GitHub or Copy report instead." });
+    assert.deepEqual(readRelayResponse(0, 'not json'), { ok: false, message: "The report couldn't be sent. Use Open on GitHub or Copy report instead." });
   });
 });
 

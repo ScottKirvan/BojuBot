@@ -17,6 +17,7 @@ import { migrateVariantModel, newSessionBackend } from './src/utils/agentModels'
 import { AgentVersion, formatVersionInfo, osLabel } from './src/utils/buildInfo';
 import type { ReportType } from './src/utils/report';
 import { ReportModal } from './src/modals/ReportModal';
+import { REPORT_RELAY_URL } from './src/constants';
 import { isWhiteLabeled } from './src/brand';
 import * as os from 'os';
 import { countSessionsIn, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
@@ -860,6 +861,8 @@ export default class BojuBotPlugin extends Plugin {
     ].filter(Boolean).join('\n');
     new ReportModal(this.app, {
       sourceRepoUrl: this.brand.links.source,
+      // The relay files issues on BojuBot's own repo, so white-labeled builds don't send there.
+      relayUrl: isWhiteLabeled(this.brand) ? '' : REPORT_RELAY_URL,
       details,
       type: extra.type,
       logPath: currentLogPath(),
