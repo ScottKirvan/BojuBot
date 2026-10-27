@@ -25,6 +25,8 @@ export const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/ScottKirvan';
 export const SUPPORT_PAGE_URL = 'https://www.scottkirvan.com/BojuBot/support';
 export const CHANGELOG_URL = 'https://www.scottkirvan.com/BojuBot/changelog';
 export const PRIVACY_URL = 'https://www.scottkirvan.com/BojuBot/privacy';
+/** The report relay (#381) that files Report a problem's Send as a GitHub issue. */
+export const REPORT_RELAY_URL = 'https://report.scottkirvan.com/report';
 export const TROUBLESHOOTING_URL = 'https://www.scottkirvan.com/BojuBot/guide/troubleshooting';
 
 /**

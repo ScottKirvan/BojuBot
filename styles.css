@@ -2433,6 +2433,11 @@
   margin: 4px 0 10px;
 }
 
+.bojubot-report-error {
+  margin: 0 0 10px;
+  color: var(--text-error);
+}
+
 .bojubot-report-this {
   display: inline-block;
   margin-top: 4px;
