@@ -17,6 +17,7 @@ import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath
 import type BojuBotPlugin from '../main';
 import type { ModelOption, PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
+import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
 import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE } from './utils/modeGates';
@@ -1458,6 +1459,7 @@ export class ClaudeView extends ItemView {
       onThanked: () => {
         if (this._activeTurnEls) this._activeTurnEls.thanked = true;
       },
+      onReportProblem: (prefill: ReportPrefill) => this.plugin.openReportForm(prefill),
       onSetLabel: (userLabel: string, assistantLabel: string) => {
         this.currentUserLabel = userLabel;
         this.currentAssistantLabel = assistantLabel;
