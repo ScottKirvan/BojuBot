@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, requireApiVersion, Setting } from 'obsidian';
+import { App, debounce, PluginSettingTab, requireApiVersion, Setting } from 'obsidian';
 import type { SettingDefinition, SettingDefinitionItem } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import type { BackendId, ModelOption, PermissionMode } from './backends/types';
@@ -207,10 +207,22 @@ export class BojuBotSettingsTab extends PluginSettingTab {
   plugin: BojuBotPlugin;
   /** Cleanups returned by render callbacks the fallback renderer drew. */
   private fallbackCleanups: (() => void)[] = [];
+  /** A binary path being typed: find and probe the agent once typing pauses. */
+  private redetect: Record<BackendId, () => void> = {
+    'claude-code': debounce(() => this.redetectBinary('claude-code'), 800, true),
+    'antigravity': debounce(() => this.redetectBinary('antigravity'), 800, true),
+  };
 
   constructor(app: App, plugin: BojuBotPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+
+  private redetectBinary(id: BackendId): void {
+    void this.plugin.redetectBinary(id).then(() => {
+      this.plugin.refreshChatIndicators();
+      this.refreshState(); // the Detected version line
+    });
   }
 
   getSettingDefinitions(): SettingDefinitionItem<ControlKey>[] {
@@ -286,6 +298,12 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         break;
       case 'registerSkillsAsCommands':
         this.plugin.reloadSkillCommands();
+        break;
+      case 'binaryPath':
+        this.redetect['claude-code']();
+        break;
+      case 'agyBinaryPath':
+        this.redetect.antigravity();
         break;
       case 'logEnabled':
       case 'logFilePath':
