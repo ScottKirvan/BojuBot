@@ -2,13 +2,13 @@
 
 **App**: BojuBot  
 **Developer**: Scott Kirvan  
-**Effective date**: 2026-10-26
+**Effective date**: 2026-10-27
 
 ---
 
 ## The short version
 
-BojuBot has no servers, no accounts, no analytics and no telemetry. It collects nothing about you.
+BojuBot has no accounts, no analytics and no telemetry. It collects nothing about you. Its one service, for problem reports, only passes on reports you choose to send and stores nothing (see [Reporting a problem](#network-requests-bojubot-makes)).
 
 BojuBot is a chat panel for an AI agent that runs on your own computer. What you send to that agent goes to the company behind it, under that company's privacy policy, not this one.
 
@@ -56,20 +56,19 @@ If you sync or back up your vault, these files go wherever your vault goes.
 
 ## Network requests BojuBot makes
 
-BojuBot itself makes no network requests. A few things you do can reach the internet:
+BojuBot itself makes no network requests, except when you click **Send** in the **Report a problem** form (see below). A few things you do can reach the internet:
 
 - **The agent.** The agent CLI talks to its provider, as described above. Web addresses you attach are fetched by the agent, not by BojuBot.
 - **Links.** Clicking a link in BojuBot opens that website in your browser.
 - **Web images.** If a reply contains an image linked by web address, Obsidian downloads it when it's shown, as it would in any note.
 
-**Reporting a problem.** BojuBot's **Report a problem** form never sends anything itself. It fills in details to help with the report (BojuBot's version and build, your installed agents, the session's agent and model, your operating system, and an error message if there was one), and optionally the last lines of the debug log. You can edit or remove all of it. Then:
+**Reporting a problem.** BojuBot's **Report a problem** form sends nothing until you click **Send**. It fills in details to help with the report (BojuBot's version and build, your installed agents, the session's agent and model, your operating system, and an error message if there was one), and optionally the last lines of the debug log. You can edit or remove all of it. Then:
 
+- **Send** sends the report, exactly as it appears in the form, to BojuBot's report service at `report.scottkirvan.com`. The service files it as a **public** issue on [BojuBot's GitHub repository](https://github.com/ScottKirvan/BojuBot/issues), where anyone can read it, under GitHub's own privacy policy. The service stores nothing: it doesn't keep reports or log their content or your IP address. It runs on Cloudflare, which sees each request as it passes through, as for any website on Cloudflare; see [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/). The issue is filed by BojuBot's GitHub app, not your GitHub account, so you don't need one.
 - **Open on GitHub** opens a new GitHub issue in your browser with the report filled in. Nothing is sent until you submit it there, and once submitted it's a **public** issue that anyone can read, under GitHub's own privacy policy.
 - **Copy report** copies the report to your clipboard, for you to send however you like.
 
 Clicking the version information in the **Help & resources** dialog copies it to your clipboard; that stays on your computer.
-
-A planned **Send** button will send reports straight from BojuBot. This policy will be updated before it ships.
 
 ## Analytics, crash reporting, and telemetry
 
@@ -77,7 +76,7 @@ None. BojuBot doesn't count users, track usage or send crash reports.
 
 ## Third parties
 
-BojuBot doesn't share data with anyone. The only third party involved is the agent provider you choose, and your data reaches them through their own CLI, under their own terms.
+BojuBot doesn't share data with anyone. The only third party involved is the agent provider you choose, and your data reaches them through their own CLI, under their own terms. A report you **Send** passes through Cloudflare and is published on GitHub, as described under [Reporting a problem](#network-requests-bojubot-makes).
 
 ## Children
 
