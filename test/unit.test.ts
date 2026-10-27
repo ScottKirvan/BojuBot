@@ -4107,14 +4107,14 @@ describe('thanks.json', () => {
 // ---------------------------------------------------------------------------
 
 describe('reportTitle', () => {
-  test('template prefix plus the first line of the description', () => {
-    assert.equal(reportTitle('bug', 'Gauge never updates\nMore detail here'), '[BUG] Gauge never updates');
+  test('template prefix plus the title, on one line', () => {
+    assert.equal(reportTitle('bug', 'Gauge never updates\nstray pasted line'), '[BUG] Gauge never updates');
     assert.equal(reportTitle('feature', 'Dark mode signature'), '[FEATURE] Dark mode signature');
-    assert.equal(reportTitle('feedback', '  love it  '), '[GENERAL] love it');
+    assert.equal(reportTitle('feedback', '  love   it  '), '[GENERAL] love it');
   });
-  test('long first lines are cut with an ellipsis; empty descriptions get a default', () => {
+  test('long titles are cut with an ellipsis; empty titles get a default', () => {
     const t = reportTitle('bug', 'x'.repeat(200));
-    assert.equal(t.length, '[BUG] '.length + 80);
+    assert.equal(t.length, '[BUG] '.length + 120);
     assert.ok(t.endsWith('…'));
     assert.equal(reportTitle('bug', '   '), '[BUG] Problem report');
     assert.equal(reportTitle('feature', ''), '[FEATURE] Feature request');
@@ -4123,16 +4123,16 @@ describe('reportTitle', () => {
 
 describe('reportBody', () => {
   test('bug: Description, Environment, optional log, and a footer', () => {
-    const body = reportBody({ type: 'bug', description: 'It broke', details: 'BojuBot 3.8.0', log: 'line 1\nline 2' });
+    const body = reportBody({ type: 'bug', title: 'T', description: 'It broke', details: 'BojuBot 3.8.0', log: 'line 1\nline 2' });
     assert.equal(body, "## Description\n\nIt broke\n\n## Environment\n\nBojuBot 3.8.0\n\n## Recent log\n\n```\nline 1\nline 2\n```\n\n---\n\n_Sent from BojuBot's Report a problem form._");
   });
   test('feature: Problem / Motivation and Additional Context; no log section when empty', () => {
-    const body = reportBody({ type: 'feature', description: 'Please add X', details: 'v1', log: '  ' });
+    const body = reportBody({ type: 'feature', title: 'T', description: 'Please add X', details: 'v1', log: '  ' });
     assert.ok(body.startsWith('## Problem / Motivation\n\nPlease add X\n\n## Additional Context\n\nv1'));
     assert.ok(!body.includes('Recent log'));
   });
   test('empty description is marked; empty details are left out', () => {
-    const body = reportBody({ type: 'bug', description: '', details: '' });
+    const body = reportBody({ type: 'bug', title: 'T', description: '', details: '' });
     assert.ok(body.includes('_(no description)_'));
     assert.ok(!body.includes('## Environment'));
   });
@@ -4141,25 +4141,26 @@ describe('reportBody', () => {
 describe('reportIssueUrl', () => {
   const repo = 'https://github.com/ScottKirvan/BojuBot';
   test('pre-fills title and body on the repo\'s new-issue page', () => {
-    const url = reportIssueUrl(repo + '/', { type: 'bug', description: 'It broke', details: 'v1' });
+    const url = reportIssueUrl(repo + '/', { type: 'bug', title: 'Gauge never updates', description: 'It broke', details: 'v1' });
     assert.ok(url.startsWith(`${repo}/issues/new?template=bug_report.md&title=`), 'blank issues are disabled org-wide, so a template is required');
     const params = new URL(url).searchParams;
-    assert.equal(params.get('title'), '[BUG] It broke');
+    assert.equal(params.get('title'), '[BUG] Gauge never updates');
     assert.ok(params.get('body')!.includes('## Description\n\nIt broke'));
+    assert.ok(!params.get('body')!.includes('Gauge never updates'), 'the title is not repeated in the body');
   });
   test('each type uses its own issue template', () => {
-    assert.equal(new URL(reportIssueUrl(repo, { type: 'feature', description: 'x', details: '' })).searchParams.get('template'), 'feature_request.md');
-    assert.equal(new URL(reportIssueUrl(repo, { type: 'feedback', description: 'x', details: '' })).searchParams.get('template'), 'general_report.md');
+    assert.equal(new URL(reportIssueUrl(repo, { type: 'feature', title: 'T', description: 'x', details: '' })).searchParams.get('template'), 'feature_request.md');
+    assert.equal(new URL(reportIssueUrl(repo, { type: 'feedback', title: 'T', description: 'x', details: '' })).searchParams.get('template'), 'general_report.md');
   });
   test('too long: the log goes first, with a note', () => {
-    const url = reportIssueUrl(repo, { type: 'bug', description: 'd', details: 'v', log: 'x'.repeat(5000) }, 2000);
+    const url = reportIssueUrl(repo, { type: 'bug', title: 'T', description: 'd', details: 'v', log: 'x'.repeat(5000) }, 2000);
     assert.ok(url.length <= 2000);
     const body = new URL(url).searchParams.get('body')!;
     assert.ok(!body.includes('## Recent log'));
     assert.match(body, /log was too long/);
   });
   test('still too long: the body is cut to fit and says to use Copy report', () => {
-    const url = reportIssueUrl(repo, { type: 'bug', description: 'y'.repeat(9000), details: 'v' }, 2000);
+    const url = reportIssueUrl(repo, { type: 'bug', title: 'T', description: 'y'.repeat(9000), details: 'v' }, 2000);
     assert.ok(url.length <= 2000, String(url.length));
     assert.match(new URL(url).searchParams.get('body')!, /Copy report/);
   });
@@ -4167,24 +4168,24 @@ describe('reportIssueUrl', () => {
 
 describe('relayRequest', () => {
   test('app, type, title and body, without our footer (the relay adds its own)', () => {
-    const req = relayRequest({ type: 'bug', description: 'It broke', details: 'v1' });
-    assert.deepEqual(req, { app: 'bojubot', type: 'bug', title: '[BUG] It broke', body: '## Description\n\nIt broke\n\n## Environment\n\nv1' });
+    const req = relayRequest({ type: 'bug', title: 'Gauge never updates', description: 'It broke', details: 'v1' });
+    assert.deepEqual(req, { app: 'bojubot', type: 'bug', title: '[BUG] Gauge never updates', body: '## Description\n\nIt broke\n\n## Environment\n\nv1' });
   });
   test('reportBody keeps the footer by default', () => {
-    assert.match(reportBody({ type: 'bug', description: 'd', details: '' }), /Sent from BojuBot/);
-    assert.doesNotMatch(reportBody({ type: 'bug', description: 'd', details: '' }, false), /Sent from|---/);
+    assert.match(reportBody({ type: 'bug', title: 'T', description: 'd', details: '' }), /Sent from BojuBot/);
+    assert.doesNotMatch(reportBody({ type: 'bug', title: 'T', description: 'd', details: '' }, false), /Sent from|---/);
   });
   test('too long: the log goes first, with a note', () => {
-    const req = relayRequest({ type: 'bug', description: 'd', details: 'v', log: 'x'.repeat(500) }, 300);
+    const req = relayRequest({ type: 'bug', title: 'T', description: 'd', details: 'v', log: 'x'.repeat(500) }, 300);
     assert.ok(req.body.length <= 300);
     assert.ok(!req.body.includes('## Recent log'));
     assert.match(req.body, /log was too long/);
   });
   test('still too long: the body is cut to the limit with a note', () => {
-    const req = relayRequest({ type: 'feature', description: 'y'.repeat(500), details: 'v' }, 200);
+    const req = relayRequest({ type: 'feature', title: 'Gauge', description: 'y'.repeat(500), details: 'v' }, 200);
     assert.equal(req.body.length, 200);
     assert.ok(req.body.endsWith('_…cut to fit._'));
-    assert.equal(req.title, '[FEATURE] ' + 'y'.repeat(79) + '…');
+    assert.equal(req.title, '[FEATURE] Gauge');
   });
 });
 
@@ -4203,7 +4204,7 @@ describe('readRelayResponse', () => {
     assert.match(msg(413, { error: 'payload_too_large' }), /too long to send/);
     assert.match(msg(503, { error: 'disabled' }), /switched off/);
     assert.match(msg(503, { error: 'not_configured' }), /switched off/);
-    assert.match(msg(400, { error: 'invalid_report', field: 'title' }), /first line/);
+    assert.match(msg(400, { error: 'invalid_report', field: 'title' }), /title is too long/);
     assert.match(msg(400, { error: 'invalid_report', field: 'body' }), /couldn't be sent as it is/);
   });
   test('anything else names the status and points at the fallbacks', () => {

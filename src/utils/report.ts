@@ -10,7 +10,9 @@ export type ReportType = 'bug' | 'feature' | 'feedback';
 
 export interface ReportInput {
   type: ReportType;
-  /** What went wrong, or what they'd like. */
+  /** One-line summary; the issue title after its type prefix. */
+  title: string;
+  /** What went wrong, or what they'd like. Goes in the body only. */
   description: string;
   /** Version line, agent and model, error text — already reviewed and editable. */
   details: string;
@@ -20,16 +22,17 @@ export interface ReportInput {
 
 /** Title prefixes the org's issue templates use. */
 const TITLE_PREFIX: Record<ReportType, string> = { bug: '[BUG] ', feature: '[FEATURE] ', feedback: '[GENERAL] ' };
-const TITLE_MAX = 80;
+/** Longest title the form accepts (the field's maxlength); GitHub and the relay allow 256. */
+export const TITLE_MAX = 120;
 /** The org's issue templates. Blank issues are disabled org-wide, so a link
  *  without a template would land on the template picker and lose the report. */
 const TEMPLATE: Record<ReportType, string> = { bug: 'bug_report.md', feature: 'feature_request.md', feedback: 'general_report.md' };
 /** Browsers and GitHub cope with URLs well beyond this, but it keeps us safe everywhere. */
 export const REPORT_URL_MAX = 7000;
 
-/** "[BUG] First line of the description", trimmed to a readable length. */
-export function reportTitle(type: ReportType, description: string): string {
-  const first = description.trim().split(/\r?\n/)[0].replace(/\s+/g, ' ');
+/** "[BUG] The title", on one line and no longer than TITLE_MAX. */
+export function reportTitle(type: ReportType, title: string): string {
+  const first = title.trim().split(/\r?\n/)[0].replace(/\s+/g, ' ');
   const text = first.length > TITLE_MAX ? first.slice(0, TITLE_MAX - 1).trimEnd() + '…' : first;
   return TITLE_PREFIX[type] + (text || (type === 'feature' ? 'Feature request' : type === 'bug' ? 'Problem report' : 'Feedback'));
 }
@@ -62,7 +65,7 @@ export function reportBody(input: ReportInput, footer = true): string {
 export function reportIssueUrl(sourceRepoUrl: string, input: ReportInput, maxLength = REPORT_URL_MAX): string {
   const base = `${sourceRepoUrl.replace(/\/+$/, '')}/issues/new`;
   const make = (body: string) =>
-    `${base}?template=${TEMPLATE[input.type]}&title=${encodeURIComponent(reportTitle(input.type, input.description))}&body=${encodeURIComponent(body)}`;
+    `${base}?template=${TEMPLATE[input.type]}&title=${encodeURIComponent(reportTitle(input.type, input.title))}&body=${encodeURIComponent(body)}`;
 
   let url = make(reportBody(input));
   if (url.length <= maxLength) return url;
@@ -94,7 +97,7 @@ export interface RelayRequest {
  * first, then is cut with a note, so a long log never makes Send fail.
  */
 export function relayRequest(input: ReportInput, maxBody = RELAY_BODY_MAX): RelayRequest {
-  const request = (body: string): RelayRequest => ({ app: RELAY_APP, type: input.type, title: reportTitle(input.type, input.description), body });
+  const request = (body: string): RelayRequest => ({ app: RELAY_APP, type: input.type, title: reportTitle(input.type, input.title), body });
   let body = reportBody(input, false);
   if (body.length <= maxBody) return request(body);
   body = reportBody({ ...input, log: undefined }, false) + '\n\n_The recent log was too long to include._';
@@ -126,7 +129,7 @@ export function readRelayResponse(status: number, json: unknown): SendResult {
       return { ok: false, message: `The report is too long to send. Shorten the details or the log, or ${lower(fallback)}` };
     case 'invalid_report':
       return { ok: false, message: data.field === 'title'
-        ? 'The first line of the description is too long. Shorten it and try again.'
+        ? 'The title is too long. Shorten it and try again.'
         : `The report couldn't be sent as it is. ${fallback}` };
     case 'disabled':
     case 'not_configured':

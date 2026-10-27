@@ -40,7 +40,9 @@ The **Help & resources** dialog is the place to go when you're stuck. Open it wi
 
 Found a bug, want a feature, or have feedback? Open **Report a problem** from the Help & resources dialog, `/bug` in the chat, the **BojuBot: Report a problem** command, **Settings → Help & feedback**, or the **Report this problem** link on an error message.
 
-The form is filled in for you: BojuBot's version and build, your installed agents, the session's agent and model, your OS, and the error if you opened it from one. Everything is editable, so remove anything you'd rather not share. You can also include the last lines of the debug log (turn on **Settings → Logging** first); they're shown for editing too, because logs can contain note names and parts of messages.
+Give the report a short **Title** (it becomes the issue's title) and a **Description**. For a bug, the description is most useful with the steps that make it happen, so it can be reproduced.
+
+The **Details** are filled in for you: BojuBot's version and build, your installed agents, the session's agent and model, your OS, and the error if you opened it from one. Everything is editable, so remove anything you'd rather not share. You can also include the last lines of the debug log (turn on **Settings → Logging** first); they're shown for editing too, because logs can contain note names and parts of messages.
 
 - **Send** <Badge type="warning" text="Beta" /> files the report as a GitHub issue for you; you don't need a GitHub account. When it's done, the form shows a link to the issue so you can follow replies.
 - **Open on GitHub** opens the report as a new GitHub issue, ready for you to submit.
