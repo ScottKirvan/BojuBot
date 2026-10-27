@@ -41,6 +41,7 @@ import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice, claudeAuthFailure, claudeAuthReply, isAgyAuthFailure, CLAUDE_AUTH, AGY_AUTH, CLAUDE_SIGN_IN_HELP_URL, AGY_SIGN_IN_HELP_URL } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities } from '../src/utils/cliCapabilities';
+import { fileStamp } from '../src/utils/fileStamp';
 import { extractActions } from '../src/utils/actionParser';
 import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
 import { resolveShellEnv } from '../src/utils/shellEnv';
@@ -421,6 +422,24 @@ const HELP_OLD = [
 
 const CAPS_2_1_286 = parseCliCapabilities(HELP_2_1_286, '2.1.286 (Claude Code)\n');
 const CAPS_OLD = parseCliCapabilities(HELP_OLD, '2.1.70 (Claude Code)');
+
+describe('fileStamp', () => {
+  test('combines modified time and size', () => {
+    assert.equal(fileStamp('claude.exe', () => ({ mtimeMs: 1700000000123.5, size: 4096 })), '1700000000123.5:4096');
+  });
+  test('changes when the binary is replaced', () => {
+    const before = fileStamp('agy', () => ({ mtimeMs: 1, size: 100 }));
+    assert.notEqual(fileStamp('agy', () => ({ mtimeMs: 2, size: 100 })), before);
+    assert.notEqual(fileStamp('agy', () => ({ mtimeMs: 1, size: 101 })), before);
+  });
+  test('is null when the file cannot be read', () => {
+    assert.equal(fileStamp('missing', () => { throw new Error('ENOENT'); }), null);
+  });
+  test('reads a real file', () => {
+    assert.match(fileStamp('package.json') ?? '', /^\d+(\.\d+)?:\d+$/);
+    assert.equal(fileStamp('no-such-file.exe'), null);
+  });
+});
 
 describe('parseCliCapabilities', () => {
   test('reads the version from --version output', () => {

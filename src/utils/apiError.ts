@@ -200,7 +200,7 @@ export function formatApiError(err: ApiError, platform: string): ApiErrorDisplay
       title: "The Antigravity CLI couldn't start this mode's agent",
       details: [
         err.message.split('\n')[0],
-        "Until Obsidian restarts, new Gemini sessions start without it and Chat only is unavailable. Send your message again.",
+        "Until the Antigravity CLI is updated (or Obsidian restarts), new Gemini sessions start without it and Chat only is unavailable. Send your message again.",
       ],
     };
   }

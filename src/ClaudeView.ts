@@ -1002,6 +1002,8 @@ export class ClaudeView extends ItemView {
     const backend = this.plugin.getBackend(id);
     log('ClaudeView: CLI capabilities updated —', formatCliVersion(this.plugin.getCapabilities(id), backend.cliName));
     this.updateModelIndicator();
+    // A binary path set in settings found the agent this setup card was waiting for
+    if (this.setupShown && this.plugin.getBinaryPath(this.plugin.settings.backend)) void this.onOpen();
   }
 
   /** The backend for new sessions changed in settings. An untouched new session follows it. */
@@ -1659,6 +1661,9 @@ export class ClaudeView extends ItemView {
       new Notice(`${this.plugin.brand.name}: a turn is already running — wait for it to finish or press stop first.`);
       return;
     }
+
+    // An agent CLI updated since it was probed: probe it again before this turn
+    await this.plugin.refreshIfCliChanged(this.coordinator.backendId);
 
     if (!this.plugin.getBinaryPath(this.coordinator.backendId)) {
       this.appendMessage('system', `${sentenceStart(this.coordinator.backend.cliPhrase)} wasn't found. Check ${this.plugin.brand.name} settings.`);
