@@ -232,9 +232,11 @@ export class ClaudeView extends ItemView {
   private _setupCoordinatorEvents(): void {
     // ── Session lifecycle ────────────────────────────────────────────────────
 
-    // Sponsorship milestones count sessions that actually got a reply (#384)
+    // Sponsorship milestones count sessions that actually got a reply (#384).
+    // A reply from the agent new sessions use also settles that choice.
     this.coordinator.on('session:started', () => {
       this.plugin.settings.startedSessionCount += 1;
+      if (this.coordinator.backendId === this.plugin.settings.backend) this.plugin.settings.backendChosen = true;
       void this.plugin.saveSettings();
     });
 
@@ -2001,6 +2003,13 @@ export class ClaudeView extends ItemView {
     const isWin = process.platform === 'win32';
     const card = this.messagesEl.createDiv({ cls: 'bojubot-setup-card' });
 
+    // No agent picked yet and none installed (the plugin moves new sessions to
+    // an installed one on its own): offer both
+    if (!this.plugin.settings.backendChosen) {
+      this.renderInstallAgent(card);
+      return;
+    }
+
     if (this.plugin.settings.backend !== 'claude-code') {
       this.renderAgentNotFound(card);
       return;
@@ -2013,6 +2022,84 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-intro',
     });
     this.renderUseOtherAgent(card);
+    this.renderClaudeSteps(card);
+
+    // Already installed? Override path
+    const pathSection = card.createDiv({ cls: 'bojubot-setup-step' });
+    pathSection.createEl('p', {
+      text: 'Already installed and still seeing this?',
+      cls: 'bojubot-setup-step-title',
+    });
+    pathSection.createEl('p', {
+      text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude Code binary below, then click check again.',
+      cls: 'bojubot-setup-note',
+    });
+    const pathRow = pathSection.createDiv({ cls: 'bojubot-setup-code-row' });
+    const pathInput = pathRow.createEl('input', { cls: 'bojubot-setup-path-input' });
+    pathInput.type = 'text';
+    pathInput.placeholder = isWin ? 'C:\\Users\\you\\AppData\\Local\\Programs\\claude\\claude.exe' : '/usr/local/bin/claude';
+    pathInput.value = this.plugin.settings.binaryPath ?? '';
+    pathInput.addEventListener('change', () => {
+      this.plugin.settings.binaryPath = pathInput.value.trim();
+      void this.plugin.saveSettings();
+    });
+
+    // Action buttons
+    const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
+    this.renderInstallGuideLink(btnRow, 'claude-code');
+
+    const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
+    checkBtn.addEventListener('click', () => {
+      if (this.plugin.detectBinary(this.plugin.settings.backend)) {
+        void this.onOpen();
+      } else {
+        const err = card.createEl('p', {
+          text: isWin
+            ? 'Still not found. Ensure you installed in PowerShell (not WSL), then restart Obsidian.'
+            : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
+          cls: 'bojubot-setup-error',
+        });
+        window.setTimeout(() => err.remove(), 6000);
+      }
+    });
+  }
+
+  /** First run with no agent installed: both agents, side by side, neither one an error. */
+  private renderInstallAgent(card: HTMLElement) {
+    const name = this.plugin.brand.name;
+    card.createEl('h3', { text: 'Install an agent', cls: 'bojubot-setup-title' });
+    card.createEl('p', {
+      text: `${name} works with ${this.agentLabelList()}. Install either one and sign in, then click Check again. ` +
+        `Already installed? Set its binary path in ${name} settings.`,
+      cls: 'bojubot-setup-intro',
+    });
+
+    card.createEl('h4', { text: `${this.plugin.getBackend('claude-code').label}: needs a Claude Pro or Max subscription`, cls: 'bojubot-setup-title' });
+    this.renderClaudeSteps(card);
+    this.renderInstallGuideLink(card.createDiv({ cls: 'bojubot-setup-btn-row' }), 'claude-code');
+
+    card.createEl('h4', { text: `${this.plugin.getBackend('antigravity').label}: needs a Google account`, cls: 'bojubot-setup-title' });
+    this.renderAgySignIn(card);
+    this.renderInstallGuideLink(card.createDiv({ cls: 'bojubot-setup-btn-row' }), 'antigravity');
+
+    const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
+    this.renderOpenSettingsButton(btnRow);
+    const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
+    checkBtn.addEventListener('click', () => void (async () => {
+      const found = BACKEND_IDS.filter(id => this.plugin.detectBinary(id));
+      if (found.length) {
+        await this.plugin.settleNewSessionBackend();
+        await this.onOpen();
+        return;
+      }
+      const err = card.createEl('p', { text: 'Still no agent found. Install one, or set its binary path in settings.', cls: 'bojubot-setup-error' });
+      window.setTimeout(() => err.remove(), 6000);
+    })());
+  }
+
+  /** Install, verify and log in steps for Claude Code. */
+  private renderClaudeSteps(card: HTMLElement) {
+    const isWin = process.platform === 'win32';
 
     // Step 1 — Install
     const step1 = card.createDiv({ cls: 'bojubot-setup-step' });
@@ -2041,51 +2128,33 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-note',
     });
     this.renderCodeRow(step3, 'claude login');
+  }
 
-    // Already installed? Override path
-    const pathSection = card.createDiv({ cls: 'bojubot-setup-step' });
-    pathSection.createEl('p', {
-      text: 'Already installed and still seeing this?',
-      cls: 'bojubot-setup-step-title',
-    });
-    pathSection.createEl('p', {
-      text: 'Claude Code may not be on the auto-detected path. Enter the full path to your Claude Code binary below, then click check again.',
+  /** How to sign in to the Antigravity CLI once it's installed. */
+  private renderAgySignIn(card: HTMLElement) {
+    const step = card.createDiv({ cls: 'bojubot-setup-step' });
+    step.createEl('p', { text: 'To sign in after installing', cls: 'bojubot-setup-step-title' });
+    step.createEl('p', {
+      text: 'Run this once in a terminal. It opens a browser window where you sign in; close the terminal afterwards.',
       cls: 'bojubot-setup-note',
     });
-    const pathRow = pathSection.createDiv({ cls: 'bojubot-setup-code-row' });
-    const pathInput = pathRow.createEl('input', { cls: 'bojubot-setup-path-input' });
-    pathInput.type = 'text';
-    pathInput.placeholder = isWin ? 'C:\\Users\\you\\AppData\\Local\\Programs\\claude\\claude.exe' : '/usr/local/bin/claude';
-    pathInput.value = this.plugin.settings.binaryPath ?? '';
-    pathInput.addEventListener('change', () => {
-      this.plugin.settings.binaryPath = pathInput.value.trim();
-      void this.plugin.saveSettings();
-    });
+    this.renderCodeRow(step, 'agy');
+  }
 
-    // Action buttons
-    const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
+  private renderInstallGuideLink(row: HTMLElement, id: BackendId) {
+    const [text, href] = id === 'claude-code'
+      ? ['Claude Code install guide ↗', 'https://code.claude.com/docs/en/overview#native-install-recommended']
+      : ['Antigravity CLI install guide ↗', 'https://antigravity.google/docs/getting-started?tab=cli#download-and-install'];
+    const link = row.createEl('a', { text, href, cls: 'bojubot-setup-docs-link' });
+    link.setAttr('target', '_blank');
+    link.setAttr('rel', 'noopener');
+  }
 
-    const docsLink = btnRow.createEl('a', {
-      text: 'Claude Code install guide ↗',
-      href: 'https://code.claude.com/docs/en/overview#native-install-recommended',
-      cls: 'bojubot-setup-docs-link',
-    });
-    docsLink.setAttr('target', '_blank');
-    docsLink.setAttr('rel', 'noopener');
-
-    const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
-    checkBtn.addEventListener('click', () => {
-      if (this.plugin.detectBinary(this.plugin.settings.backend)) {
-        void this.onOpen();
-      } else {
-        const err = card.createEl('p', {
-          text: isWin
-            ? 'Still not found. Ensure you installed in PowerShell (not WSL), then restart Obsidian.'
-            : 'Still not found. Make sure claude is on your PATH, then restart Obsidian.',
-          cls: 'bojubot-setup-error',
-        });
-        window.setTimeout(() => err.remove(), 6000);
-      }
+  private renderOpenSettingsButton(row: HTMLElement) {
+    const settingsBtn = row.createEl('button', { text: 'Open settings', cls: 'bojubot-setup-check-btn' });
+    settingsBtn.addEventListener('click', () => {
+      this.appInternal.setting.open();
+      this.appInternal.setting.openTabById('bojubot');
     });
   }
 
@@ -2113,6 +2182,7 @@ export class ClaudeView extends ItemView {
 
   private async useAgentForNewSessions(id: BackendId): Promise<void> {
     this.plugin.settings.backend = id;
+    this.plugin.settings.backendChosen = true;
     await this.plugin.saveSettings();
     this.plugin.onDefaultBackendChanged();
     await this.onOpen();
@@ -2130,31 +2200,11 @@ export class ClaudeView extends ItemView {
       cls: 'bojubot-setup-intro',
     });
     this.renderUseOtherAgent(card);
-    if (id === 'antigravity') {
-      const step = card.createDiv({ cls: 'bojubot-setup-step' });
-      step.createEl('p', { text: 'To sign in after installing', cls: 'bojubot-setup-step-title' });
-      step.createEl('p', {
-        text: 'Run this once in a terminal. It opens a browser window where you sign in; close the terminal afterwards.',
-        cls: 'bojubot-setup-note',
-      });
-      this.renderCodeRow(step, 'agy');
-    }
+    if (id === 'antigravity') this.renderAgySignIn(card);
 
     const btnRow = card.createDiv({ cls: 'bojubot-setup-btn-row' });
-    if (id === 'antigravity') {
-      const docsLink = btnRow.createEl('a', {
-        text: 'Antigravity CLI install guide ↗',
-        href: 'https://antigravity.google/docs/getting-started?tab=cli#download-and-install',
-        cls: 'bojubot-setup-docs-link',
-      });
-      docsLink.setAttr('target', '_blank');
-      docsLink.setAttr('rel', 'noopener');
-    }
-    const settingsBtn = btnRow.createEl('button', { text: 'Open settings', cls: 'bojubot-setup-check-btn' });
-    settingsBtn.addEventListener('click', () => {
-      this.appInternal.setting.open();
-      this.appInternal.setting.openTabById('bojubot');
-    });
+    if (id === 'antigravity') this.renderInstallGuideLink(btnRow, id);
+    this.renderOpenSettingsButton(btnRow);
     const checkBtn = btnRow.createEl('button', { text: 'Check again', cls: 'mod-cta bojubot-setup-check-btn' });
     checkBtn.addEventListener('click', () => {
       // The user may have switched the agent in settings meanwhile
@@ -2848,13 +2898,16 @@ export class ClaudeView extends ItemView {
     }
 
     const prevBackend = this.plugin.settings.backend;
+    const prevChosen = this.plugin.settings.backendChosen;
     const prevModel = this.plugin.getDefaultModel(id);
     this.plugin.settings.backend = id;
+    this.plugin.settings.backendChosen = true;
     this.plugin.setDefaultModel(id, model.id);
     try {
       await this.plugin.saveSettings();
     } catch (err) {
       this.plugin.settings.backend = prevBackend;
+      this.plugin.settings.backendChosen = prevChosen;
       this.plugin.setDefaultModel(id, prevModel);
       log('error', 'Failed to save model setting', err);
       new Notice('Failed to save model setting. Please try again.');
