@@ -157,6 +157,4 @@ You can change this in **Settings → BojuBot → Session storage path**:
 | `_sessions` (vault-relative)     | Sessions stored at `_sessions/` in your vault root. Tracked by git if not excluded. |
 | `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely.                                         |
 
-::: warning Sessions are not migrated
-Changing this setting affects **new sessions only**. Existing sessions remain in their original location and will not appear in the Sessions panel until you change the path back. If you want to move existing sessions, copy the `.json` files manually to the new path before restarting BojuBot.
-:::
+When you close settings after changing the path, BojuBot offers to move your existing sessions (and Gemini session transcripts) to the new folder. A file that already exists in the new folder is never overwritten; it stays in the old folder, and a notice says how many were left. If you choose **Leave them**, those sessions stay in the old folder and aren't listed until you set the old path again. No restart is needed either way.
