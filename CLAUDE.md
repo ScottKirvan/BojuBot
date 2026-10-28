@@ -137,6 +137,7 @@ Lint and TypeScript violations are `fix:` commits, not `chore:`.
 npm install && npm run build   # one-shot
 npm run dev                    # watch mode
 ```
+**Builds must be reproducible.** Obsidian's release check rebuilds `main.js` from the release's source and warns when it differs from the uploaded file. Never bake in anything that changes between builds of the same commit: no clock time, no environment-only values. `__BUILD_INFO__` (`scripts/buildInfo.mjs`) uses the commit's time and records the branch only when it isn't `main`; `.gitattributes` keeps bundled `src/**/*.md` at LF so Windows builds match CI.
 
 ## Windows gotchas
 - Claude Code must be installed AND logged in natively in PowerShell. `winget install Anthropic.ClaudeCode` + `claude login`.
