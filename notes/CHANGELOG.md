@@ -12,7 +12,7 @@
 
 ### Bug Fixes
 
-* stop the compact confirmation widening the chat panel ([8c67b3c](https://github.com/ScottKirvan/BojuBot/commit/8c67b3cd70416fb9b030ea430530c485517ead9a))
+* stop the compact confirmation widening the chat panel ([#430](https://github.com/ScottKirvan/BojuBot/pull/430))
 
 ## [3.8.0](https://github.com/ScottKirvan/BojuBot/compare/3.7.0...3.8.0) (2026-10-28)
 
