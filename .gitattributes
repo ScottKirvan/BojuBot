@@ -1,0 +1,4 @@
+# Markdown under src/ is bundled into main.js as text (orientation, references).
+# LF everywhere, so a build on Windows gives the same main.js as CI on Linux and
+# the agent's instructions carry no stray \r.
+src/**/*.md text eol=lf
