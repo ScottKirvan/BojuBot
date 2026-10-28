@@ -1740,7 +1740,10 @@
 }
 
 /* ── Compact-session confirmation panel ── */
+/* Out of the layout until shown: parked off to the side, it widened the chat
+   panel and gave it a horizontal scrollbar that revealed the panel. */
 .bojubot-compact-confirm {
+  display: none;
   position: absolute;
   right: 0;
   bottom: 100%;
@@ -1751,12 +1754,22 @@
   padding: 12px 14px;
   box-shadow: -4px -4px 16px rgba(0, 0, 0, 0.15);
   z-index: 50;
-  transform: translateX(110%);
-  transition: transform 220ms ease;
 }
 
 .bojubot-compact-confirm.is-visible {
-  transform: translateX(0);
+  display: block;
+  animation: bojubot-compact-confirm-in 220ms ease;
+}
+
+@keyframes bojubot-compact-confirm-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bojubot-compact-confirm.is-visible {
+    animation: none;
+  }
 }
 
 .bojubot-compact-confirm-msg {
