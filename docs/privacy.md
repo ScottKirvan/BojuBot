@@ -8,7 +8,7 @@
 
 ## The short version
 
-BojuBot has no accounts, no analytics and no telemetry. It collects nothing about you. Its one service, for problem reports, only passes on reports you choose to send and stores nothing (see [Reporting a problem](#network-requests-bojubot-makes)).
+BojuBot has no accounts, no analytics and no telemetry. It collects nothing about you: the little it records about your use (such as how many sessions you've started) stays on your computer. Its one service, for problem reports, only passes on reports you choose to send and stores nothing (see [Reporting a problem](#network-requests-bojubot-makes)).
 
 BojuBot is a chat panel for an AI agent that runs on your own computer. What you send to that agent goes to the company behind it, under that company's privacy policy, not this one.
 
@@ -43,7 +43,7 @@ Everything BojuBot saves stays on your computer: in your vault, in Obsidian's co
 
 - **Session files.** A small JSON file per session with its name, settings and the agent's conversation ID, in `.obsidian/bojubot/sessions/` by default. You can choose another folder in settings.
 - **Transcripts for Antigravity sessions.** Antigravity's own history can't be read back, so BojuBot keeps a copy of each conversation next to the session file (`<id>.transcript.jsonl`).
-- **Settings.** Your BojuBot settings, in `.obsidian/plugins/bojubot/data.json`.
+- **Settings.** Your BojuBot settings, in `.obsidian/plugins/bojubot/data.json`. The same file holds a few records about your use, described under [Analytics](#analytics-crash-reporting-and-telemetry), and your name if the agent learns it (when you tell it what to call you), so the welcome screen can greet you.
 - **Attached images and PDFs.** Images and PDFs you attach with the attach button, drag in or paste as a screenshot are copied to `.obsidian/plugins/bojubot/tmp/` so the agent can read them. A file copied in your file manager and pasted is read where it is, not copied. BojuBot doesn't delete these copies; remove the folder's contents whenever you like.
 - **The debug log.** Off by default. If you turn it on, BojuBot writes a log file, which can include the start of your messages (and, at verbose detail, the agent's raw output), to `.obsidian/plugins/bojubot/bojubot-debug.log` or the path you choose.
 - **Open chat tabs.** Obsidian's workspace file (`.obsidian/workspace.json`) remembers which session each chat tab shows, so your tabs come back after a restart.
@@ -72,7 +72,14 @@ Clicking the version information in the **Help & resources** dialog copies it to
 
 ## Analytics, crash reporting, and telemetry
 
-None. BojuBot doesn't count users, track usage or send crash reports.
+None. Nothing about how you use BojuBot leaves your computer: it doesn't count users, report usage or send crash reports.
+
+BojuBot does keep a few records in its settings file, only to decide when to show its occasional messages:
+
+- how many sessions you've started that got a reply, and the last count at which the support message was shown (it appears after 10, 20, 30 and 50 sessions, then every 50)
+- when the support message and the thank-you card were last shown, so each appears at most once a day
+
+So that only people who use BojuBot regularly are asked for support, it also checks how recently your saved sessions were used, from their session files. None of this is ever sent anywhere. Turn on **Hide the support message** in settings to stop the support message.
 
 ## Third parties
 
@@ -96,6 +103,8 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-10-27 | 3.8.0 | Listed the records BojuBot keeps on your computer to time its support message and thank-you card (sessions started, when each was last shown), and the name the agent learns for the welcome screen. |
+| 2026-10-27 | 3.8.0 | Added the report form's **Send** and the report service it uses (it stores nothing; reports become public GitHub issues and pass through Cloudflare). The short version no longer says BojuBot has no servers. |
 | 2026-10-26 | 3.8.0 | Added the Antigravity agent definitions BojuBot writes to `~/.gemini/config/agents/`, and the chat tabs Obsidian's workspace file remembers. |
 | 2026-10-26 | 3.8.0 | Added what Chat only keeps from the agent: nothing from your vault is sent. |
 | 2026-10-25 | 3.8.0 | Corrected which attached images and PDFs are copied into the plugin folder (and that the copies aren't deleted), and that the open note's path is sent with every message. |
