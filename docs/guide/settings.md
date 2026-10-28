@@ -9,7 +9,7 @@ On Obsidian 1.13 or later you can also find any BojuBot setting with the search 
 | Setting                            | Default | Description                                                                                                                                                                          |
 | ----------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Claude Code binary path**             | *(auto-detect)* | Full path to the `claude` executable. Leave blank to auto-detect from PATH and common install locations. The description below the field shows the detected Claude Code version (or *unknown* if it couldn't be checked). |
-| **Antigravity CLI binary path**        | *(auto-detect)* | Full path to the `agy` executable (Google's Antigravity CLI, in beta builds). Leave blank to auto-detect from PATH and `%LOCALAPPDATA%\agy\bin`. The description shows the detected Antigravity version. |
+| **Antigravity CLI binary path**        | *(auto-detect)* | Full path to the `agy` executable (Google's Antigravity CLI). Leave blank to auto-detect from PATH and `%LOCALAPPDATA%\agy\bin`. The description shows the detected Antigravity version. |
 
 ## Chat
 

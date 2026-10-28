@@ -42,7 +42,7 @@ features:
 
   - icon: 🔌
     title: Claude or Gemini, no API key
-    details: Use Claude through Claude Code with your Claude Pro or Max subscription, or Gemini through Google's Antigravity CLI (in beta builds). BojuBot runs the agent on your computer with the account you already have. No separate billing.
+    details: Use Claude through Claude Code with your Claude Pro or Max subscription, or Gemini through Google's Antigravity CLI. BojuBot runs the agent on your computer with the account you already have. No separate billing.
 ---
 
 <!-- Begin Sponsors -->

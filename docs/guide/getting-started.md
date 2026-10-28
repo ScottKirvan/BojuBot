@@ -5,7 +5,7 @@
 - **Obsidian desktop**: Windows, Mac, or Linux. Mobile is not supported.
 - **An AI agent**, installed and signed in. BojuBot doesn't talk to an AI service itself: it runs an agent program (a CLI) on your computer and uses your existing account with it, so there's no API key to set up. Pick one:
   - **Claude**, through Anthropic's **Claude Code** CLI, listed in BojuBot as **Claude (Claude Code)**. Needs a **Claude Pro or Max subscription**.
-  - **Gemini**, through **Google's Antigravity CLI** (`agy`) <Badge type="warning" text="Beta" />, listed in BojuBot as **Gemini (Antigravity CLI)**. Needs a **Google account with Antigravity access**; usage counts against your Antigravity quota, not a Claude plan. Antigravity also offers some Claude and GPT-OSS models on the same quota.
+  - **Gemini**, through **Google's Antigravity CLI** (`agy`), listed in BojuBot as **Gemini (Antigravity CLI)**. Needs a **Google account with Antigravity access**; usage counts against your Antigravity quota, not a Claude plan. Antigravity also offers some Claude and GPT-OSS models on the same quota.
 
 You only need one of them, and BojuBot uses whichever one you installed. If you install both, you can switch between them at any time (see [Switching agents later](#switching-agents-later)), and [Choosing an Agent](./agents) compares the two.
 
@@ -41,11 +41,7 @@ There's nothing to set up in BojuBot: it finds Claude Code on its own.
 
 ---
 
-## Installing Antigravity (for Gemini) <Badge type="warning" text="Beta" />
-
-::: warning Not released yet
-Gemini support through Antigravity is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version only runs Claude Code.
-:::
+## Installing Antigravity (for Gemini)
 
 To use Gemini, BojuBot runs Google's Antigravity CLI (`agy`), which runs Gemini. In BojuBot's settings and menus it's listed as **Gemini (Antigravity CLI)**.
 

@@ -67,11 +67,7 @@ Read only can't run Obsidian commands through BojuBot either, because commands c
 
 ---
 
-## Permissions on each agent <Badge type="warning" text="Beta" />
-
-::: warning Not released yet
-Antigravity support is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version only runs Claude Code.
-:::
+## Permissions on each agent
 
 The four modes mean the same thing on both agents, but each agent CLI enforces them its own way, so the details differ.
 
