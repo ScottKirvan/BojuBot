@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.8.2](https://github.com/ScottKirvan/BojuBot/compare/3.8.1...3.8.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* make release builds reproducible ([5aec458](https://github.com/ScottKirvan/BojuBot/commit/5aec458c25c724bc9562157f9d6a6af5503e6353))
+
 ## [3.8.1](https://github.com/ScottKirvan/BojuBot/compare/3.8.0...3.8.1) (2026-10-28)
 
 
