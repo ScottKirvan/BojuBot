@@ -1,15 +1,17 @@
 import type { BuildInfo } from '../src/utils/buildInfo';
 
 export interface GitFacts {
-  commit: string | null;
   branch: string | null;
+  /** `git log -1 --format=%ct`: the commit's time in seconds since the epoch. */
+  commitTime: string | null;
   dirty: boolean | null;
 }
 
 export interface BuildEnv {
-  GITHUB_SHA?: string;
   GITHUB_HEAD_REF?: string;
+  GITHUB_REF?: string;
   GITHUB_REF_NAME?: string;
+  SOURCE_DATE_EPOCH?: string;
 }
 
 export function resolveBuildInfo(inputs: { git: GitFacts; env: BuildEnv; now: Date }): BuildInfo;

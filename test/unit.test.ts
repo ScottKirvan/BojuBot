@@ -3941,65 +3941,70 @@ describe('resolveBrand claudeCodeTips', () => {
 // ---------------------------------------------------------------------------
 
 describe('resolveBuildInfo', () => {
-  const FULL_SHA = '0123456789abcdef0123456789abcdef01234567';
   const NOW = new Date('2026-09-21T08:32:45Z');
+  // 2026-10-28 01:20 UTC
+  const COMMIT_TIME = String(Date.UTC(2026, 9, 28, 1, 20) / 1000);
+  const clean = { branch: 'main', commitTime: COMMIT_TIME, dirty: false };
 
-  test('uses git facts when present, shortening the commit to 7 characters', () => {
-    assert.deepEqual(resolveBuildInfo({ git: { commit: FULL_SHA, branch: 'feat/about-box', dirty: false }, env: {}, now: NOW }),
-      { commit: '0123456', branch: 'feat/about-box', builtAt: '2026-09-21 08:32 UTC', dirty: false });
+  test('a clean build records the commit time, not the clock, so a rebuild matches', () => {
+    assert.deepEqual(resolveBuildInfo({ git: clean, env: {}, now: NOW }), { branch: '', builtAt: '2026-10-28 01:20 UTC' });
+    assert.deepEqual(resolveBuildInfo({ git: clean, env: {}, now: new Date() }), resolveBuildInfo({ git: clean, env: {}, now: NOW }));
   });
 
-  test('falls back to GITHUB_SHA and GITHUB_REF_NAME when git has nothing (CI release builds)', () => {
-    const info = resolveBuildInfo({ git: { commit: null, branch: null, dirty: null }, env: { GITHUB_SHA: 'FEDCBA9876543210', GITHUB_REF_NAME: '3.9.0' }, now: NOW });
-    assert.equal(info.commit, 'fedcba9');
-    assert.equal(info.branch, '3.9.0');
+  test('the release build (main) and a rebuild from its tag (detached HEAD) give the same info', () => {
+    const release = resolveBuildInfo({ git: clean, env: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_NAME: 'main' }, now: NOW });
+    const rebuild = resolveBuildInfo({ git: { ...clean, branch: '' }, env: {}, now: new Date('2026-11-01T00:00:00Z') });
+    assert.deepEqual(release, rebuild);
+    const tagCi = resolveBuildInfo({ git: { ...clean, branch: 'HEAD' }, env: { GITHUB_REF: 'refs/tags/3.8.1', GITHUB_REF_NAME: '3.8.1' }, now: NOW });
+    assert.deepEqual(tagCi, release, 'a tag is not a branch');
   });
 
-  test("prefers a pull request's source branch over its N/merge ref", () => {
-    const info = resolveBuildInfo({ git: { commit: null, branch: null, dirty: null }, env: { GITHUB_HEAD_REF: 'feat/x', GITHUB_REF_NAME: '42/merge' }, now: NOW });
-    assert.equal(info.branch, 'feat/x');
+  test('another branch is recorded: git first, then a pull request source, then a branch ref', () => {
+    assert.equal(resolveBuildInfo({ git: { ...clean, branch: 'feat/about-box' }, env: {}, now: NOW }).branch, 'feat/about-box');
+    assert.equal(resolveBuildInfo({ git: { ...clean, branch: 'refs/heads/dev' }, env: {}, now: NOW }).branch, 'dev');
+    assert.equal(resolveBuildInfo({ git: { ...clean, branch: null }, env: { GITHUB_HEAD_REF: 'feat/x', GITHUB_REF: 'refs/pull/42/merge' }, now: NOW }).branch, 'feat/x');
+    assert.equal(resolveBuildInfo({ git: { ...clean, branch: null }, env: { GITHUB_REF: 'refs/heads/dev' }, now: NOW }).branch, 'dev');
+    assert.equal(resolveBuildInfo({ git: { ...clean, branch: null }, env: { GITHUB_REF: 'refs/pull/42/merge' }, now: NOW }).branch, '');
   });
 
-  test('a detached HEAD counts as no branch', () => {
-    for (const branch of ['', 'HEAD']) {
-      assert.equal(resolveBuildInfo({ git: { commit: FULL_SHA, branch, dirty: false }, env: { GITHUB_REF_NAME: 'main' }, now: NOW }).branch, 'main');
-    }
+  test('uncommitted changes, or no git at all, use the clock', () => {
+    assert.equal(resolveBuildInfo({ git: { ...clean, dirty: true }, env: {}, now: NOW }).builtAt, '2026-09-21 08:32 UTC');
+    assert.deepEqual(resolveBuildInfo({ git: { branch: null, commitTime: null, dirty: null }, env: {}, now: NOW }), { branch: '', builtAt: '2026-09-21 08:32 UTC' });
+    assert.equal(resolveBuildInfo({ git: { ...clean, commitTime: 'garbage' }, env: {}, now: NOW }).builtAt, '2026-09-21 08:32 UTC');
   });
 
-  test('strips refs/heads/ and falls back to unknown', () => {
-    assert.equal(resolveBuildInfo({ git: { commit: null, branch: 'refs/heads/dev', dirty: null }, env: {}, now: NOW }).branch, 'dev');
-    assert.deepEqual(resolveBuildInfo({ git: { commit: 'xyz', branch: null, dirty: null }, env: {}, now: NOW }),
-      { commit: 'unknown', branch: 'unknown', builtAt: '2026-09-21 08:32 UTC', dirty: false });
-  });
-
-  test('reports uncommitted changes only when git said so', () => {
-    assert.equal(resolveBuildInfo({ git: { commit: FULL_SHA, branch: 'b', dirty: true }, env: {}, now: NOW }).dirty, true);
-    assert.equal(resolveBuildInfo({ git: { commit: FULL_SHA, branch: 'b', dirty: null }, env: {}, now: NOW }).dirty, false);
+  test('SOURCE_DATE_EPOCH wins over the commit time, and only when it is a real time', () => {
+    const epoch = String(Date.UTC(2026, 0, 2, 3, 4) / 1000);
+    assert.equal(resolveBuildInfo({ git: { ...clean, dirty: true }, env: { SOURCE_DATE_EPOCH: epoch }, now: NOW }).builtAt, '2026-01-02 03:04 UTC');
+    assert.equal(resolveBuildInfo({ git: clean, env: { SOURCE_DATE_EPOCH: '' }, now: NOW }).builtAt, '2026-10-28 01:20 UTC');
+    assert.equal(resolveBuildInfo({ git: clean, env: { SOURCE_DATE_EPOCH: 'soon' }, now: NOW }).builtAt, '2026-10-28 01:20 UTC');
   });
 });
 
 describe('formatVersionInfo', () => {
-  const info = { commit: '0123456', branch: 'main', builtAt: '2026-10-17 06:12 UTC', dirty: true };
+  const info = { branch: '', builtAt: '2026-10-17 06:12 UTC' };
 
-  test('version, build, installed agents and OS on one line — no commit hash or dirty flag', () => {
+  test('version, build time, installed agents and OS on one line', () => {
     assert.equal(
       formatVersionInfo('BojuBot', '3.8.0', info, [{ name: 'Claude Code', version: '2.1.72' }, { name: 'Antigravity', version: '1.4.2' }], 'Windows 10.0.28120'),
-      'BojuBot 3.8.0 (branch main, built 2026-10-17 06:12 UTC) · Claude Code 2.1.72 · Antigravity 1.4.2 · Windows 10.0.28120',
+      'BojuBot 3.8.0 (built 2026-10-17 06:12 UTC) · Claude Code 2.1.72 · Antigravity 1.4.2 · Windows 10.0.28120',
     );
   });
 
+  test('a build from another branch names it', () => {
+    assert.equal(formatVersionInfo('BojuBot', '3.8.0', { ...info, branch: 'dev' }, [], 'Linux 6.8.0'), 'BojuBot 3.8.0 (branch dev, built 2026-10-17 06:12 UTC) · Linux 6.8.0');
+  });
+
   test('agents that are not installed are simply absent', () => {
-    assert.equal(formatVersionInfo('BojuBot', '3.8.0', info, [], 'Linux 6.8.0'), 'BojuBot 3.8.0 (branch main, built 2026-10-17 06:12 UTC) · Linux 6.8.0');
+    assert.equal(formatVersionInfo('BojuBot', '3.8.0', info, [], 'Linux 6.8.0'), 'BojuBot 3.8.0 (built 2026-10-17 06:12 UTC) · Linux 6.8.0');
   });
 
   test('buildLineParts: a main build shows only its build time', () => {
     assert.deepEqual(buildLineParts(info), ['2026-10-17 06:12 UTC']);
-    assert.deepEqual(buildLineParts({ ...info, branch: 'unknown' }), ['2026-10-17 06:12 UTC']);
   });
 
   test('buildLineParts: another branch is shown before the build time', () => {
     assert.deepEqual(buildLineParts({ ...info, branch: 'feat/report-send' }), ['feat/report-send', '2026-10-17 06:12 UTC']);
-    assert.deepEqual(buildLineParts({ ...info, branch: 'dev' }), ['dev', '2026-10-17 06:12 UTC']);
   });
 });
 
