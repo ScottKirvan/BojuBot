@@ -7,6 +7,13 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.8.1](https://github.com/ScottKirvan/BojuBot/compare/3.8.0...3.8.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* stop the compact confirmation widening the chat panel ([8c67b3c](https://github.com/ScottKirvan/BojuBot/commit/8c67b3cd70416fb9b030ea430530c485517ead9a))
+
 ## [3.8.0](https://github.com/ScottKirvan/BojuBot/compare/3.7.0...3.8.0) (2026-10-28)
 
 
