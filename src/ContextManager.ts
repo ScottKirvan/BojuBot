@@ -7,7 +7,7 @@ import { scanPinnedFiles, scanFileInstructions } from './FrontmatterGuard';
 import type { BackendOrientation, PermissionMode } from './backends/types';
 import orientationTemplate from './orientation.md';
 import { renderOrientation } from './utils/orientation';
-import { canRunCommands } from './utils/modeGates';
+import { allowedCommandsSection } from './utils/modeGates';
 import { activeBrand, resolveIdentityName, DEFAULT_BRAND } from './brand';
 
 export class ContextManager {
@@ -72,20 +72,12 @@ export class ContextManager {
     });
 
     // Chat only and Read only refuse run-command, so don't list commands or invite it (#406)
-    if (this.commandAllowlist.length > 0 && canRunCommands(this.permissionMode)) {
-      const rows = this.commandAllowlist
-        .map(id => {
-          const name = (this.app as unknown as AppInternal).commands.commands[id]?.name ?? id;
-          return `| \`${name}\` | \`${id}\` |`;
-        })
-        .join('\n');
-      orientation +=
-        `\n\n## Allowed Obsidian commands\n` +
-        `You can run specific Obsidian commands using:\n` +
-        `@@BOJU {"action": "run-command", "commandId": "<id>"}\n\n` +
-        `These commands run immediately. For any other command the user asks for, attempt it — the user will be prompted to approve or deny:\n\n` +
-        `| Command | ID |\n|---|---|\n${rows}`;
-    }
+    const commands = this.commandAllowlist.map(id => ({
+      id,
+      name: (this.app as unknown as AppInternal).commands.commands[id]?.name ?? id,
+    }));
+    const commandsSection = allowedCommandsSection(commands, this.permissionMode);
+    if (commandsSection) orientation += `\n\n${commandsSection}`;
 
     if (this.thanksHook) {
       orientation +=
