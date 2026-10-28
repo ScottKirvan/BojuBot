@@ -3992,8 +3992,14 @@ describe('formatVersionInfo', () => {
     assert.equal(formatVersionInfo('BojuBot', '3.8.0', info, [], 'Linux 6.8.0'), 'BojuBot 3.8.0 (branch main, built 2026-10-17 06:12 UTC) · Linux 6.8.0');
   });
 
-  test('buildLineParts shows branch and build time only', () => {
-    assert.deepEqual(buildLineParts(info), ['main', '2026-10-17 06:12 UTC']);
+  test('buildLineParts: a main build shows only its build time', () => {
+    assert.deepEqual(buildLineParts(info), ['2026-10-17 06:12 UTC']);
+    assert.deepEqual(buildLineParts({ ...info, branch: 'unknown' }), ['2026-10-17 06:12 UTC']);
+  });
+
+  test('buildLineParts: another branch is shown before the build time', () => {
+    assert.deepEqual(buildLineParts({ ...info, branch: 'feat/report-send' }), ['feat/report-send', '2026-10-17 06:12 UTC']);
+    assert.deepEqual(buildLineParts({ ...info, branch: 'dev' }), ['dev', '2026-10-17 06:12 UTC']);
   });
 });
 
