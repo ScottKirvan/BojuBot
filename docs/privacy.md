@@ -104,8 +104,9 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 | Date | Version | Change |
 |---|---|---|
 | 2026-10-27 | 3.8.0 | Listed the records BojuBot keeps on your computer to time its support message and thank-you card (sessions started, when each was last shown), and the name the agent learns for the welcome screen. |
-| 2026-10-27 | 3.8.0 | Added the report form's **Send** and the report service it uses (it stores nothing; reports become public GitHub issues and pass through Cloudflare). The short version no longer says BojuBot has no servers. |
+| 2026-10-27 | 3.8.0 | Added **Send** to the Report a problem form: the first network request BojuBot makes itself, and only when you click it. Described the report service it uses (stores nothing, runs on Cloudflare) and that sent reports become public GitHub issues filed by BojuBot's GitHub app. The short version no longer says BojuBot has no servers, and Third parties now names Cloudflare and GitHub for sent reports. |
 | 2026-10-26 | 3.8.0 | Added the Antigravity agent definitions BojuBot writes to `~/.gemini/config/agents/`, and the chat tabs Obsidian's workspace file remembers. |
 | 2026-10-26 | 3.8.0 | Added what Chat only keeps from the agent: nothing from your vault is sent. |
 | 2026-10-25 | 3.8.0 | Corrected which attached images and PDFs are copied into the plugin folder (and that the copies aren't deleted), and that the open note's path is sent with every message. |
+| 2026-10-19 | 3.8.0 | Added the Report a problem form, which replaced the "planned" note: what it fills in (version, installed agents, agent and model, OS, error, optional debug log lines), that everything is editable, that **Open on GitHub** creates a public issue only when you submit it, and that **Copy report** and the Help & resources version information only copy to your clipboard. |
 | 2026-10-17 | 3.8.0 | First published. |
