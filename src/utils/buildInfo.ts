@@ -17,9 +17,16 @@ export interface AgentVersion {
   version: string;
 }
 
-/** The small "branch · built time" line under the version, as separate parts so it wraps between them. */
+/** Branches not worth showing: releases and automatic betas are built from `main`. */
+const UNREMARKABLE_BRANCHES = new Set(['main', 'unknown']);
+
+/**
+ * The small "branch · built time" line under the version, as separate parts so
+ * it wraps between them. The branch only appears for builds from another
+ * branch (a manual beta or a local build); a `main` build shows just its build time.
+ */
 export function buildLineParts(info: BuildInfo): string[] {
-  return [info.branch, info.builtAt];
+  return UNREMARKABLE_BRANCHES.has(info.branch) ? [info.builtAt] : [info.branch, info.builtAt];
 }
 
 /** "Windows 10.0.28120", "macOS 24.1.0", "Linux 6.8.0". */
