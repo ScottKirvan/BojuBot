@@ -32,7 +32,7 @@ Check that your context file exists at the configured path (`_claude-context.md`
 
 **The agent is doing something unexpected mid-task**
 
-Click the **Stop** button (square icon in the input bar) to interrupt immediately. The agent's process and any subprocesses are killed. Files already written before you stopped will remain — review them before continuing. Start a new session or send a follow-up to correct course.
+Click the **Stop** button (square icon in the input bar) to interrupt immediately, or run **BojuBot: Stop reply** from the Command Palette (bind it to a hotkey to stop with one key). The agent's process and any subprocesses are killed. Files already written before you stopped will remain — review them before continuing. Start a new session or send a follow-up to correct course.
 
 ---
 
