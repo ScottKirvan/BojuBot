@@ -1385,16 +1385,14 @@ export class ClaudeView extends ItemView {
     }).open();
   }
 
-  clearCurrentSession() {
-    this.guardSessionChange(() => this.applyClearSession());
+  /** True while this panel's session has a reply running. */
+  get isReplying(): boolean {
+    return this.coordinator.isBusy;
   }
 
-  private applyClearSession() {
-    this.dropPendingSessionState();
-    this.messagesEl.empty();
-    this.appendMessage('system', 'Session cleared');
-    this.updateSessionStatus();
-    log('Current session cleared');
+  /** Stop the running reply, as the Stop button does. The reply so far stays with the session. */
+  stopReply(): void {
+    if (this.coordinator.isBusy) this.coordinator.cancel();
   }
 
   exportConversation() {
@@ -3002,6 +3000,12 @@ export class ClaudeView extends ItemView {
 
   private buildCommands(): SlashCommand[] {
     return [
+      ...(this.coordinator.isBusy ? [{
+        category: 'Session',
+        name: 'Stop reply',
+        description: 'Stop the reply that is running',
+        action: () => this.stopReply(),
+      }] : []),
       {
         category: 'Session',
         name: 'Switch model',

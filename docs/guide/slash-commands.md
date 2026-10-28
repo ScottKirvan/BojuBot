@@ -19,6 +19,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 
 | Category    | Command           | What it does                             |
 | ----------- | ----------------- | ---------------------------------------- |
+| **Session** | Stop reply        | Stop the reply that's running; shown only while one is |
 | **Session** | New session       | Start a fresh conversation               |
 | **Session** | Show sessions     | Browse and resume past sessions in the [Sessions panel](./sessions#sessions-panel) |
 | **Session** | Export session    | Save the current session to your vault   |

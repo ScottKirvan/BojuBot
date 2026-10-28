@@ -10,7 +10,7 @@
  */
 export const EXCLUDED_FROM_REFERENCE: ReadonlySet<string> = new Set([
   'bojubot:new-session',
-  'bojubot:clear-session',
+  'bojubot:stop-reply',
   'bojubot:audit-memory-file',
   'bojubot:toggle-panel',
   'bojubot:open-agent',

@@ -171,11 +171,15 @@ export default class BojuBotPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'clear-session',
-      name: 'Clear current session',
-      callback: () => {
-        this.clearCurrentSession();
-      }
+      id: 'stop-reply',
+      name: 'Stop reply',
+      // Listed only while the target chat panel has a reply running.
+      checkCallback: (checking) => {
+        const view = this.targetChatView();
+        if (!view?.isReplying) return false;
+        if (!checking) view.stopReply();
+        return true;
+      },
     });
 
     this.addCommand({
@@ -495,10 +499,6 @@ export default class BojuBotPlugin extends Plugin {
       if (plan.kind === 'start') plan.panel.startNewSession(opts.custom);
       plan.panel.focusInput();
     }
-  }
-
-  clearCurrentSession() {
-    this.targetChatView()?.clearCurrentSession();
   }
 
   /** Hide or show the target chat panel: collapses or expands its sidebar. */

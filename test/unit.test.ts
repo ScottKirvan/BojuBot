@@ -4311,6 +4311,9 @@ describe('buildCommandsReference', () => {
 
   test('leaves out commands that would disrupt the agent mid-turn', () => {
     assert.ok(!out.includes('bojubot:new-session'));
+    // The agent would be stopping its own reply
+    assert.ok(EXCLUDED_FROM_REFERENCE.has('bojubot:stop-reply'));
+    assert.ok(!EXCLUDED_FROM_REFERENCE.has('bojubot:clear-session'));
     for (const id of EXCLUDED_FROM_REFERENCE) assert.ok(id.startsWith('bojubot:'), id);
   });
 
