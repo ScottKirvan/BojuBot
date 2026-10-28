@@ -74,12 +74,7 @@ Clicking the version information in the **Help & resources** dialog copies it to
 
 None. Nothing about how you use BojuBot leaves your computer: it doesn't count users, report usage or send crash reports.
 
-BojuBot does keep a few records in its settings file, only to decide when to show its occasional messages:
-
-- how many sessions you've started that got a reply, and the last count at which the support message was shown (it appears after 10, 20, 30 and 50 sessions, then every 50)
-- when the support message and the thank-you card were last shown, so each appears at most once a day
-
-So that only people who use BojuBot regularly are asked for support, it also checks how recently your saved sessions were used, from their session files. None of this is ever sent anywhere. Turn on **Hide the support message** in settings to stop the support message.
+BojuBot does keep a few records in its settings file, only to decide when to show its occasional support message and thank-you card: how many sessions you've started, and when each message was last shown. So that only people who use BojuBot regularly are asked for support, it also checks how recently your saved sessions were used. None of this is ever sent anywhere. Turn on **Hide the support message** in settings to stop the support message.
 
 ## Third parties
 
@@ -103,7 +98,7 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 
 | Date | Version | Change |
 |---|---|---|
-| 2026-10-27 | 3.8.0 | Listed the records BojuBot keeps on your computer to time its support message and thank-you card (sessions started, when each was last shown), and the name the agent learns for the welcome screen. |
+| 2026-10-27 | 3.8.0 | Listed the records BojuBot keeps on your computer to decide when to show its support message and thank-you card, and the name the agent learns for the welcome screen. |
 | 2026-10-27 | 3.8.0 | Added **Send** to the Report a problem form: the first network request BojuBot makes itself, and only when you click it. Described the report service it uses (stores nothing, runs on Cloudflare) and that sent reports become public GitHub issues filed by BojuBot's GitHub app. The short version no longer says BojuBot has no servers, and Third parties now names Cloudflare and GitHub for sent reports. |
 | 2026-10-26 | 3.8.0 | Added the Antigravity agent definitions BojuBot writes to `~/.gemini/config/agents/`, and the chat tabs Obsidian's workspace file remembers. |
 | 2026-10-26 | 3.8.0 | Added what Chat only keeps from the agent: nothing from your vault is sent. |
