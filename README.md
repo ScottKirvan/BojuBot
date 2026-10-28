@@ -42,7 +42,7 @@ Turn Obsidian into a tool that reaches beyond PKM, notetaking, storage, and orga
 - *Obsidian desktop (Windows, Mac, Linux — no mobile support)*
 - *An AI agent, installed and signed in with an account you already have (no API key needed):*
   - **Claude**, through the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) — included in Claude Pro/Max subscriptions. (Windows: install in PowerShell. Mac/Linux: use `curl -fsSL https://claude.ai/install.sh | bash`)
-  - **Gemini**, through Google's [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli#download-and-install) (`agy`) — needs a Google account with Antigravity access. Currently in [beta builds](https://www.scottkirvan.com/BojuBot/guide/beta-builds) only; ships in the next release. See [Choosing an Agent](https://www.scottkirvan.com/BojuBot/guide/agents).
+  - **Gemini**, through Google's [Antigravity CLI](https://antigravity.google/docs/getting-started?tab=cli#download-and-install) (`agy`) — needs a Google account with Antigravity access. See [Choosing an Agent](https://www.scottkirvan.com/BojuBot/guide/agents).
 
 ### From the Community Plugin Browser
 1. Open Obsidian → **Settings → Community Plugins → Browse**
@@ -58,7 +58,7 @@ Or find it at **[community.obsidian.md/plugins/bojubot](https://community.obsidi
 ---
 ## Quick Start
 
-1. Using Gemini (beta builds)? BojuBot uses whichever agent you installed. With both Claude Code and the Antigravity CLI installed, click the model name below the message box to switch
+1. Using Gemini? BojuBot uses whichever agent you installed. With both Claude Code and the Antigravity CLI installed, click the model name below the message box to switch
 2. Open the BojuBot panel from the ribbon (brain/circuit icon) or Command Palette: `BojuBot: Open agent panel`
 3. Type a message (ie. "Hi!  Tell me about yourself.") and press **Enter**
 4. See the [User Guide](https://www.scottkirvan.com/BojuBot/) for details on Skills, session management, and settings

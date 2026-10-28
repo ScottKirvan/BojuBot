@@ -1,8 +1,4 @@
-# Choosing an Agent <Badge type="warning" text="Beta" />
-
-::: warning Not released yet
-Gemini support through Antigravity is in [beta builds](beta-builds.md) and will ship in the next release. The community plugin version doesn't have it yet.
-:::
+# Choosing an Agent
 
 BojuBot can work with Claude or with Gemini. It runs each one through an agent CLI installed on your computer:
 
@@ -19,7 +15,7 @@ A common setup is to keep your Claude quota for heavy work, such as programming 
 2. **Sign in once.** Open a terminal, run `agy`, and sign in in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
 3. **Pick it in BojuBot.** If the Antigravity CLI is the only agent you installed, BojuBot uses it on its own. If you also have Claude Code, click the model name below the message box in the chat panel and pick a Gemini model under **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 
-You switch agents in the [model picker](./chat-panel#model-indicator) <Badge type="warning" text="Beta" />: pick a model under the other agent. An empty new session that you haven't sent a message in yet switches straight away; a session with messages starts a new session on the other agent, because a conversation can't move between CLIs. The agent you picked last is the one new sessions start with.
+You switch agents in the [model picker](./chat-panel#model-indicator): pick a model under the other agent. An empty new session that you haven't sent a message in yet switches straight away; a session with messages starts a new session on the other agent, because a conversation can't move between CLIs. The agent you picked last is the one new sessions start with.
 
 To start a single session on the other agent without changing what new sessions use, Shift+click **+** and choose it in the **Agent and model** field of [Custom Session](./sessions#starting-a-new-session).
 

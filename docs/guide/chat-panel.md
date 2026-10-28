@@ -95,7 +95,7 @@ The change takes effect on the next message. See [Permissions](./permissions.md)
 
 ## Model Indicator
 
-The **model indicator** in the input toolbar shows the session's agent and model, with the agent's icon, e.g. *✳ Claude · Claude Sonnet 5.5*. Click it to open the agent + model picker <Badge type="warning" text="Beta" />. It has one section per agent, headed by its name; an agent that isn't installed is greyed out with *not installed*. The Antigravity CLI also offers Claude models, so the same model name can appear under both agents: they're different choices, run by different agents.
+The **model indicator** in the input toolbar shows the session's agent and model, with the agent's icon, e.g. *✳ Claude · Claude Sonnet 5.5*. Click it to open the agent + model picker. It has one section per agent, headed by its name; an agent that isn't installed is greyed out with *not installed*. The Antigravity CLI also offers Claude models, so the same model name can appear under both agents: they're different choices, run by different agents.
 
 What picking does:
 
@@ -114,7 +114,7 @@ For **Claude (Claude Code)** sessions, the built-in models are:
 | Claude Opus   | Complex reasoning and long tasks |
 | Claude Fable  | Long-running agents              |
 
-For **Gemini (Antigravity CLI)** sessions <Badge type="warning" text="Beta" />, the picker lists the models the Antigravity CLI offers: Gemini, plus some Claude and GPT-OSS models. See [Choosing an Agent](./agents#what-s-different-with-gemini).
+For **Gemini (Antigravity CLI)** sessions, the picker lists the models the Antigravity CLI offers: Gemini, plus some Claude and GPT-OSS models. See [Choosing an Agent](./agents#what-s-different-with-gemini).
 
 You can switch models **mid-conversation** — the session continues with its full history, and the new model takes over from your next message. This is handy for getting a second opinion: work through a problem with one model, then switch to another to review the result without re-explaining everything.
 
@@ -154,7 +154,7 @@ You can also switch via `/effort` in the slash menu or **BojuBot: Switch effort*
 Choose **Usage** from the `/` menu (or run **BojuBot: Show plan usage** from the Command Palette) to see how much of your plan or quota you've used. The report appears as a card in the chat, and depends on the session's agent:
 
 - **Claude (Claude Code):** how much of your Claude plan you've used — the current session and current week percentages and when they reset, plus Claude Code's breakdown of what's contributing.
-- **Gemini (Antigravity CLI)** <Badge type="warning" text="Beta" />: the remaining weekly and 5-hour quota for each Antigravity model group.
+- **Gemini (Antigravity CLI)**: the remaining weekly and 5-hour quota for each Antigravity model group.
 
 Checking usage is free: it runs the agent CLI's own `/usage` command in a separate process, so it isn't sent to the model, doesn't become part of your conversation, and doesn't affect the context gauge. You can check it while the agent is still replying.
 
