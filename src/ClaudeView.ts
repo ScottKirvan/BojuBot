@@ -20,7 +20,7 @@ import { extractActions, executeAction, promptPermissionRequest } from './UIBrid
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE } from './utils/modeGates';
+import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE, modeChangeNote } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, estimateTokens, formatTokenCount } from './utils/logger';
@@ -1052,14 +1052,27 @@ export class ClaudeView extends ItemView {
     const before = this.coordinator.getEffectivePermissionMode();
     const changed = this.coordinator.setSessionPermissionMode(mode) && before !== mode;
     this.updatePermissionIcon();
-    if (changed && this.coordinator.sessionId) {
-      const perm = this.coordinator.backend.orientation.permissions[this.coordinator.getEffectivePermissionMode()];
-      this.coordinator.setPendingSystemMessage(
-        `[System: Permission mode changed to ${perm.summary}. ` +
-        `You can now: ${perm.can}. ` +
-        `You cannot: ${perm.cannot}.]`,
-      );
-    }
+    if (changed) this.noteModeChange(before);
+  }
+
+  /**
+   * Tell the agent the open session's mode changed (picker, denial card,
+   * request-permission card), with the Obsidian commands that come or go with
+   * it (#406). Sent with the next message; nothing before the first one, since
+   * the first message's orientation describes the mode anyway.
+   */
+  private noteModeChange(before: PermissionMode): void {
+    if (!this.coordinator.sessionId) return;
+    const after = this.coordinator.getEffectivePermissionMode();
+    if (after === before) return;
+    const commands = this.plugin.settings.commandAllowlist.map(id => ({
+      id,
+      name: this.appInternal.commands.commands[id]?.name ?? id,
+    }));
+    this.coordinator.setPendingSystemMessage(
+      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands,
+        `${this.app.vault.configDir}/plugins/bojubot/obsidian-commands.md`),
+    );
   }
 
   /** The default for new sessions changed (settings, or a picker in another
@@ -2279,8 +2292,10 @@ export class ClaudeView extends ItemView {
         return;
       }
       if (granted) {
+        const before = this.coordinator.getEffectivePermissionMode();
         this.coordinator.setSessionPermissionMode('full', requestSessionId);
         this.updatePermissionIcon();
+        this.noteModeChange(before);
         this.inputEl.value = `[Permission granted] Full access is now enabled. Please retry the blocked ${request.tool} operation and complete the task.`;
       } else {
         this.inputEl.value = `[Permission denied] ${request.tool} access was denied. Please continue without it or suggest an alternative approach.`;
@@ -2323,12 +2338,14 @@ export class ClaudeView extends ItemView {
       // The card upgrades the session it was shown in, and only that one.
       const cardSessionId = this.coordinator.sessionFileId;
       upgradeBtn.addEventListener('click', () => {
+        const before = this.coordinator.getEffectivePermissionMode();
         if (!this.coordinator.setSessionPermissionMode(upgradeTarget, cardSessionId)) {
           new Notice('This card belongs to a session that is no longer open.');
           card.remove();
           return;
         }
         this.updatePermissionIcon();
+        this.noteModeChange(before);
         upgradeBtn.setText('↺ retrying…');
         upgradeBtn.disabled = true;
         this.applyStatus({ type: 'denial-resolved' });

@@ -23,7 +23,7 @@ import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, C
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
-import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL } from '../src/utils/modeGates';
+import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
@@ -5194,6 +5194,47 @@ describe('blockedAttachments', () => {
   });
   test('no attachments: nothing blocked', () => {
     assert.deepEqual(blockedAttachments([], 'restricted'), []);
+  });
+});
+
+describe('allowedCommandsSection', () => {
+  const cmds = [{ name: 'Quick switcher', id: 'switcher:open' }];
+  test('lists the allowlist with the run-command syntax', () => {
+    const s = allowedCommandsSection(cmds, 'standard');
+    assert.ok(s.startsWith('## Allowed Obsidian commands\n'));
+    assert.ok(s.includes('@@BOJU {"action": "run-command", "commandId": "<id>"}'));
+    assert.ok(s.endsWith('| Command | ID |\n|---|---|\n| `Quick switcher` | `switcher:open` |'));
+  });
+  test('empty in modes that can\'t run commands, or with no commands', () => {
+    assert.equal(allowedCommandsSection(cmds, 'readonly'), '');
+    assert.equal(allowedCommandsSection(cmds, 'restricted'), '');
+    assert.equal(allowedCommandsSection([], 'full'), '');
+  });
+});
+
+describe('modeChangeNote', () => {
+  const perm = { summary: 'Standard', can: 'write', cannot: 'shell' };
+  const F = 'cfg/plugins/bojubot/obsidian-commands.md';
+  const cmds = [{ name: 'Quick switcher', id: 'switcher:open' }];
+  test('the new mode\'s can and cannot', () => {
+    assert.equal(modeChangeNote(perm, 'standard', 'full', cmds, F), '[System: Permission mode changed to Standard. You can now: write. You cannot: shell.]');
+  });
+  test('Read only → Standard: commands come back, with the allowlist (#406)', () => {
+    const note = modeChangeNote(perm, 'readonly', 'standard', cmds, F);
+    assert.match(note, /run-command\(commandId\) works again/);
+    assert.ok(note.includes('read `cfg/plugins/bojubot/obsidian-commands.md` before run-command'));
+    assert.ok(note.includes('| `Quick switcher` | `switcher:open` |'));
+    assert.ok(note.endsWith(']'));
+  });
+  test('commands come back with an empty allowlist: no table', () => {
+    const note = modeChangeNote(perm, 'restricted', 'full', [], F);
+    assert.match(note, /works again/);
+    assert.ok(!note.includes('## Allowed Obsidian commands'));
+  });
+  test('Standard → Read only: commands go away', () => {
+    const note = modeChangeNote(perm, 'standard', 'readonly', cmds, F);
+    assert.match(note, /run-command is unavailable in this permission mode/);
+    assert.ok(!note.includes('switcher:open'));
   });
 });
 

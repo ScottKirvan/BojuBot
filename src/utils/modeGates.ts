@@ -1,4 +1,4 @@
-import type { PermissionMode } from '../backends/types';
+import type { PermissionDescription, PermissionMode } from '../backends/types';
 import { canWrite } from '../backends/modes';
 import type { VaultQuery, VaultQueryResult } from '../QueryHandler';
 
@@ -17,6 +17,52 @@ export function sharesVaultInfo(mode: PermissionMode): boolean {
 /** Obsidian commands can create or change notes, so they need a mode that can write. */
 export function canRunCommands(mode: PermissionMode): boolean {
   return canWrite(mode);
+}
+
+/** An allowlisted command, with its display name for the agent. */
+export interface AllowedCommand {
+  name: string;
+  id: string;
+}
+
+/**
+ * The orientation's "Allowed Obsidian commands" section, or '' when the list
+ * is empty or the mode can't run commands (#406).
+ */
+export function allowedCommandsSection(commands: readonly AllowedCommand[], mode: PermissionMode): string {
+  if (commands.length === 0 || !canRunCommands(mode)) return '';
+  const rows = commands.map(c => `| \`${c.name}\` | \`${c.id}\` |`).join('\n');
+  return `## Allowed Obsidian commands\n` +
+    `You can run specific Obsidian commands using:\n` +
+    `@@BOJU {"action": "run-command", "commandId": "<id>"}\n\n` +
+    `These commands run immediately. For any other command the user asks for, attempt it — the user will be prompted to approve or deny:\n\n` +
+    `| Command | ID |\n|---|---|\n${rows}`;
+}
+
+/**
+ * The note queued for the agent when an open session's mode changes. Besides
+ * the new mode's can/cannot, it says when Obsidian commands come or go: the
+ * orientation the session started with either left run-command out or listed
+ * it, and stays as it was (#406).
+ */
+export function modeChangeNote(
+  perm: PermissionDescription,
+  before: PermissionMode,
+  after: PermissionMode,
+  commands: readonly AllowedCommand[],
+  /** Vault-relative path of the command reference file (`<configDir>/plugins/bojubot/obsidian-commands.md`). */
+  commandsFile: string,
+): string {
+  let note = `[System: Permission mode changed to ${perm.summary}. You can now: ${perm.can}. You cannot: ${perm.cannot}.`;
+  if (!canRunCommands(before) && canRunCommands(after)) {
+    note += '\n\nObsidian commands are available now: run-command(commandId) works again. ' +
+      `Confirm first (ask in text, wait for the user's yes, emit next turn), and read \`${commandsFile}\` before run-command — never guess IDs.`;
+    const section = allowedCommandsSection(commands, after);
+    if (section) note += `\n\n${section}`;
+  } else if (canRunCommands(before) && !canRunCommands(after)) {
+    note += '\n\nrun-command is unavailable in this permission mode (Obsidian commands can create or change notes). Don\'t emit it.';
+  }
+  return note + ']';
 }
 
 /**
