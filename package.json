@@ -15,7 +15,7 @@
   "author": "Scott Kirvan",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^18.0.0",
+    "@types/node": "^26.6.6",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.0",
     "esbuild": "^0.21.0",
