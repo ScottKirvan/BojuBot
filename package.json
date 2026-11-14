@@ -1,6 +1,6 @@
 {
   "name": "bojubot",
-  "version": "3.8.1",
+  "version": "3.8.2",
   "description": "More than a writing assistant — BojuBot turns your Obsidian vault into a personal AI platform.",
   "main": "main.js",
   "scripts": {
