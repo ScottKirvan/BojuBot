@@ -1,0 +1,33 @@
+# Dependabot version updates, kept low-noise on purpose:
+# - Monthly, one grouped PR per ecosystem for GitHub Actions.
+# - Package updates: minor and patch bumps come as one grouped PR; each major
+#   bump gets its own PR, since those are the ones that break things.
+# - Commits use `chore(deps):`, so release-please doesn't cut a release for them.
+#
+# Security alerts and security fix PRs are separate repo settings
+# (Settings > Code security) and are turned on; those PRs use the options here.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    open-pull-requests-limit: 5
