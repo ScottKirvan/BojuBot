@@ -38,3 +38,14 @@ updates:
       prefix: "chore"
       include: "scope"
     open-pull-requests-limit: 5
+    ignore:
+      # The plugin runs on the Node built into Obsidian's Electron, which is
+      # older than current Node (and older still on installs that haven't
+      # updated). Newer types would allow APIs that fail at runtime, so major
+      # bumps are made by hand to match the oldest supported Obsidian.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 (the native compiler) isn't supported by typescript-eslint
+      # yet: npm ci fails on its peer dependency. Remove once it is.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]

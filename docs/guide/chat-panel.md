@@ -104,7 +104,7 @@ The change takes effect on the next message. See [Permissions](./permissions.md)
 
 ## Model Indicator
 
-The **model indicator** in the input toolbar shows the session's agent and model, with the agent's icon, e.g. *✳ Claude · Claude Sonnet 5.5*. Click it to open the agent + model picker. It has one section per agent, headed by its name; an agent that isn't installed is greyed out with *not installed*. The Antigravity CLI also offers Claude models, so the same model name can appear under both agents: they're different choices, run by different agents.
+The **model indicator** in the input toolbar shows the session's agent and model, with the agent's icon, e.g. *✳ Claude · Claude Sonnet 5.5*. Click it to open the agent + model picker. It has one section per agent, headed by its name; an agent that isn't installed is greyed out with *Not installed*. The Antigravity CLI also offers Claude models, so the same model name can appear under both agents: they're different choices, run by different agents.
 
 What picking does:
 
