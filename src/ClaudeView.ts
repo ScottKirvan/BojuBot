@@ -1955,7 +1955,7 @@ export class ClaudeView extends ItemView {
         this.plugin.settings.hideSponsorshipMessages = true;
         void this.plugin.saveSettings();
         donatedRow.empty();
-        donatedRow.createSpan({ cls: 'bojubot-welcome-sponsor-thankyou', text: 'Thank You!' });
+        donatedRow.createSpan({ cls: 'bojubot-welcome-sponsor-thankyou', text: 'Thank you!' });
       });
     } else {
       const sprite = body.createEl('img', { cls: 'bojubot-welcome-sprite', attr: { alt: brandName, src: this.brandImageSrc(this.plugin.brand.sprite, spriteUrl) } });

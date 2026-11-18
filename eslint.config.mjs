@@ -12,7 +12,7 @@ export default [
     files: ['**/*.ts'],
     rules: {
       'obsidianmd/ui/sentence-case': ['error', {
-        brands: ['BojuBot', 'Claude', 'Code', 'Obsidian', 'WSL', 'PowerShell'],
+        brands: ['BojuBot', 'Claude', 'Code', 'Obsidian', 'WSL', 'PowerShell', 'UI Bridge', 'CLAUDE.md'],
       }],
     },
   },

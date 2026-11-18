@@ -40,7 +40,7 @@ export class AgentModelPickerModal extends Modal {
 
       if (!section.installed) {
         header.addClass('is-disabled');
-        header.createSpan({ cls: 'bojubot-model-section-note', text: 'not installed' });
+        header.createSpan({ cls: 'bojubot-model-section-note', text: 'Not installed' });
         continue;
       }
       if (section.models.length === 0) {
