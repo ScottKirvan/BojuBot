@@ -28,6 +28,7 @@ import { migrateVariantModel, resolveTurnModel, TurnModel } from './utils/agentM
 import { needsFreshSessionForChatOnly } from './utils/modeGates';
 import { composeStreamingText } from './utils/streamPreview';
 import { preserveUserFields } from './utils/sessionList';
+import type { TurnToolCall } from './utils/generatedImages';
 
 // ── Host interface ───────────────────────────────────────────────────────────
 
@@ -78,6 +79,8 @@ export interface TurnDoneResult {
   clean: boolean | undefined;
   pendingQueries: VaultQuery[];
   pendingPermissionRequest: { tool: string; reason: string } | null;
+  /** Images the agent's own tools made this turn, outside the vault (#427): absolute paths. */
+  images: string[];
 }
 
 /** Typed map of all events emitted by SessionCoordinator.
@@ -653,6 +656,7 @@ export class SessionCoordinator {
     // keeps, so replay can rebuild query cards the way Claude Code history does.
     let transcriptReply = '';
     const pendingQueries: VaultQuery[] = [];
+    const toolCalls: TurnToolCall[] = [];
     let pendingPermissionRequest: { tool: string; reason: string } | null = null;
 
     const handleAction = (action: BojuBotAction) => {
@@ -702,6 +706,7 @@ export class SessionCoordinator {
         } catch { log('turn:query — malformed line:', line.substring(0, 100)); }
       },
       onToolCall: (tool, input, toolUseId) => {
+        toolCalls.push({ tool, input, startedAt: Date.now() });
         this.emit('turn:tool-call', tool, input, toolUseId);
         log('onToolCall —', tool, JSON.stringify(input).substring(0, 120));
       },
@@ -722,12 +727,13 @@ export class SessionCoordinator {
       },
       onDone: (sessionId, clean) => {
         if (!this._procEnded(proc)) return;
+        const images = sessionId ? this._findGeneratedImages(backend, sessionId, toolCalls) : [];
         if (sessionId) {
           if (!turnSession.sessionId) turnSession.agent = agent;
           this._persistSessionAfterTurn(turnSession, sessionId, firstUserInput);
-          if (!backend.readableHistory) this._appendTranscript(turnSession, prompt, transcriptReply);
+          if (!backend.readableHistory) this._appendTranscript(turnSession, prompt, transcriptReply, images);
         }
-        this.emit('turn:done', { sessionId, clean, pendingQueries, pendingPermissionRequest });
+        this.emit('turn:done', { sessionId, clean, pendingQueries, pendingPermissionRequest, images });
         this._releaseTurnEndWaiters();
       },
     });
@@ -774,13 +780,26 @@ export class SessionCoordinator {
     return settled;
   }
 
+  /** Images the backend's own tools made this turn (#427). Best-effort: a failure finds none. */
+  private _findGeneratedImages(backend: AgentBackend, conversationId: string, calls: TurnToolCall[]): string[] {
+    if (!backend.generatedImages || calls.length === 0) return [];
+    try {
+      const images = backend.generatedImages.find(conversationId, calls);
+      if (images.length) log('Generated images this turn:', images.join(', '));
+      return images;
+    } catch (e) {
+      log('Finding generated images failed:', e instanceof Error ? e.message : String(e));
+      return [];
+    }
+  }
+
   /** Record a finished turn for backends whose own history BojuBot can't read.
    *  Best-effort: a failed write costs the replay, never the turn. */
-  private _appendTranscript(s: SessionState, prompt: string, reply: string): void {
+  private _appendTranscript(s: SessionState, prompt: string, reply: string, images: string[]): void {
     const fileId = s.fileId;
     if (!fileId) return;
     try {
-      appendTranscript(this.host.getSessionsDir(), fileId, transcriptEntries(prompt, reply, new Date().toISOString()));
+      appendTranscript(this.host.getSessionsDir(), fileId, transcriptEntries(prompt, reply, new Date().toISOString(), images));
     } catch (e) {
       log('Transcript write failed:', e instanceof Error ? e.message : String(e));
     }
