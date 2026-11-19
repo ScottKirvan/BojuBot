@@ -1,4 +1,12 @@
-.obsidian/*
+# Obsidian: this repo opens as a vault. Keep its settings, ignore its state.
+.obsidian/workspace*.json
+.obsidian/bojubot/
+.obsidian/plugins/*/main.js
+.obsidian/plugins/*/manifest.json
+.obsidian/plugins/*/styles.css
+.obsidian/plugins/bojubot/obsidian-commands.md
+.obsidian/plugins/obsidian-git/obsidian_askpass.sh
+.bojubot/*
 node_modules/
 main.js
 _bojubot-debug.log
@@ -9,8 +17,8 @@ bojubot-debug.log
 # Pasted images saved by BojuBot clipboard paste feature
 tmp/
 
-# Obsidian plugin runtime data (machine-specific)
-data.json
+# Plugin settings written through the test vaults' junction to the repo root (machine-specific)
+/data.json
 
 # Claude Code — machine-specific and runtime files
 .claude/settings.local.json

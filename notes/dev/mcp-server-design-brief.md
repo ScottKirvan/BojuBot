@@ -109,7 +109,7 @@ Is there anything missing? Anything that should be removed to keep first release
 
 ### Q7 — Skills Library Connection
 
-The community skills library spec (`notes/dev/bojubot-skills-library-spec.md`) envisions skills installed from the community registry landing in `.bojubot/skills/community/<library-id>/<skill-id>/`. User-authored skills live in `_BojuBot Skills/` (or a custom path).
+The community skills library spec (`notes/dev/bojubot-skills-library-spec.md`) envisions skills installed from the community registry landing in `_bojubot/skills/community/<library-id>/<skill-id>/`. User-authored skills live in `_BojuBot Skills/` (or a custom path).
 
 Does the MCP server need to distinguish between community-installed and user-authored skills, or is the folder abstraction (`scanSkillFolder`) sufficient to treat them uniformly? Are there any trust or namespace collision concerns?
 
