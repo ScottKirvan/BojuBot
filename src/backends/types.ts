@@ -8,6 +8,7 @@
 import type { ChildProcess } from 'child_process';
 import type { ApiError } from '../utils/apiError';
 import type { CliCapabilities } from '../utils/cliCapabilities';
+import type { TurnToolCall } from '../utils/generatedImages';
 
 export type BackendId = 'claude-code' | 'antigravity';
 
@@ -145,5 +146,17 @@ export interface AgentBackend {
   /** True when a conversation started as `agent` can't continue in `mode`, so
    *  switching to it needs a new session. Optional — omitted means never. */
   needsNewConversation?(agent: string | undefined, mode: PermissionMode): boolean;
+  /** Images the CLI's own tools saved outside the vault (Antigravity's
+   *  generate_image, #427). Optional — omitted means the CLI makes none. */
+  generatedImages?: GeneratedImageSource;
   orientation: BackendOrientation;
+}
+
+export interface GeneratedImageSource {
+  /** The image files `calls` made in conversation `conversationId`, as absolute
+   *  paths. Called when the turn ends. Never throws: a failure finds none. */
+  find(conversationId: string, calls: readonly TurnToolCall[]): string[];
+  /** True when `path` is an image where this CLI saves them. A saved
+   *  transcript only ever shows those. */
+  owns(path: string): boolean;
 }

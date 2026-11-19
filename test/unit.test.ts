@@ -27,13 +27,14 @@ import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActio
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
+import { generatedImageStem, pickGeneratedImage, isImageInside, imageMimeType } from '../src/utils/generatedImages';
 import { buildCommandsReference, EXCLUDED_FROM_REFERENCE, migrateRenamedCommands, RENAMED_COMMANDS } from '../src/utils/commandsReference';
 import { resolveBuildInfo } from '../scripts/buildInfo.mjs';
 import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildInfo';
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
 import { PREFILL_DESCRIPTION_MAX, TITLE_MAX, readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportPrefill, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation } from '../src/backends/antigravity';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation, agyBrainDir, agyGeneratedImages } from '../src/backends/antigravity';
 import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
 import { agentModelIndicatorText, collapseEffortVariants, migrateVariantModel, modeForAgentSwitch, modelEffortLevels, modelPickAction, nearestLevel, newSessionBackend, resolveTurnModel, splitEffortVariant } from '../src/utils/agentModels';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
@@ -3152,6 +3153,12 @@ describe('transcriptEntries', () => {
   test('a prompt that is only injected context records only the reply', () => {
     assert.deepEqual(transcriptEntries('<vault_context>x</vault_context>', 'ok', ts), [{ role: 'assistant', content: 'ok', timestamp: ts }]);
   });
+
+  test('generated images go on the reply; a reply of only an image still records it', () => {
+    assert.deepEqual(transcriptEntries('draw', 'Here.', ts, ['/b/snail_1.jpg'])[1], { role: 'assistant', content: 'Here.', timestamp: ts, images: ['/b/snail_1.jpg'] });
+    assert.deepEqual(transcriptEntries('draw', ' ', ts, ['/b/snail_1.jpg'])[1], { role: 'assistant', content: '', timestamp: ts, images: ['/b/snail_1.jpg'] });
+    assert.equal('images' in transcriptEntries('draw', 'Here.', ts, [])[1], false);
+  });
 });
 
 describe('appendTranscript / loadTranscript', () => {
@@ -3183,6 +3190,19 @@ describe('appendTranscript / loadTranscript', () => {
       { role: 'assistant', content: 'fine', timestamp: '' },
     ]);
     assert.deepEqual(loadTranscript(dir, 'missing'), []);
+  }));
+
+  test('reads back generated images on replies only, dropping non-strings', withSessionsDir((dir) => {
+    writeFileSync(transcriptPath(dir, 's'), [
+      '{"role":"user","content":"draw","timestamp":"t","images":["/x.png"]}',
+      '{"role":"assistant","content":"","timestamp":"t","images":["/b/a_1.jpg",7]}',
+      '{"role":"assistant","content":"no","timestamp":"t","images":[1]}',
+    ].join('\n'));
+    assert.deepEqual(loadTranscript(dir, 's'), [
+      { role: 'user', content: 'draw', timestamp: 't' },
+      { role: 'assistant', content: '', timestamp: 't', images: ['/b/a_1.jpg'] },
+      { role: 'assistant', content: 'no', timestamp: 't' },
+    ]);
   }));
 
   test('transcripts are not listed as sessions, and deleteSession removes them', withSessionsDir((dir) => {
@@ -6205,5 +6225,116 @@ describe('command allowlist browser', () => {
   test('commandCountText reports allowlisted IDs that are not found', () => {
     assert.equal(commandCountText(['switcher:open', 'gone:a'], commands), '1 command enabled, 1 not found (uncheck to remove).');
     assert.equal(commandCountText(['gone:a', 'gone:b'], commands), '0 commands enabled, 2 not found (uncheck to remove).');
+  });
+});
+
+describe('generatedImageStem', () => {
+  test('takes the ImageName generate_image was given', () => {
+    assert.equal(generatedImageStem({ ImageName: 'cartoon_snail', Prompt: 'a snail' }), 'cartoon_snail');
+    assert.equal(generatedImageStem({ ImageName: '  snail  ' }), 'snail');
+  });
+
+  test('refuses names that could reach outside the folder, and missing names', () => {
+    for (const name of ['../secret', 'a/b', 'a\\b', 'C:x', '..', '', '   ', 'a'.repeat(201)]) {
+      assert.equal(generatedImageStem({ ImageName: name }), null, name);
+    }
+    assert.equal(generatedImageStem({ Prompt: 'x' }), null);
+    assert.equal(generatedImageStem({ ImageName: 42 }), null);
+    assert.equal(generatedImageStem(null), null);
+    assert.equal(generatedImageStem('snail'), null);
+  });
+});
+
+describe('pickGeneratedImage', () => {
+  const since = 1795058930000;
+
+  test('finds <stem>_<epoch ms>.<ext> stamped at or after the call', () => {
+    assert.equal(pickGeneratedImage(['scratch', 'cartoon_snail_1795058938748.jpg'], 'cartoon_snail', since), 'cartoon_snail_1795058938748.jpg');
+  });
+
+  test('the newest wins; an older one from an earlier turn is never picked', () => {
+    const files = ['snail_1795000000000.png', 'snail_1795058938748.png', 'snail_1795058940000.webp'];
+    assert.equal(pickGeneratedImage(files, 'snail', since), 'snail_1795058940000.webp');
+    assert.equal(pickGeneratedImage(['snail_1795000000000.png'], 'snail', since), null);
+  });
+
+  test('allows a few seconds of rounding before the call started', () => {
+    assert.equal(pickGeneratedImage(['snail_1795058926000.png'], 'snail', since), 'snail_1795058926000.png');
+    assert.equal(pickGeneratedImage(['snail_1795058924000.png'], 'snail', since), null);
+  });
+
+  test('ignores other names, non-images and a stem that only shares a prefix', () => {
+    const files = ['snail_1795058938748.txt', 'snail.png', 'big_snail_1795058938748.png', 'snail_x_1795058938748.png', 'phone-reading-after.png'];
+    assert.equal(pickGeneratedImage(files, 'snail', since), null);
+  });
+
+  test('a stem with regex characters matches literally', () => {
+    assert.equal(pickGeneratedImage(['a.b_1795058938748.png', 'axb_1795058938748.png'], 'a.b', since), 'a.b_1795058938748.png');
+  });
+});
+
+describe('isImageInside', () => {
+  const dir = join(tmpdir(), 'brain');
+
+  test('an image file inside the folder, at any depth', () => {
+    assert.equal(isImageInside(join(dir, 'conv', 'snail_1.jpg'), dir), true);
+    assert.equal(isImageInside(join(dir, 'conv', 'sub', 'a.PNG'), dir), true);
+  });
+
+  test('not outside it, not through .., not a relative path, not a non-image', () => {
+    assert.equal(isImageInside(join(tmpdir(), 'other', 'a.png'), dir), false);
+    assert.equal(isImageInside(join(dir, '..', 'a.png'), dir), false);
+    assert.equal(isImageInside('conv/a.png', dir), false);
+    assert.equal(isImageInside(join(dir, 'conv', 'id_rsa'), dir), false);
+    assert.equal(isImageInside(join(dir, 'conv', 'notes.md'), dir), false);
+    assert.equal(isImageInside(dir, dir), false);
+  });
+});
+
+describe('imageMimeType', () => {
+  test('by extension, PNG otherwise', () => {
+    assert.equal(imageMimeType('a.jpg'), 'image/jpeg');
+    assert.equal(imageMimeType('a.JPEG'), 'image/jpeg');
+    assert.equal(imageMimeType('a.webp'), 'image/webp');
+    assert.equal(imageMimeType('a.gif'), 'image/gif');
+    assert.equal(imageMimeType('a.png'), 'image/png');
+  });
+});
+
+describe('agyGeneratedImages', () => {
+  const conv = '0076814a-b494-42cd-aa69-14c1e8578856';
+  const since = 1795058930000;
+  const call = (input: unknown, tool = 'generate_image') => ({ tool, input, startedAt: since });
+
+  test('the brain folder is under ~/.gemini/antigravity-cli', () => {
+    assert.equal(agyBrainDir('/home/u'), join('/home/u', '.gemini', 'antigravity-cli', 'brain'));
+  });
+
+  test('finds each generate_image call\'s file in the conversation folder', withSessionsDir((brain) => {
+    mkdirSync(join(brain, conv));
+    for (const f of ['cartoon_snail_1795058938748.jpg', 'phone-reading-after.png', 'old_1795000000000.png']) writeFileSync(join(brain, conv, f), 'x');
+    const source = agyGeneratedImages(brain);
+    assert.deepEqual(
+      source.find(conv, [call({ ImageName: 'cartoon_snail' }), call({ path: 'x' }, 'view_file'), call({ ImageName: 'old' })]),
+      [join(brain, conv, 'cartoon_snail_1795058938748.jpg')],
+    );
+  }));
+
+  test('finds nothing for an odd conversation ID, a missing folder or no generate_image call', withSessionsDir((brain) => {
+    const source = agyGeneratedImages(brain);
+    assert.deepEqual(source.find('../etc', [call({ ImageName: 'a' })]), []);
+    assert.deepEqual(source.find(conv, [call({ ImageName: 'a' })]), []);
+    assert.deepEqual(source.find(conv, [call({ path: 'a' }, 'view_file')]), []);
+  }));
+
+  test('owns only images inside its brain folder', withSessionsDir((brain) => {
+    const source = agyGeneratedImages(brain);
+    assert.equal(source.owns(join(brain, conv, 'a_1.jpg')), true);
+    assert.equal(source.owns(join(brain, '..', 'a_1.jpg')), false);
+    assert.equal(source.owns(join(brain, conv, 'creds.json')), false);
+  }));
+
+  test('only the Antigravity backend has generated images', () => {
+    assert.ok(antigravityBackend.generatedImages);
   });
 });
