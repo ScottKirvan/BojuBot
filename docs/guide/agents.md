@@ -35,6 +35,8 @@ To start a single session on the other agent without changing what new sessions 
 
 **Cost per message.** Antigravity adds roughly 12,000 tokens of its own instructions to every message and doesn't report cache reads. That counts against your Antigravity quota, not your Claude plan. Run `/usage` to see what's left.
 
+**Generated images.** <Badge type="warning" text="Beta" /> Gemini can make images ("draw a snail for my notes"). The Antigravity CLI saves them in its own folder, outside your vault, so BojuBot shows each one in the reply as a card with **Save to vault**. That copies the image into your attachment folder (**Settings → Files and links → Default location for new attachments**) and offers **Copy embed** for a link that shows it in a note. It works in every permission mode, since you do the saving, and the cards are still there when you reopen the session, as long as the image is still in the Antigravity CLI's folder. Claude Code doesn't generate images.
+
 **Models from other providers.** Antigravity's quota is split into groups (for example "Gemini Models" and "Claude and GPT models"), each with its own weekly and 5-hour limit. Using a Claude model through Antigravity draws on Antigravity's quota, not your Claude subscription.
 
 ## Permissions on Antigravity

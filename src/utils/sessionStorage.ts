@@ -72,11 +72,11 @@ export function transcriptPath(sessionsDir: string, sessionFileId: string): stri
  * <bojubot-context> tags removed, contexts kept for badges), then the reply.
  * Empty sides are left out. Pure — exported for tests.
  */
-export function transcriptEntries(prompt: string, reply: string, timestamp: string): ChatMessage[] {
+export function transcriptEntries(prompt: string, reply: string, timestamp: string, images: readonly string[] = []): ChatMessage[] {
   const entries: ChatMessage[] = [];
   const user = cleanUserContent(prompt);
   if (user) entries.push({ role: 'user', content: user.clean, timestamp, ...(user.contexts.length && { contexts: user.contexts }) });
-  if (reply.trim()) entries.push({ role: 'assistant', content: reply.trim(), timestamp });
+  if (reply.trim() || images.length) entries.push({ role: 'assistant', content: reply.trim(), timestamp, ...(images.length && { images: [...images] }) });
   return entries;
 }
 
@@ -102,6 +102,8 @@ export function loadTranscript(sessionsDir: string, sessionFileId: string): Chat
           content: m.content,
           timestamp: typeof m.timestamp === 'string' ? m.timestamp : '',
           ...(Array.isArray(m.contexts) && m.contexts.length && { contexts: m.contexts }),
+          ...(m.role === 'assistant' && Array.isArray(m.images) && m.images.some(i => typeof i === 'string')
+            && { images: m.images.filter((i): i is string => typeof i === 'string') }),
         });
       }
     } catch { /* skip malformed line */ }
@@ -323,6 +325,9 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   contexts?: InjectedContext[];
+  /** Images the agent's own tools made during the turn, outside the vault
+   *  (#427): absolute paths, shown as image cards on replay. Transcripts only. */
+  images?: string[];
 }
 
 /** Sum of estimated tokens across a session's messages — used for the session size display. */

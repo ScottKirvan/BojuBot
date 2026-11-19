@@ -50,6 +50,7 @@ import {
   sessionBackend,
 } from './utils/sessionStorage';
 import { StopReplyModal, StopReplyAction } from './modals/StopReplyModal';
+import { renderGeneratedImageCard } from './GeneratedImageCard';
 import { relativeTime } from './utils/sessionList';
 import { renderAgentIcon } from './agentIcon';
 import { ExportToVaultModal } from './modals/ExportToVaultModal';
@@ -424,7 +425,7 @@ export class ClaudeView extends ItemView {
       // Render assistant response
       if (apiError && !accumulated) {
         this.renderApiError(assistantEl, apiError);
-      } else if (!accumulated && uiBridgeActionCount) {
+      } else if (!accumulated && (uiBridgeActionCount || result.images.length)) {
         assistantEl.remove();
       } else if (!accumulated) {
         assistantEl.setText('(No response)');
@@ -440,6 +441,7 @@ export class ClaudeView extends ItemView {
       if (result.pendingQueries.length > 0) {
         assistantEl.dataset.queries = JSON.stringify(result.pendingQueries);
       }
+      this.renderGeneratedImages(responseGroupEl, result.images);
       if (thanked) this.maybeRenderThanksCard(responseGroupEl);
 
       this.scrollToBottom();
@@ -1594,6 +1596,9 @@ export class ClaudeView extends ItemView {
             } else {
               this.appendMessage('user', msg.content);
             }
+          } else if (!msg.content.trim()) {
+            // A turn whose only output was a generated image (#427)
+            this.renderGeneratedImages(this.messagesEl, msg.images);
           } else {
             const el = this.appendMessage('assistant', '');
             const clean = this.repairLinks(this.cleanContent(msg.content));
@@ -1616,6 +1621,7 @@ export class ClaudeView extends ItemView {
             if (replayQueries.length > 0) {
               el.dataset.queries = JSON.stringify(replayQueries);
             }
+            this.renderGeneratedImages(this.messagesEl, msg.images);
           }
         }
         const divider = this.messagesEl.createDiv({ cls: 'bojubot-history-divider' });
@@ -1634,6 +1640,20 @@ export class ClaudeView extends ItemView {
       this.appendMessage('system', `Session from another machine: ${session.title}`);
     }
     this.onPanelSessionChanged();
+  }
+
+  /**
+   * Cards for images the agent's own tools made outside the vault (#427), each
+   * with Save to vault. Only files where the session's agent saves them: a
+   * transcript is a file in the vault, so a path in it isn't trusted on its own.
+   */
+  private renderGeneratedImages(parent: HTMLElement, images: readonly string[] | undefined): void {
+    if (!images?.length) return;
+    const source = this.plugin.getBackend(this.coordinator.backendId).generatedImages;
+    for (const path of images) {
+      if (!source?.owns(path)) { log('Generated image ignored (not where the agent saves them):', path); continue; }
+      renderGeneratedImageCard(this.app, parent, path, () => this.app.workspace.getActiveFile()?.path ?? '');
+    }
   }
 
   /** The panel's session changed: retitle its tab, remember it in the saved

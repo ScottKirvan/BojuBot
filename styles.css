@@ -2476,3 +2476,58 @@
 .bojubot-welcome-recent-agent {
   margin-right: 6px;
 }
+
+/* Image the agent's own tools made outside the vault (#427) */
+.bojubot-generated-image {
+  margin: 4px 0 2px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.85em;
+}
+
+.bojubot-generated-image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.bojubot-generated-image-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+.bojubot-generated-image-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--color-accent);
+}
+
+.bojubot-generated-image-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+}
+
+.bojubot-generated-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bojubot-generated-image-link {
+  overflow-wrap: anywhere;
+}

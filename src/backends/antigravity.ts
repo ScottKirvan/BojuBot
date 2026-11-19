@@ -3,7 +3,7 @@
  * notes/dev/specs/agent-backends-spec.md for the stream format and permission
  * behavior this adapter relies on.
  */
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import * as os from 'os';
 import { execSync, ChildProcess } from 'child_process';
@@ -12,11 +12,13 @@ import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from
 import { splitBojuLines } from '../utils/bojuLines';
 import { type ApiError, AGY_AUTH, isAgyAuthFailure } from '../utils/apiError';
 import { collapseEffortVariants, splitEffortVariant } from '../utils/agentModels';
+import { generatedImageStem, isImageInside, pickGeneratedImage, type TurnToolCall } from '../utils/generatedImages';
 import { launchCli, runCli, runCliCapture } from './process';
 import { AGY_CHAT_AGENT, AGY_MAIN_AGENT, AgyAgentName, syncAgyAgentDefinitions } from './agyAgents';
 import type {
   AgentBackend,
   BackendOrientation,
+  GeneratedImageSource,
   ModelOption,
   PermissionDenial,
   PermissionMode,
@@ -568,6 +570,47 @@ export function agyModeDescriptions(caps: CliCapabilities): Partial<Record<Permi
  *  the mark itself is Google's). No Antigravity mark is published under an open license. */
 const GEMINI_MARK_SVG = '<svg role="img" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="100%" height="100%"><title>Gemini (Antigravity CLI)</title><path d="M7.98695 0C8.15434 0 8.30031 0.114462 8.34117 0.276923C8.46604 0.773819 8.63059 1.25989 8.83323 1.73046C9.36295 2.96123 10.0898 4.0384 11.0127 4.96123C11.936 5.88431 13.0129 6.6112 14.2434 7.14092C14.7141 7.3435 15.2003 7.50805 15.6972 7.63298C15.8597 7.67385 15.9739 7.81957 15.9739 7.98695C15.9739 8.15434 15.8597 8.30031 15.697 8.34117C15.2001 8.46604 14.714 8.63059 14.2434 8.83323C13.0127 9.36295 11.9358 10.0898 11.0127 11.0127C10.0898 11.936 9.36295 13.0129 8.83323 14.2434C8.63056 14.7141 8.46593 15.2003 8.34092 15.6972C8.32114 15.7762 8.27558 15.8463 8.21146 15.8964C8.14734 15.9465 8.06833 15.9738 7.98695 15.9739C7.81957 15.9739 7.67385 15.8597 7.63298 15.697C7.50802 15.2001 7.34339 14.714 7.14068 14.2434C6.6112 13.0127 5.88455 11.9358 4.96123 11.0127C4.03815 10.0898 2.96123 9.36295 1.73046 8.83323C1.25987 8.63058 0.773805 8.46595 0.276923 8.34092C0.197979 8.3212 0.127873 8.27569 0.077712 8.21162C0.0275511 8.14755 0.00020297 8.06857 0 7.9872C0 7.81982 0.114462 7.67409 0.276923 7.63323C0.773826 7.50828 1.2599 7.34365 1.73046 7.14092C2.96123 6.61145 4.0384 5.88455 4.96123 4.96148C5.88431 4.03865 6.6112 2.96148 7.14092 1.73071C7.3435 1.26011 7.50804 0.774045 7.63298 0.277169C7.65267 0.198138 7.69819 0.127947 7.76232 0.0777335C7.82645 0.0275203 7.90551 0.000161972 7.98695 0Z"/></svg>';
 
+/** Where agy keeps each conversation's files, generated images included: `<this>/<conversation id>/`. */
+export function agyBrainDir(home: string = os.homedir()): string {
+  return join(home, '.gemini', 'antigravity-cli', 'brain');
+}
+
+/**
+ * generate_image's files (#427). The tool reports no output, so each call's
+ * ImageName picks `<ImageName>_<epoch ms>.<ext>` in the conversation's folder,
+ * stamped no earlier than the call started. `brainDir` is for tests.
+ */
+export function agyGeneratedImages(brainDir: string = agyBrainDir()): GeneratedImageSource {
+  return {
+    find(conversationId: string, calls: readonly TurnToolCall[]): string[] {
+      // Conversation IDs are UUIDs: anything else could name a folder outside brainDir.
+      if (!/^[0-9a-f-]{8,64}$/i.test(conversationId)) return [];
+      const stems = calls
+        .filter(c => c.tool === 'generate_image')
+        .map(c => ({ stem: generatedImageStem(c.input), since: c.startedAt }))
+        .filter((c): c is { stem: string; since: number } => c.stem !== null);
+      if (stems.length === 0) return [];
+      const dir = join(brainDir, conversationId);
+      let files: string[];
+      try {
+        files = readdirSync(dir);
+      } catch (e) {
+        LOG('agy: generated images — cannot read', dir, e instanceof Error ? e.message : String(e));
+        return [];
+      }
+      const found: string[] = [];
+      for (const { stem, since } of stems) {
+        const file = pickGeneratedImage(files, stem, since);
+        if (!file) { LOG('agy: generated image not found for', stem); continue; }
+        const path = join(dir, file);
+        if (!found.includes(path)) found.push(path);
+      }
+      return found;
+    },
+    owns: (path: string) => isImageInside(path, brainDir),
+  };
+}
+
 export const antigravityBackend: AgentBackend = {
   id: 'antigravity',
   icon: { svg: GEMINI_MARK_SVG },
@@ -589,5 +632,6 @@ export const antigravityBackend: AgentBackend = {
   modeDescriptions: agyModeDescriptions,
   conversationAgent: agyConversationAgent,
   needsNewConversation: agyNeedsNewConversation,
+  generatedImages: agyGeneratedImages(),
   orientation: ANTIGRAVITY_ORIENTATION,
 };
