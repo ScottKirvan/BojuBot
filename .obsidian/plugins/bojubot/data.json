@@ -5,7 +5,7 @@
   "agyBinaryPath": "",
   "agyDefaultModel": "gemini-3.8-flash",
   "agyDefaultEffort": "",
-  "contextFilePath": ".BojuBot/_claude-context.md",
+  "contextFilePath": "_BojuBot/_claude-context.md",
   "sendOnEnter": true,
   "resumeLastSession": true,
   "autonomousMemory": true,

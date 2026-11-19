@@ -20,7 +20,7 @@ This file serves as persistent memory across BojuBot sessions in this vault. It 
 - **Protocol:** Inter-process UI actions and queries use the `@@BOJU` line format.
 
 ## Primary Role & Focus
-- **Core Tasks:** Assist with **testing** (test plans, manual testing, QA validation), **documentation** (VitePress docs, guides, feature references), and **creating skills** (`.BojuBot/skills`).
+- **Core Tasks:** Assist with **testing** (test plans, manual testing, QA validation), **documentation** (VitePress docs, guides, feature references), and **creating skills** (`_BojuBot/skills`).
 - **Code Boundary:** Do **not** work on or edit application source code (`src/`). Code implementation is handled separately.
 
 ## Notes for Assistant
