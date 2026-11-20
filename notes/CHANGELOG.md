@@ -7,6 +7,17 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.8.2](https://github.com/ScottKirvan/BojuBot/compare/3.8.1...3.8.2) (2026-11-19)
+
+
+### Bug Fixes
+
+* add a 7-day cooldown to Dependabot version updates ([2accff2](https://github.com/ScottKirvan/BojuBot/commit/2accff237b3138a00893cc42282ce8b9dd38df75))
+* add Dependabot config for monthly grouped dependency updates ([c8bae8c](https://github.com/ScottKirvan/BojuBot/commit/c8bae8c1b4d242020a99f73d7aa151b3d5e64a5d))
+* make release builds reproducible ([5aec458](https://github.com/ScottKirvan/BojuBot/commit/5aec458c25c724bc9562157f9d6a6af5503e6353))
+* replace Clear current session with a Stop reply command ([500da60](https://github.com/ScottKirvan/BojuBot/commit/500da60680d50a02807a0d56d9ea3bd56d97ed0a))
+* sentence-case UI text flagged by eslint-plugin-obsidianmd 0.5 ([b9499ce](https://github.com/ScottKirvan/BojuBot/commit/b9499ce8a642f0d7a72d8b1459e23812c018ad4c))
+
 ## [3.8.1](https://github.com/ScottKirvan/BojuBot/compare/3.8.0...3.8.1) (2026-10-28)
 
 
