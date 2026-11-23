@@ -23,6 +23,7 @@ import * as os from 'os';
 import { countSessionsIn, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
 import { MoveSessionsModal } from './src/modals/MoveSessionsModal';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
+import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_STORAGE_KEY, PluginState, stripPluginState } from './src/utils/pluginState';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
 import { buildCommandsReference, migrateRenamedCommands } from './src/utils/commandsReference';
@@ -45,6 +46,8 @@ interface BackendRuntime {
 
 export default class BojuBotPlugin extends Plugin {
   settings: BojuBotSettings;
+  /** Runtime state kept on this computer, outside data.json (#447). */
+  state: PluginState = { ...DEFAULT_PLUGIN_STATE };
   /** Fully-resolved brand — always populated (loadSettings runs before use). */
   brand: ResolvedBrand = resolveBrand(undefined);
   shellEnv: Record<string, string> = {};
@@ -709,16 +712,24 @@ export default class BojuBotPlugin extends Plugin {
   async loadSettings() {
     const saved = await this.loadData() as Partial<BojuBotSettings> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
-    // Installs from before started-session counting (#384): seed the count from
-    // saved sessions that got a reply. Fresh installs (no data.json) start at 0.
-    if (saved && saved.startedSessionCount === undefined) {
+    // Runtime state lives in this computer's localStorage, not data.json (#447):
+    // move what older installs kept in data.json, then drop it from settings
+    let stored: unknown = null;
+    try { stored = this.app.loadLocalStorage(PLUGIN_STATE_STORAGE_KEY); } catch (e) { log('Failed to read plugin state:', e); }
+    const migration = migratePluginState(stored, saved);
+    this.state = migration.state;
+    // No started-session count yet (an install from before counting, #384, or another
+    // computer with a synced data.json): seed it from saved sessions that got a reply.
+    // Fresh installs (no data.json) start at 0.
+    if (migration.needsSeed) {
       const vaultRoot = this.getVaultRoot();
       const configDir = this.app.vault.configDir;
       const dir = resolveSessionsDir(vaultRoot, this.settings.sessionStoragePath, configDir);
       const started = loadAllSessions(vaultRoot, dir, configDir).filter(s => s.claudeSessionId).length;
-      Object.assign(this.settings, seedSponsorProgress(started));
-      await this.saveData(this.settings);
+      Object.assign(this.state, seedSponsorProgress(started));
     }
+    if (migration.needsSeed || migration.settingsHadState) this.saveState();
+    if (stripPluginState(this.settings)) await this.saveData(this.settings);
     // `brand` is a nested object: the shallow Object.assign above copies the
     // whole reference from data.json (or leaves it undefined). resolveBrand()
     // is what fills every field field-by-field, so a partial brand never drops
@@ -728,7 +739,7 @@ export default class BojuBotPlugin extends Plugin {
     // Installs from before backendChosen: a non-default agent was picked in the
     // model picker, and sessions with replies mean the agent was in use
     if (saved && saved.backendChosen === undefined) {
-      this.settings.backendChosen = this.settings.backend !== DEFAULT_BACKEND_ID || this.settings.startedSessionCount > 0;
+      this.settings.backendChosen = this.settings.backend !== DEFAULT_BACKEND_ID || this.state.startedSessionCount > 0;
     }
     // Antigravity models used to be saved as effort variants ("gemini-3.8-flash-high"):
     // keep the base model and carry the level over as Antigravity's default effort (#402)
@@ -765,6 +776,15 @@ export default class BojuBotPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     this.refreshBrand();
+  }
+
+  /** Save runtime state to this computer's localStorage (#447). Never touches data.json. */
+  saveState(): void {
+    try {
+      this.app.saveLocalStorage(PLUGIN_STATE_STORAGE_KEY, this.state);
+    } catch (e) {
+      log('Failed to save plugin state:', e);
+    }
   }
 
   /** A backend by ID; defaults to the one new sessions use (settings.backend). */

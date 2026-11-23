@@ -226,8 +226,8 @@ export class ClaudeView extends ItemView {
       getModels: (id) => this.plugin.getModels(id),
       getSessionsDir: () => this.getSessionsDir(),
       saveLastActiveSessionId: async (id) => {
-        this.plugin.settings.lastActiveSessionId = id;
-        await this.plugin.saveSettings();
+        this.plugin.state.lastActiveSessionId = id;
+        this.plugin.saveState();
       },
       isUiBridgeEnabled: () => this.plugin.settings.uiBridgeEnabled,
       isStreamingEnabled: () => this.plugin.settings.streamPartialMessages,
@@ -266,9 +266,12 @@ export class ClaudeView extends ItemView {
     // Sponsorship milestones count sessions that actually got a reply (#384).
     // A reply from the agent new sessions use also settles that choice.
     this.coordinator.on('session:started', () => {
-      this.plugin.settings.startedSessionCount += 1;
-      if (this.coordinator.backendId === this.plugin.settings.backend) this.plugin.settings.backendChosen = true;
-      void this.plugin.saveSettings();
+      this.plugin.state.startedSessionCount += 1;
+      this.plugin.saveState();
+      if (this.coordinator.backendId === this.plugin.settings.backend && !this.plugin.settings.backendChosen) {
+        this.plugin.settings.backendChosen = true;
+        void this.plugin.saveSettings();
+      }
     });
 
     this.coordinator.on('session:new', () => {
@@ -536,7 +539,7 @@ export class ClaudeView extends ItemView {
       whiteLabeled: isWhiteLabeled(this.plugin.brand),
       optedOut: this.plugin.settings.hideSponsorshipMessages,
       shownThisSession: !!this.coordinator.sessionFileId && this.thanksCardSessionId === this.coordinator.sessionFileId,
-      lastShownAt: this.plugin.settings.lastThanksCardAt,
+      lastShownAt: this.plugin.state.lastThanksCardAt,
       now,
     });
     if (!allowed) return;
@@ -547,8 +550,8 @@ export class ClaudeView extends ItemView {
     if (!picked) return;
 
     this.thanksCardSessionId = this.coordinator.sessionFileId;
-    this.plugin.settings.lastThanksCardAt = now;
-    void this.plugin.saveSettings();
+    this.plugin.state.lastThanksCardAt = now;
+    this.plugin.saveState();
 
     const card = parent.createDiv({ cls: 'bojubot-thanks-card' });
     const avatar = card.createEl('img', { cls: 'bojubot-thanks-avatar', attr: { alt: 'Scott Kirvan', src: sponsorImageUrl } });
@@ -660,7 +663,7 @@ export class ClaudeView extends ItemView {
       target = this.findSession(st.sessionFileId);
     } else if (!st.blank && this.plugin.settings.resumeLastSession) {
       const sessions = loadAllSessions(this.plugin.getVaultRoot(), this.getSessionsDir(), this.app.vault.configDir);
-      const lastId = this.plugin.settings.lastActiveSessionId;
+      const lastId = this.plugin.state.lastActiveSessionId;
       target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
     }
     if (target && !this.plugin.leafForSession(target.id, this.leaf)) {
@@ -1966,21 +1969,21 @@ export class ClaudeView extends ItemView {
     const sponsorMilestone = sponsorMilestoneToShow({
       whiteLabeled: isWhiteLabeled(this.plugin.brand),
       optedOut: this.plugin.settings.hideSponsorshipMessages,
-      startedSessionCount: this.plugin.settings.startedSessionCount,
-      lastMilestone: this.plugin.settings.lastSponsorMilestone,
+      startedSessionCount: this.plugin.state.startedSessionCount,
+      lastMilestone: this.plugin.state.lastSponsorMilestone,
       otherStartedSessionUpdatedAt: sessions
         .filter(s => s.claudeSessionId)
         .map(s => new Date(s.updatedAt).getTime()),
-      lastShownAt: this.plugin.settings.lastSponsorShownAt,
+      lastShownAt: this.plugin.state.lastSponsorShownAt,
       now,
     });
     const showSponsorMessage = sponsorMilestone > 0;
 
     if (showSponsorMessage) {
       // Each milestone shows once, so reopening this empty session can't repeat it (#374)
-      this.plugin.settings.lastSponsorMilestone = sponsorMilestone;
-      this.plugin.settings.lastSponsorShownAt = now;
-      void this.plugin.saveSettings();
+      this.plugin.state.lastSponsorMilestone = sponsorMilestone;
+      this.plugin.state.lastSponsorShownAt = now;
+      this.plugin.saveState();
       body.addClass('bojubot-welcome-sponsor');
       const sponsorImg = body.createEl('img', { cls: 'bojubot-welcome-sponsor-image', attr: { alt: brandName, src: sponsorImageUrl } });
       sponsorImg.draggable = false;

@@ -83,8 +83,6 @@ export interface BojuBotSettings {
   injectStackedTabFiles: boolean;
   /** Vault-relative folder where "Export session to vault" saves notes. */
   exportFolder: string;
-  /** File ID of the session that was active when Obsidian was last closed. */
-  lastActiveSessionId: string;
   /**
    * Where session JSON files are stored.
    * Empty = default (.obsidian/bojubot/sessions — gitignored).
@@ -118,17 +116,8 @@ export interface BojuBotSettings {
   defaultEffort: string;
   /** Show reply text as it's generated (--include-partial-messages, when the CLI supports it). */
   streamPartialMessages: boolean;
-  /** Sessions that got at least one reply from the agent. Drives the sponsorship milestones
-   *  (src/utils/sponsorGate.ts). Seeded from saved sessions on first load (main.ts). */
-  startedSessionCount: number;
-  /** The sponsorship milestone last shown (10, 20, 30, 50, then every 50th), 0 if never. */
-  lastSponsorMilestone: number;
   /** User opt-out of the periodic sponsorship welcome variant. Always hidden/off on white-labeled installs regardless of this value. */
   hideSponsorshipMessages: boolean;
-  /** When the sponsorship welcome variant was last shown (ms since epoch), 0 if never. Enforces the 1-day minimum gap. */
-  lastSponsorShownAt: number;
-  /** When the thank-you card (#385) was last shown (ms since epoch), 0 if never. At most one a day. */
-  lastThanksCardAt: number;
   /**
    * Optional white-label branding (display name, icon, art, greetings, links).
    * Absent → the stock BojuBot identity, byte-for-byte. Always read through
@@ -162,7 +151,6 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   injectSplitPaneFiles: true,
   injectStackedTabFiles: false,
   exportFolder: '',
-  lastActiveSessionId: '',
   sessionStoragePath: '',
   commandsFolder: '',
   registerSkillsAsCommands: true,
@@ -174,11 +162,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   defaultModel: DEFAULT_MODEL_ID,
   defaultEffort: '',
   streamPartialMessages: true,
-  startedSessionCount: 0,
-  lastSponsorMilestone: 0,
   hideSponsorshipMessages: false,
-  lastSponsorShownAt: 0,
-  lastThanksCardAt: 0,
 };
 
 /**

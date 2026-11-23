@@ -51,6 +51,7 @@ import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, r
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
+import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -6627,5 +6628,61 @@ describe('agyGeneratedImages', () => {
 
   test('only the Antigravity backend has generated images', () => {
     assert.ok(antigravityBackend.generatedImages);
+  });
+});
+
+describe('pluginState (#447)', () => {
+  const full = { lastActiveSessionId: 'abc', startedSessionCount: 12, lastSponsorMilestone: 10, lastSponsorShownAt: 1700000000000, lastThanksCardAt: 1700000001000 };
+
+  test('the five runtime fields; backendChosen stays a setting', () => {
+    assert.deepEqual([...PLUGIN_STATE_KEYS], ['lastActiveSessionId', 'startedSessionCount', 'lastSponsorMilestone', 'lastSponsorShownAt', 'lastThanksCardAt']);
+    assert.deepEqual(Object.keys(DEFAULT_PLUGIN_STATE), [...PLUGIN_STATE_KEYS]);
+  });
+
+  test('readPluginState keeps fields of the right type only', () => {
+    assert.deepEqual(readPluginState(full), full);
+    assert.deepEqual(readPluginState({ ...full, extra: 1, backendChosen: true }), full);
+    assert.deepEqual(readPluginState({ lastActiveSessionId: 5, startedSessionCount: '3', lastSponsorMilestone: -1, lastSponsorShownAt: NaN, lastThanksCardAt: Infinity }), {});
+    for (const v of [null, undefined, 'x', 7, [], [full]]) assert.deepEqual(readPluginState(v), {}, String(v));
+  });
+
+  test('fresh install: defaults, nothing to strip, no seeding', () => {
+    assert.deepEqual(migratePluginState(null, null), { state: { ...DEFAULT_PLUGIN_STATE }, settingsHadState: false, needsSeed: false });
+  });
+
+  test('upgrade: state moves out of data.json', () => {
+    const m = migratePluginState(null, { backend: 'claude-code', ...full });
+    assert.deepEqual(m, { state: full, settingsHadState: true, needsSeed: false });
+  });
+
+  test('localStorage wins per field over data.json', () => {
+    const m = migratePluginState({ lastActiveSessionId: 'local', startedSessionCount: 30 }, full);
+    assert.deepEqual(m.state, { ...full, lastActiveSessionId: 'local', startedSessionCount: 30 });
+    assert.equal(m.settingsHadState, true);
+  });
+
+  test('already migrated: state from localStorage, data.json clean', () => {
+    assert.deepEqual(migratePluginState(full, { backend: 'claude-code' }), { state: full, settingsHadState: false, needsSeed: false });
+  });
+
+  test('a computer with a synced, migrated data.json and no local state seeds the count', () => {
+    const m = migratePluginState(null, { backend: 'claude-code' });
+    assert.equal(m.needsSeed, true);
+    assert.equal(m.settingsHadState, false);
+    assert.deepEqual(m.state, { ...DEFAULT_PLUGIN_STATE });
+  });
+
+  test('an install from before session counting seeds the count, other fields still move', () => {
+    const m = migratePluginState(null, { lastActiveSessionId: 'abc' });
+    assert.equal(m.needsSeed, true);
+    assert.equal(m.settingsHadState, true);
+    assert.equal(m.state.lastActiveSessionId, 'abc');
+  });
+
+  test('stripPluginState removes state fields only, in place', () => {
+    const s: Record<string, unknown> = { backend: 'antigravity', backendChosen: true, ...full };
+    assert.equal(stripPluginState(s), true);
+    assert.deepEqual(s, { backend: 'antigravity', backendChosen: true });
+    assert.equal(stripPluginState(s), false);
   });
 });
