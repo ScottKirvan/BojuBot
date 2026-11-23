@@ -2542,3 +2542,8 @@
 .bojubot-generated-image-link {
   overflow-wrap: anywhere;
 }
+
+/* Rename session dialog (/ menu, #323) */
+.bojubot-rename-session-input {
+  width: 100%;
+}

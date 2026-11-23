@@ -20,7 +20,7 @@ import { ReportModal } from './src/modals/ReportModal';
 import { REPORT_RELAY_URL } from './src/constants';
 import { isWhiteLabeled } from './src/brand';
 import * as os from 'os';
-import { countSessionsIn, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
+import { countSessionsIn, loadAllSessions, loadSessionFile, moveSessionFiles, resolveSessionsDir, saveSession, StoredSession } from './src/utils/sessionStorage';
 import { MoveSessionsModal } from './src/modals/MoveSessionsModal';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_STORAGE_KEY, PluginState, stripPluginState } from './src/utils/pluginState';
@@ -637,6 +637,18 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   /** A session was renamed in the Sessions panel: update the chat panel showing it. */
+  /** Rename a saved session (the `/` menu's Rename session): its file, any panel showing it, the Sessions panel. */
+  renameSession(sessionFileId: string, title: string): void {
+    const dir = this.getSessionsDir();
+    const session = loadSessionFile(dir, sessionFileId);
+    if (session) {
+      session.title = title;
+      saveSession(this.getVaultRoot(), session, dir);
+    }
+    this.onSessionRenamed(sessionFileId, title);
+    this.refreshSessionsViews();
+  }
+
   onSessionRenamed(sessionFileId: string, title: string): void {
     for (const view of this.chatViews()) view.onSessionRenamed(sessionFileId, title);
   }

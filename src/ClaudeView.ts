@@ -10,7 +10,8 @@ import { IDLE_STATUS, SessionStatus, StatusEvent, StatusState, displayStatus, ne
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
 import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
-import { PERMISSION_MODES, openPermissionPopover } from './modals/PermissionPickerModal';
+import { PERMISSION_MODES, PermissionPickerModal, openPermissionPopover } from './modals/PermissionPickerModal';
+import { RenameSessionModal } from './modals/RenameSessionModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
@@ -3137,10 +3138,32 @@ export class ClaudeView extends ItemView {
       },
       {
         category: 'Session',
+        name: 'Change permission mode',
+        description: 'Choose what the agent may do in this session',
+        action: () => new PermissionPickerModal(this.app, this.plugin, this.coordinator.getEffectivePermissionMode()).open(),
+      },
+      {
+        category: 'Session',
         name: 'New session',
         description: 'Start a fresh conversation',
         action: () => this.startNewSession(),
       },
+      {
+        category: 'Session',
+        name: 'Open new chat tab',
+        description: 'Start a new session in another tab',
+        action: () => void this.plugin.newSession({ forceNewTab: true, near: this.leaf }),
+      },
+      ...(this.coordinator.sessionFileId ? [{
+        category: 'Session',
+        name: 'Rename session',
+        description: 'Give this session a new name',
+        action: () => {
+          const id = this.coordinator.sessionFileId;
+          if (!id) return;
+          new RenameSessionModal(this.app, this.coordinator.sessionTitle ?? '', (title) => this.plugin.renameSession(id, title)).open();
+        },
+      }] : []),
       {
         category: 'Session',
         name: 'Show sessions',
@@ -3158,6 +3181,18 @@ export class ClaudeView extends ItemView {
           if (session) void this.exportSessionToVault(session);
           else new Notice('Session not found.');
         },
+      },
+      {
+        category: 'Session',
+        name: 'Copy last response',
+        description: 'Copy the last reply to the clipboard as Markdown',
+        action: () => this.copyLastResponse(),
+      },
+      {
+        category: 'Session',
+        name: 'Copy conversation',
+        description: 'Copy the whole conversation to the clipboard as Markdown',
+        action: () => this.exportConversation(),
       },
       {
         category: 'Context',
@@ -3208,6 +3243,15 @@ export class ClaudeView extends ItemView {
         description: 'Ask the agent to review the context file for suspicious content',
         action: () => this.auditMemoryFile(),
       },
+      ...(this.plugin.settings.registerSkillsAsCommands ? [{
+        category: 'Skills',
+        name: 'Reload skills',
+        description: 'Pick up added or removed skill files in the command palette',
+        action: () => {
+          this.plugin.reloadSkillCommands();
+          new Notice(`${this.plugin.brand.name}: skills reloaded.`);
+        },
+      }] : []),
       ...this.loadSkillCommands(),
     ];
   }
