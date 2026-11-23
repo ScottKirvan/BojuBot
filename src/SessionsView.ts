@@ -1,9 +1,9 @@
-import { App, ItemView, Keymap, Menu, Modal, Notice, WorkspaceLeaf, setIcon, setTooltip } from 'obsidian';
+import { App, debounce, ItemView, Keymap, Menu, Modal, Notice, WorkspaceLeaf, setIcon, setTooltip } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import { renderAgentIcon } from './agentIcon';
 import { estimateSessionTokens, hasReadableHistory, loadAllSessions, loadHistory, loadSessionFile, saveSession, sessionBackend, deleteSession, StoredSession } from './utils/sessionStorage';
 import { STATUS_LABELS, SessionStatus } from './utils/sessionStatus';
-import { agentModelLabel, filterSessions, groupSessions, moveSession, relativeTime, sessionGroupKey, sessionTooltip, SessionHistoryState } from './utils/sessionList';
+import { agentModelLabel, groupSessions, matchSessionContent, moveSession, relativeTime, searchableMessages, SearchableMessage, searchSessions, SessionContentMatch, sessionGroupKey, sessionTooltip, SessionHistoryState } from './utils/sessionList';
 
 export const VIEW_TYPE_SESSIONS = 'bojubot-sessions';
 
@@ -30,6 +30,8 @@ interface HistoryInfo {
   key: string;
   state: SessionHistoryState;
   tokens?: number;
+  /** The conversation's messages, for searching inside sessions (#133). */
+  messages?: SearchableMessage[];
 }
 
 /**
@@ -66,11 +68,13 @@ export class SessionsView extends ItemView {
     const header = root.createDiv({ cls: 'bojubot-sessions-header' });
     const filter = header.createEl('input', {
       cls: 'bojubot-sessions-filter',
-      attr: { type: 'search', placeholder: 'Filter sessions…', 'aria-label': 'Filter sessions' },
+      attr: { type: 'search', placeholder: 'Search sessions…', 'aria-label': 'Search session names and conversations' },
     });
+    // Searching inside conversations reads each session's history once (cached), so wait for a pause in typing
+    const search = debounce(() => this.renderList(), 200, true);
     filter.addEventListener('input', () => {
       this.query = filter.value;
-      this.renderList();
+      search();
     });
 
     const newBtn = header.createDiv({ cls: 'clickable-icon bojubot-sessions-new', attr: { role: 'button', tabindex: '0' } });
@@ -136,11 +140,13 @@ export class SessionsView extends ItemView {
     if (!list) return;
     list.empty();
 
-    const shown = filterSessions(this.sessions, this.query);
-    if (shown.length === 0) {
+    // Name matches first, grouped as usual; then sessions that only match inside their conversation (#133)
+    const result = searchSessions(this.sessions, this.query, (session) => this.contentMatch(session));
+    const shown = result.byTitle;
+    if (shown.length === 0 && result.byContent.length === 0) {
       list.createDiv({
         cls: 'bojubot-sessions-empty',
-        text: this.sessions.length === 0 ? 'No saved sessions yet.' : 'No sessions match your filter.',
+        text: this.sessions.length === 0 ? 'No saved sessions yet.' : 'No sessions match your search.',
       });
       return;
     }
@@ -154,6 +160,19 @@ export class SessionsView extends ItemView {
       groupEl.createDiv({ cls: 'bojubot-sessions-group-label', text: group.label });
       for (const session of group.sessions) this.renderRow(groupEl, session, now, session.id === activeId, openIds.has(session.id));
     }
+    if (result.byContent.length > 0) {
+      const groupEl = list.createDiv({ cls: 'bojubot-sessions-group bojubot-sessions-group-content' });
+      groupEl.createDiv({ cls: 'bojubot-sessions-group-label', text: 'In conversations' });
+      for (const { session, match } of result.byContent) {
+        this.renderRow(groupEl, session, now, session.id === activeId, openIds.has(session.id), match);
+      }
+    }
+  }
+
+  /** Where the search query appears in a session's conversation, or null (or no readable history). */
+  private contentMatch(session: StoredSession): SessionContentMatch | null {
+    const messages = this.historyInfo(session).messages;
+    return messages ? matchSessionContent(messages, this.query) : null;
   }
 
   private historyInfo(session: StoredSession): HistoryInfo {
@@ -168,7 +187,7 @@ export class SessionsView extends ItemView {
       info = { key, state: 'remote' };
     } else {
       const messages = loadHistory(session, sessionsDir);
-      info = { key, state: 'local', tokens: messages.length > 0 ? estimateSessionTokens(messages) : undefined };
+      info = { key, state: 'local', tokens: messages.length > 0 ? estimateSessionTokens(messages) : undefined, messages: searchableMessages(messages) };
     }
     this.historyCache.set(session.id, info);
     return info;
@@ -185,7 +204,7 @@ export class SessionsView extends ItemView {
     return label;
   }
 
-  private renderRow(parent: HTMLElement, session: StoredSession, now: number, isActive: boolean, isOpen: boolean): void {
+  private renderRow(parent: HTMLElement, session: StoredSession, now: number, isActive: boolean, isOpen: boolean, match?: SessionContentMatch): void {
     const info = this.historyInfo(session);
     const row = parent.createDiv({
       cls: 'bojubot-sessions-row',
@@ -208,6 +227,15 @@ export class SessionsView extends ItemView {
     renderAgentIcon(meta, backend, 'bojubot-sessions-row-agent');
     meta.createSpan({ cls: 'bojubot-sessions-row-agent-model', text: this.agentModel(session) });
     meta.createSpan({ cls: 'bojubot-sessions-row-time', text: relativeTime(session.updatedAt, now) });
+
+    if (match) {
+      const snippet = text.createDiv({ cls: 'bojubot-sessions-row-snippet' });
+      snippet.createSpan({ cls: 'bojubot-sessions-row-snippet-who', text: match.role === 'user' ? 'You: ' : 'Agent: ' });
+      snippet.createSpan({ text: match.snippet });
+      if (match.compacted) {
+        text.createDiv({ cls: 'bojubot-sessions-row-compacted', text: 'Compacted: no longer in the agent\'s context' });
+      }
+    }
 
     setTooltip(row, sessionTooltip({
       title: session.title,
