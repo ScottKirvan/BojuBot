@@ -52,6 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
+import { attachmentKind, fileExtension, fileNameOf, IMAGE_EXTS, PASTE_TEXT_MAX_BYTES, TEXT_EXTS } from '../src/utils/attachmentKind';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -6684,5 +6685,38 @@ describe('pluginState (#447)', () => {
     assert.equal(stripPluginState(s), true);
     assert.deepEqual(s, { backend: 'antigravity', backendChosen: true });
     assert.equal(stripPluginState(s), false);
+  });
+});
+
+describe('attachmentKind (#262)', () => {
+  test('images and PDFs are read by the agent; text inline; anything else by name or path', () => {
+    assert.equal(attachmentKind('shot.PNG'), 'image');
+    assert.equal(attachmentKind('C:\\Users\\me\\doc.pdf'), 'pdf');
+    assert.equal(attachmentKind('/home/me/notes.md'), 'text');
+    assert.equal(attachmentKind('data.JSON'), 'text');
+    assert.equal(attachmentKind('board.canvas'), 'text');
+    assert.equal(attachmentKind('archive.zip'), 'file');
+    assert.equal(attachmentKind('Makefile'), 'file');
+    assert.equal(attachmentKind('.gitignore'), 'file');
+  });
+
+  test('fileExtension looks at the file name only, lower-cased', () => {
+    assert.equal(fileExtension('C:\\a.b\\file.TXT'), 'txt');
+    assert.equal(fileExtension('/a.b/file'), '');
+    assert.equal(fileExtension('archive.tar.gz'), 'gz');
+    assert.equal(fileExtension('.env'), '');
+    assert.equal(fileExtension(''), '');
+  });
+
+  test('fileNameOf takes the last part of either kind of path', () => {
+    assert.equal(fileNameOf('C:\\Users\\me\\notes.md'), 'notes.md');
+    assert.equal(fileNameOf('/home/me/notes.md'), 'notes.md');
+    assert.equal(fileNameOf('notes.md'), 'notes.md');
+  });
+
+  test('text and image sets keep their members', () => {
+    for (const ext of ['md', 'txt', 'json', 'ts', 'ps1', 'canvas']) assert.ok(TEXT_EXTS.has(ext), ext);
+    for (const ext of ['png', 'jpg', 'webp', 'avif']) assert.ok(IMAGE_EXTS.has(ext), ext);
+    assert.equal(PASTE_TEXT_MAX_BYTES, 524288);
   });
 });

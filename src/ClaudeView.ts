@@ -1839,7 +1839,7 @@ export class ClaudeView extends ItemView {
           if (c.type === 'url') return `<bojubot-context type="url" url="${escapeAttr(c.text)}"></bojubot-context>`;
           if (c.type === 'image') return `<bojubot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</bojubot-context>`;
           if (c.type === 'pdf') return `<bojubot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</bojubot-context>`;
-          return `<bojubot-context type="attachment" source="${c.source}">${neutralizeTriggers(c.text)}</bojubot-context>`;
+          return `<bojubot-context type="attachment" source="${escapeAttr(c.source)}">${neutralizeTriggers(c.text)}</bojubot-context>`;
         })
         .join('\n\n');
       finalPrompt = `${contextBlock}\n\n${prompt}`;
