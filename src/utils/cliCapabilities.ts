@@ -128,24 +128,6 @@ export function parseCliCapabilities(helpText: string, versionText: string): Cli
   return { version, flags, permissionModes, effortLevels };
 }
 
-/**
- * True when `version` ("1.5.14") is `min` ("1.5.0") or later, compared part by
- * part as numbers. Null when either isn't a dotted number (e.g. the probe found
- * no version), so callers can tell "older" from "don't know".
- */
-export function versionAtLeast(version: string | null, min: string): boolean | null {
-  const parse = (v: string | null) => (v && /^\d+(\.\d+)*$/.test(v) ? v.split('.').map(Number) : null);
-  const a = parse(version);
-  const b = parse(min);
-  if (!a || !b) return null;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    if (x !== y) return x > y;
-  }
-  return true;
-}
-
 /** "Claude Code 2.1.286", or "unknown" before/without a successful probe. */
 export function formatCliVersion(caps: CliCapabilities, product = 'Claude Code'): string {
   return caps.version ? `${product} ${caps.version}` : 'unknown';

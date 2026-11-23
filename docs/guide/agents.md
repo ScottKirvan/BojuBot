@@ -11,7 +11,7 @@ A common setup is to keep your Claude quota for heavy work, such as programming 
 
 ## Setting up Antigravity (for Gemini)
 
-1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install).
+1. **Install the Antigravity CLI.** Follow the [Antigravity CLI install guide](https://antigravity.google/docs/getting-started?tab=cli#download-and-install). Use version 1.5 or later (`agy --version` shows yours): BojuBot's instructions for Gemini name the file tools those versions have.
 2. **Sign in once.** Open a terminal, run `agy`, and sign in in the browser window that opens. You can close the terminal afterwards. BojuBot reuses that sign-in.
 3. **Pick it in BojuBot.** If the Antigravity CLI is the only agent you installed, BojuBot uses it on its own. If you also have Claude Code, click the model name below the message box in the chat panel and pick a Gemini model under **Gemini (Antigravity CLI)**. If BojuBot doesn't find `agy` on its own, set **Antigravity CLI binary path** to the full path of `agy` (on Windows usually `%LOCALAPPDATA%\agy\bin\agy.exe`).
 

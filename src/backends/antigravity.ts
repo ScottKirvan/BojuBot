@@ -14,7 +14,7 @@ import { type ApiError, AGY_AUTH, isAgyAuthFailure } from '../utils/apiError';
 import { collapseEffortVariants, splitEffortVariant } from '../utils/agentModels';
 import { generatedImageStem, isImageInside, pickGeneratedImage, type TurnToolCall } from '../utils/generatedImages';
 import { launchCli, runCli, runCliCapture } from './process';
-import { AGY_CHAT_AGENT, AGY_MAIN_AGENT, AgyAgentName, AgyToolset, agyAgentsDir, agyToolset, syncAgyAgentDefinitions } from './agyAgents';
+import { AGY_CHAT_AGENT, AGY_MAIN_AGENT, AgyAgentName, syncAgyAgentDefinitions } from './agyAgents';
 import type {
   AgentBackend,
   BackendOrientation,
@@ -194,14 +194,14 @@ export function spawnAgy(opts: TurnOptions): ChildProcess {
 const PROBE_TIMEOUT_MS = 10_000;
 
 /**
- * When agy lists `--agent`, install BojuBot's agent definitions for the probed
- * agy version (`install`, replaceable for tests) and mark them usable. Without
- * the flag nothing is written; if writing fails the capabilities stay as they were, so spawns use
+ * When agy lists `--agent`, install BojuBot's agent definitions (`install`,
+ * replaceable for tests) and mark them usable. Without the flag nothing is
+ * written; if writing fails the capabilities stay as they were, so spawns use
  * the plain mode flags. Exported for tests.
  */
 export function withAgyAgentDefinitions(
   caps: CliCapabilities,
-  install: () => unknown = () => syncAgyAgentDefinitions(agyAgentsDir(), caps.version),
+  install: () => unknown = () => syncAgyAgentDefinitions(),
 ): CliCapabilities {
   if (!has(caps, '--agent')) return caps;
   try {
@@ -519,14 +519,15 @@ export function createAgyStreamHandler(cb: StreamCallbacks) {
 // Backend
 // ---------------------------------------------------------------------------
 
-/** Orientation wording for agy < 1.5 (its view_file, list_dir, grep_search,
- *  write_to_file… tools). Kept word for word; see antigravityOrientation(). */
+/** Orientation wording for Antigravity. Tool names match agy 1.5's built-in
+ *  tools: read_file, write_file and edit_file, and no tool that lists or
+ *  searches, so listing and searching go through the vault queries (#443). */
 export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
   agentLabel: 'Antigravity CLI',
   // Without this, agy goes digging in BojuBot's main.js and GitHub source to learn
   // how to drive Obsidian (test/agy-bridge-check.ts), burning quota and turns.
   environmentNote: 'This orientation is all you need to work with {{BRAND}}. Do not read {{BRAND}} plugin files (main.js, manifest.json) or fetch its source code online. If unsure of an action or query, emit the help query for its reference instead.',
-  editToolHint: 'your file tools (write_to_file or replace_file_content)',
+  editToolHint: 'your file tools (write_file or edit_file)',
   permissions: {
     restricted: {
       summary: 'Chat only',
@@ -535,13 +536,13 @@ export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
     },
     readonly: {
       summary: 'Read-only',
-      can: 'read vault files (view_file, grep_search, find_by_name, list_dir), read web pages, and search the web',
+      can: 'read vault files (read_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
       cannot: 'write or modify any files. Answer directly in chat rather than drafting a plan for approval. If asked to make changes, show the user a diff or the exact content to paste',
     },
     standard: {
       summary: 'Standard',
-      can: 'read and write vault files (view_file, write_to_file, replace_file_content), read web pages, and search the web',
-      cannot: 'run shell commands (run_command). Use your file tools instead, and request permission if a task genuinely requires a shell',
+      can: 'read and write vault files (read_file, write_file, edit_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
+      cannot: 'run shell commands (run_command). Use your file tools and the vault queries instead, and request permission if a task genuinely requires a shell',
     },
     full: {
       summary: 'Full access',
@@ -550,64 +551,6 @@ export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
     },
   },
 };
-
-const CHAT_ONLY_PERMISSION = ANTIGRAVITY_ORIENTATION.permissions.restricted;
-const FULL_PERMISSION = ANTIGRAVITY_ORIENTATION.permissions.full;
-const READONLY_CANNOT = ANTIGRAVITY_ORIENTATION.permissions.readonly.cannot;
-const STANDARD_CANNOT = 'run shell commands (run_command). Use your file tools and the vault queries instead, and request permission if a task genuinely requires a shell';
-
-/** agy 1.5 and later: read_file, write_file and edit_file, and no tool that
- *  lists or searches, so listing and searching go through the vault queries (#443). */
-const CURRENT_ORIENTATION: BackendOrientation = {
-  ...ANTIGRAVITY_ORIENTATION,
-  editToolHint: 'your file tools (write_file or edit_file)',
-  permissions: {
-    restricted: CHAT_ONLY_PERMISSION,
-    readonly: {
-      summary: 'Read-only',
-      can: 'read vault files (read_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
-      cannot: READONLY_CANNOT,
-    },
-    standard: {
-      summary: 'Standard',
-      can: 'read and write vault files (read_file, write_file, edit_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
-      cannot: STANDARD_CANNOT,
-    },
-    full: FULL_PERMISSION,
-  },
-};
-
-/** No agy version known (probe pending or failed): names no file tool. */
-const UNKNOWN_VERSION_ORIENTATION: BackendOrientation = {
-  ...ANTIGRAVITY_ORIENTATION,
-  editToolHint: 'your built-in file tools',
-  permissions: {
-    restricted: CHAT_ONLY_PERMISSION,
-    readonly: {
-      summary: 'Read-only',
-      can: 'read vault files with your built-in file tools (list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
-      cannot: READONLY_CANNOT,
-    },
-    standard: {
-      summary: 'Standard',
-      can: 'read and write vault files with your built-in file tools (list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
-      cannot: STANDARD_CANNOT,
-    },
-    full: FULL_PERMISSION,
-  },
-};
-
-const ORIENTATIONS: Record<AgyToolset, BackendOrientation> = {
-  legacy: ANTIGRAVITY_ORIENTATION,
-  current: CURRENT_ORIENTATION,
-  unknown: UNKNOWN_VERSION_ORIENTATION,
-};
-
-/** The orientation for the installed agy (`version` from the probe): its tools
- *  changed in 1.5 (#443). Exported for tests. */
-export function antigravityOrientation(version: string | null): BackendOrientation {
-  return ORIENTATIONS[agyToolset(version)];
-}
 
 /** Chat only needs BojuBot's bojubot-chat agent (#403); without it agy can't
  *  block file access for a single session. Exported for tests. */
@@ -692,6 +635,5 @@ export const antigravityBackend: AgentBackend = {
   conversationAgent: agyConversationAgent,
   needsNewConversation: agyNeedsNewConversation,
   generatedImages: agyGeneratedImages(),
-  orientation: antigravityOrientation(null),
-  orientationFor: caps => antigravityOrientation(caps.version),
+  orientation: ANTIGRAVITY_ORIENTATION,
 };
