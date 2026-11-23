@@ -6,7 +6,9 @@ import { VIEW_TYPE_CLAUDE } from './ClaudeView';
 import { log } from './utils/logger';
 import { brandName } from './brand';
 import { existsSync, readdirSync } from 'fs';
-import { join, isAbsolute } from 'path';
+import { join } from 'path';
+import { resolveSkillsFolder } from './SkillLoader';
+import { ensureParentFolder } from './utils/vaultFolders';
 import { contextGenStatusForTool } from './utils/toolFormatting';
 
 /**
@@ -165,13 +167,9 @@ export class ContextGenerationModal extends Modal {
     this.open();
   }
 
+  /** The same folder the skill loader reads (it used to guess plugin dir/commands). */
   private resolveSkillsFolder(): string {
-    const custom = this.plugin.settings.commandsFolder;
-    if (custom?.trim()) {
-      const p = custom.trim();
-      return isAbsolute(p) ? p : join(this.vaultRoot, p);
-    }
-    return join(this.vaultRoot, this.plugin.manifest.dir, 'commands');
+    return resolveSkillsFolder(this.vaultRoot, this.plugin.settings.commandsFolder ?? '');
   }
 
   private listSkills(): string[] {
@@ -188,6 +186,8 @@ export class ContextGenerationModal extends Modal {
 
   private async generateContextFile(userIntro: string, contextFiles: string[] = [], openAfter: boolean = false) {
     log('ContextGenerationModal: spawning background generation');
+    // The default context file lives in _BojuBot/: make sure the agent can write it there
+    await ensureParentFolder(this.app, this.contextFilePath);
 
     // Reuse the same session-start context injection every normal session gets
     // (orientation — including the "ignore additional working directories"
@@ -238,7 +238,7 @@ export class ContextGenerationModal extends Modal {
       `${contextFilesSection}`,
       `${skillsSection}`,
       ``,
-      `Please create the file \`${this.contextFilePath}\` in the vault root.`,
+      `Please create the file \`${this.contextFilePath}\` (a path relative to the vault root; its folder already exists).`,
       `This file will be injected at the start of every ${brandName()} session as your persistent memory.`,
       ``,
       `Generate a concise, useful context file (aim for under 300 words) that includes:`,

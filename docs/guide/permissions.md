@@ -46,7 +46,7 @@ With Gemini (Antigravity CLI), Standard accepts file edits too, but denies every
 
 Chat only is designed for conversations where you want the agent to reason and suggest, but not touch your vault or your files. The agent sees what you type or paste into the message, and can fetch web URLs and search the web. It cannot browse, read, or modify files.
 
-None of the automatic session-start context is injected in this mode — the vault folder tree, your context file (`_claude-context.md`), pinned notes, and per-file instructions are all skipped, since any of them could otherwise leak details established in other, non-restricted sessions. The agent is also started in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
+None of the automatic session-start context is injected in this mode — the vault folder tree, your context file, pinned notes, and per-file instructions are all skipped, since any of them could otherwise leak details established in other, non-restricted sessions. The agent is also started in a neutral system temp directory rather than your vault root, so it can't infer or report your vault's file-system path.
 
 BojuBot itself also keeps vault information away from the agent in Chat only:
 

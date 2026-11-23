@@ -52,6 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
+import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from '../src/utils/storageLayout';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -179,7 +180,7 @@ describe('session storage', () => {
 
   test('saveSession creates a JSON file', () => {
     const s = makeSession('s1');
-    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
+    const dir = getSessionsDir(tmpDir);
     saveSession(tmpDir, s, dir);
     const { existsSync } = require('node:fs');
     assert.ok(existsSync(join(dir, 's1.json')));
@@ -187,7 +188,7 @@ describe('session storage', () => {
 
   test('loadAllSessions returns saved session', () => {
     const s = makeSession('s2');
-    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
+    const dir = getSessionsDir(tmpDir);
     saveSession(tmpDir, s, dir);
     const sessions = loadAllSessions(tmpDir, dir, TEST_CONFIG_DIR);
     const found = sessions.find(x => x.id === 's2');
@@ -198,7 +199,7 @@ describe('session storage', () => {
   test('loadAllSessions sorts by updatedAt descending', () => {
     const older = { ...makeSession('s3'), updatedAt: '2024-01-01T00:00:00.000Z' };
     const newer = { ...makeSession('s4'), updatedAt: '2025-01-01T00:00:00.000Z' };
-    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
+    const dir = getSessionsDir(tmpDir);
     saveSession(tmpDir, older, dir);
     saveSession(tmpDir, newer, dir);
     const sessions = loadAllSessions(tmpDir, dir, TEST_CONFIG_DIR);
@@ -208,7 +209,7 @@ describe('session storage', () => {
 
   test('deleteSession removes the file', () => {
     const s = makeSession('s5');
-    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
+    const dir = getSessionsDir(tmpDir);
     saveSession(tmpDir, s, dir);
     deleteSession(tmpDir, 's5', undefined, dir);
     const sessions = loadAllSessions(tmpDir, dir, TEST_CONFIG_DIR);
@@ -1699,13 +1700,13 @@ describe('resolveSessionsDir', () => {
 
   test('undefined customPath → default sessions dir', () => {
     const result = resolveSessionsDir('/vault', undefined, CONFIG);
-    const expected = getSessionsDir('/vault', CONFIG);
+    const expected = getSessionsDir('/vault');
     assert.equal(result, expected);
   });
 
   test('whitespace-only customPath → default sessions dir', () => {
     const result = resolveSessionsDir('/vault', '   ', CONFIG);
-    const expected = getSessionsDir('/vault', CONFIG);
+    const expected = getSessionsDir('/vault');
     assert.equal(result, expected);
   });
 
@@ -2178,16 +2179,16 @@ describe('applyIdentityName', () => {
 
 describe('resolveExportFolder', () => {
   test('empty setting → brand-aware default', () => {
-    assert.equal(resolveExportFolder('', resolveBrand(undefined)), 'BojuBot Exports');
+    assert.equal(resolveExportFolder('', resolveBrand(undefined)), '_BojuBot/Exports');
   });
 
   test('whitespace-only setting → brand-aware default', () => {
-    assert.equal(resolveExportFolder('   ', resolveBrand(undefined)), 'BojuBot Exports');
+    assert.equal(resolveExportFolder('   ', resolveBrand(undefined)), '_BojuBot/Exports');
   });
 
   test('custom brand name flows into the default', () => {
     const brand = resolveBrand({ name: 'AXI25' });
-    assert.equal(resolveExportFolder('', brand), 'AXI25 Exports');
+    assert.equal(resolveExportFolder('', brand), '_AXI25/Exports');
   });
 
   test('custom folder setting is used verbatim, trimmed', () => {
@@ -6684,5 +6685,73 @@ describe('pluginState (#447)', () => {
     assert.equal(stripPluginState(s), true);
     assert.deepEqual(s, { backend: 'antigravity', backendChosen: true });
     assert.equal(stripPluginState(s), false);
+  });
+});
+
+describe('storageLayout (_BojuBot folder)', () => {
+  test('new-vault defaults all live in _BojuBot/', () => {
+    assert.deepEqual(defaultStoragePaths('BojuBot'), {
+      folder: '_BojuBot',
+      contextFile: '_BojuBot/_bojubot-context.md',
+      skills: '_BojuBot/Skills',
+      exports: '_BojuBot/Exports',
+      sessions: '_BojuBot/Sessions',
+    });
+  });
+
+  test('white-label builds get a folder named after the brand, made safe', () => {
+    assert.deepEqual(defaultStoragePaths('Acme Bot'), {
+      folder: '_Acme Bot',
+      contextFile: '_Acme Bot/_acme-bot-context.md',
+      skills: '_Acme Bot/Skills',
+      exports: '_Acme Bot/Exports',
+      sessions: '_Acme Bot/Sessions',
+    });
+    assert.equal(defaultStoragePaths('A/B:C?').folder, '_ABC');
+    assert.equal(defaultStoragePaths('  ').folder, '_BojuBot');
+  });
+
+  test('the old defaults', () => {
+    assert.deepEqual(legacyStoragePaths('BojuBot', '.obsidian'), {
+      contextFile: '_claude-context.md',
+      skills: '_BojuBot Skills',
+      exports: 'BojuBot Exports',
+      sessions: '.obsidian/bojubot/sessions',
+    });
+  });
+
+  const legacy = legacyStoragePaths('BojuBot', '.obsidian');
+  const empty = { contextFilePath: '_BojuBot/_bojubot-context.md', commandsFolder: '', exportFolder: '', sessionStoragePath: '' };
+
+  test('an existing vault on defaults keeps every old location', () => {
+    assert.deepEqual(pinnedLegacyPaths(empty, undefined, legacy), {
+      contextFilePath: '_claude-context.md',
+      commandsFolder: '_BojuBot Skills',
+      exportFolder: 'BojuBot Exports',
+      sessionStoragePath: '.obsidian/bojubot/sessions',
+    });
+  });
+
+  test('locations the user set are left alone', () => {
+    const set = { contextFilePath: 'Meta/memory.md', commandsFolder: 'Skills', exportFolder: 'Chats', sessionStoragePath: '/abs/sessions' };
+    assert.deepEqual(pinnedLegacyPaths(set, 'Meta/memory.md', legacy), {});
+    assert.deepEqual(pinnedLegacyPaths({ ...empty, commandsFolder: 'Skills' }, '_claude-context.md', legacy), {
+      exportFolder: 'BojuBot Exports',
+      sessionStoragePath: '.obsidian/bojubot/sessions',
+    });
+  });
+
+  test('a vault is existing when it has saved settings or old BojuBot files', () => {
+    const none = () => false;
+    assert.equal(isExistingVault(false, none, legacy), false);
+    assert.equal(isExistingVault(true, none, legacy), true);
+    for (const path of ['_claude-context.md', '_BojuBot Skills', 'BojuBot Exports']) {
+      assert.equal(isExistingVault(false, p => p === path, legacy), true, path);
+    }
+    assert.equal(isExistingVault(false, p => p === '_BojuBot', legacy), false);
+  });
+
+  test('the layout version marks the check as done', () => {
+    assert.equal(STORAGE_LAYOUT_VERSION, 2);
   });
 });

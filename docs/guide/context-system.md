@@ -30,7 +30,7 @@ With **Off**, the agent uses the vault query protocol to list files when it need
 
 ## 3. Context File (Persistent Memory)
 
-A markdown file injected at the start of every session. Default path: `_claude-context.md` at your vault root. This is the agent's **persistent memory** — it survives across sessions and syncs with your vault.
+A markdown file injected at the start of every session. Default path: `_BojuBot/_bojubot-context.md`, in the `_BojuBot/` folder where BojuBot keeps its files. Vaults that used BojuBot before that folder existed keep their context file where it was (`_claude-context.md` at the vault root by default). This is the agent's **persistent memory** — it survives across sessions and syncs with your vault.
 
 ### Getting started
 
@@ -66,11 +66,11 @@ _Last updated: 2026-04-13_
 
 Think of it as a briefing document — tell the agent who you are, how your vault is organised, what's currently in focus, and any standing preferences.
 
-### `_claude-context.md` vs the agent's own instruction files
+### The context file vs the agent's own instruction files
 
 Each agent CLI also reads instruction files of its own from its working directory: Claude Code reads `CLAUDE.md`, and Antigravity reads `GEMINI.md` and `AGENTS.md`. They serve a similar purpose to BojuBot's context file, but have distinct roles:
 
-|                        | `_claude-context.md`                                     | `CLAUDE.md` / `GEMINI.md` / `AGENTS.md`                              |
+|                        | BojuBot's context file                                   | `CLAUDE.md` / `GEMINI.md` / `AGENTS.md`                              |
 | ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
 | **Read by**            | BojuBot, which injects it at session start, for either agent | The agent CLI itself (Claude Code: `CLAUDE.md`; Antigravity: `GEMINI.md`, `AGENTS.md`) |
 | **Location**           | Configurable — any path in or outside the vault          | The working directory (the vault root by default)                    |
@@ -79,9 +79,9 @@ Each agent CLI also reads instruction files of its own from its working director
 | **Travels with vault** | Yes — it's a vault note                                  | Yes — it's a tracked file                                            |
 | **Updated by the agent** | Yes, when Autonomous memory is on                      | No — the agent reads it; BojuBot never asks it to update the file    |
 
-**When to use both:** an instruction file at the vault root works as a fallback — the agent CLI reads it regardless of BojuBot. Use it for technical/project-level instructions that apply everywhere. Use `_claude-context.md` for personal context, vault conventions, and the evolving notes that Autonomous memory maintains. It also works the same whichever agent you use.
+**When to use both:** an instruction file at the vault root works as a fallback — the agent CLI reads it regardless of BojuBot. Use it for technical/project-level instructions that apply everywhere. Use BojuBot's context file for personal context, vault conventions, and the evolving notes that Autonomous memory maintains. It also works the same whichever agent you use.
 
-**When `_claude-context.md` wins:** it can live anywhere (configurable path), it's updated by the agent automatically, and it doesn't need to be at the vault root. If you use BojuBot across multiple vaults, each can have its own context file at a different path without touching the agent's instruction files.
+**When the context file wins:** it can live anywhere (configurable path), it's updated by the agent automatically, and it doesn't need to be at the vault root. If you use BojuBot across multiple vaults, each can have its own context file at a different path without touching the agent's instruction files.
 
 ### Keeping it fresh
 

@@ -40,7 +40,7 @@ Skills are the real power of the `/` menu. A skill is a markdown file that gives
 
 Drop a `.md` file in your skills folder and it appears in the menu instantly. No restart required.
 
-**Default folder:** `_BojuBot Skills/` — at your vault root, gitignored by default.
+**Default folder:** `_BojuBot/Skills/` (`_BojuBot Skills/` in vaults that used BojuBot before the `_BojuBot/` folder).
 
 **Custom folder:** set **Settings → BojuBot → Skills folder** to any vault-relative path (e.g. `_skills`) or absolute path.
 

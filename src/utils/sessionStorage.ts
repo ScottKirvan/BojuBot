@@ -4,6 +4,8 @@ import { homedir } from 'os';
 import { estimateTokens } from './logger';
 import type { BackendId, PermissionMode } from '../backends/types';
 import { getBackend } from '../backends';
+import { activeBrand } from '../brand';
+import { defaultStoragePaths } from './storageLayout';
 
 export interface StoredSession {
   id: string;
@@ -111,21 +113,21 @@ export function loadTranscript(sessionsDir: string, sessionFileId: string): Chat
   return messages;
 }
 
-export function getSessionsDir(vaultRoot: string, configDir: string): string {
-  // Stored outside the plugin directory so symlinked dev installs don't
-  // cause multiple vaults to share the same physical sessions folder.
-  return join(vaultRoot, configDir, 'bojubot', 'sessions');
+/** The default sessions folder: `_BojuBot/Sessions` in the vault (src/utils/storageLayout.ts).
+ *  Vaults from before that layout have their old folder in `sessionStoragePath`. */
+export function getSessionsDir(vaultRoot: string): string {
+  return join(vaultRoot, defaultStoragePaths(activeBrand().name).sessions);
 }
 
 /**
  * Resolve the sessions directory from a user-configured path.
- * - Empty / whitespace → default location (<configDir>/bojubot/sessions)
+ * - Empty / whitespace → default location (_BojuBot/Sessions)
  * - Absolute path → used as-is
  * - Relative path → resolved against vault root
  */
 export function resolveSessionsDir(vaultRoot: string, customPath: string | undefined, configDir: string): string {
   const p = customPath?.trim();
-  if (!p) return getSessionsDir(vaultRoot, configDir);
+  if (!p) return getSessionsDir(vaultRoot);
   if (isAbsolute(p)) return p;
   return join(vaultRoot, p);
 }
