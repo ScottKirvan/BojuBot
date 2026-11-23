@@ -24,7 +24,7 @@ import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/mod
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
 import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
-import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
+import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId, backendOrientation } from '../src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
 import { generatedImageStem, pickGeneratedImage, isImageInside, imageMimeType } from '../src/utils/generatedImages';
@@ -34,14 +34,14 @@ import { buildLineParts, formatVersionInfo, osLabel } from '../src/utils/buildIn
 import { creditsTimeline, CREDITS_FADE_MS } from '../src/utils/credits';
 import { PREFILL_DESCRIPTION_MAX, TITLE_MAX, readRelayResponse, relayRequest, reportBody, reportIssueUrl, reportPrefill, reportTitle, tailLines } from '../src/utils/report';
 import { pickThanksMessage, thanksCardAllowed, THANKS_MIN_GAP_MS, THANKS_SPONSOR_SHARE } from '../src/utils/thanks';
-import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation, agyBrainDir, agyGeneratedImages } from '../src/backends/antigravity';
-import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS } from '../src/backends/agyAgents';
+import { agyPermissionArgs, buildAgySpawnArgs, agyPromptLine, parseAgyStream, formatAgyUsage, parseAgyModels, isAgyDenialNotice, agyApiError, antigravityBackend, ANTIGRAVITY_ORIENTATION, agyAgentsAvailable, isAgyAgentRejection, resetAgyAgentRejection, withAgyAgentDefinitions, agyUnavailableModes, agyModeDescriptions, agyConversationAgent, agyNeedsNewConversation, agyBrainDir, agyGeneratedImages, antigravityOrientation } from '../src/backends/antigravity';
+import { agyAgentDefinition, agyAgentsDir, agyAgentPath, syncAgyAgentDefinitions, AGY_AGENTS, AGY_AGENT_TOOLS, AGY_MAIN_AGENT, AGY_CHAT_AGENT, AGY_REGISTRY_TOOLS, AGY_NEW_FILE_TOOLS_VERSION, agyToolset } from '../src/backends/agyAgents';
 import { agentModelIndicatorText, collapseEffortVariants, migrateVariantModel, modeForAgentSwitch, modelEffortLevels, modelPickAction, nearestLevel, newSessionBackend, resolveTurnModel, splitEffortVariant } from '../src/utils/agentModels';
 import { previewForDisplay, composeStreamingText } from '../src/utils/streamPreview';
 import { extractResultText } from '../src/utils/planUsage';
 import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFormatting';
 import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice, claudeAuthFailure, claudeAuthReply, isAgyAuthFailure, CLAUDE_AUTH, AGY_AUTH, CLAUDE_SIGN_IN_HELP_URL, AGY_SIGN_IN_HELP_URL } from '../src/utils/apiError';
-import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities } from '../src/utils/cliCapabilities';
+import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities, versionAtLeast } from '../src/utils/cliCapabilities';
 import { fileStamp } from '../src/utils/fileStamp';
 import { extractActions } from '../src/utils/actionParser';
 import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
@@ -2650,6 +2650,26 @@ describe('extractToolDetail (Antigravity tool parameters)', () => {
   test('run_command shows the command line', () => {
     assert.equal(extractToolDetail('run_command', { CommandLine: 'ls -la' }), 'ls -la');
   });
+  test('agy 1.5 read_file / write_file / edit_file show the file name (#443)', () => {
+    assert.equal(extractToolDetail('read_file', { Path: 'D:\\vault\\notes\\a.md', StartLine: 1, EndLine: 5 }), 'a.md');
+    assert.equal(extractToolDetail('write_file', { Path: '/vault/new.md' }), 'new.md');
+    assert.equal(extractToolDetail('write_file', { TargetFile: 'C:\\vault\\b.md' }), 'b.md');
+    assert.equal(extractToolDetail('edit_file', { Path: 'C:\\vault\\c.md' }), 'c.md');
+    assert.equal(extractToolDetail('edit_file', { TargetFile: '/vault/d.md' }), 'd.md');
+  });
+});
+
+describe('contextGenStatusForTool (Antigravity tool names)', () => {
+  test('agy 1.5 file tools', () => {
+    assert.equal(contextGenStatusForTool('read_file'), 'Scanning vault…');
+    assert.equal(contextGenStatusForTool('write_file'), 'Writing your context file…');
+    assert.equal(contextGenStatusForTool('edit_file'), 'Writing your context file…');
+  });
+  test('agy 1.4 file tools still work', () => {
+    assert.equal(contextGenStatusForTool('view_file'), 'Scanning vault…');
+    assert.equal(contextGenStatusForTool('grep_search'), 'Scanning vault…');
+    assert.equal(contextGenStatusForTool('write_to_file'), 'Writing your context file…');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -3275,6 +3295,9 @@ describe('agyConversationAgent / agyNeedsNewConversation', () => {
   });
 });
 
+/** An agy with the old file tools (view_file, list_dir, grep_search…). */
+const AGY_1_4 = '1.4.8';
+
 describe('agyAgentDefinition', () => {
   const frontmatter = (text: string) => text.split('\n---\n')[0];
   const body = (text: string) => text.slice(text.indexOf('\n---\n') + 5);
@@ -3294,10 +3317,10 @@ describe('agyAgentDefinition', () => {
   });
 
   test('bojubot-chat frontmatter, exactly', () => {
-    assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
+    assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT, AGY_1_4)), [
       '---',
       'name: bojubot-chat',
-      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v1), which rewrites this file when it changes."',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v2), which rewrites this file when it changes."',
       'tools:',
       '  - search_web',
       '  - read_url_content',
@@ -3308,7 +3331,7 @@ describe('agyAgentDefinition', () => {
   });
 
   test('bojubot frontmatter: every tool listed, main agent only, agy\'s default command policy', () => {
-    const fm = frontmatter(agyAgentDefinition(AGY_MAIN_AGENT));
+    const fm = frontmatter(agyAgentDefinition(AGY_MAIN_AGENT, AGY_1_4));
     assert.ok(fm.startsWith('---\nname: bojubot\ndescription: "BojuBot Standard, Read only and Full access modes. '));
     assert.equal(fm.match(/^ {2}- /gm)?.length, 26);
     assert.ok(fm.endsWith('\nmainAgent: true\nsubagent: false'));
@@ -3317,17 +3340,17 @@ describe('agyAgentDefinition', () => {
 
   test('ruleset in both: bare vault-relative wikilinks, no file:// or backticks', () => {
     for (const name of AGY_AGENTS) {
-      const b = body(agyAgentDefinition(name));
+      const b = body(agyAgentDefinition(name, AGY_1_4));
       assert.match(b, /## Links\n/, name);
       assert.match(b, /bare wikilinks: \[\[folder\/note\]\]/, name);
       assert.match(b, /Never write file:\/\/ URIs/, name);
       assert.match(b, /Never put backticks around a link/, name);
-      assert.ok(agyAgentDefinition(name).endsWith('\n'), name);
+      assert.ok(agyAgentDefinition(name, AGY_1_4).endsWith('\n'), name);
     }
   });
 
   test('bojubot ruleset is mode-neutral: file tools over shell, UI Bridge file ops, request-permission after a denial', () => {
-    const b = body(agyAgentDefinition(AGY_MAIN_AGENT));
+    const b = body(agyAgentDefinition(AGY_MAIN_AGENT, AGY_1_4));
     assert.match(b, /Follow the latest permission note you were given\. When a tool call is denied, don't retry it/);
     assert.match(b, /- List a folder: list_dir, not dir, ls or Get-ChildItem\./);
     assert.match(b, /- Read a file: view_file, not cat, type or Get-Content\./);
@@ -3340,7 +3363,7 @@ describe('agyAgentDefinition', () => {
   });
 
   test('bojubot-chat ruleset: web only, no file tools, no permission requests', () => {
-    const b = body(agyAgentDefinition(AGY_CHAT_AGENT));
+    const b = body(agyAgentDefinition(AGY_CHAT_AGENT, AGY_1_4));
     assert.match(b, /You have web tools only: search_web and read_url_content\. You can't read, list, search or change files, and you have no shell\./);
     assert.match(b, /which starts a new session/);
     for (const word of ['view_file', 'run_command', 'request-permission', 'rename-file']) assert.ok(!b.includes(word), word);
@@ -3359,23 +3382,23 @@ describe('syncAgyAgentDefinitions', () => {
   });
 
   test('creates the folder and both definitions, then leaves unchanged files alone', withDir((dir) => {
-    assert.deepEqual(syncAgyAgentDefinitions(dir), ['bojubot', 'bojubot-chat']);
-    for (const name of AGY_AGENTS) assert.equal(readFileSync(agyAgentPath(dir, name), 'utf8'), agyAgentDefinition(name));
-    assert.deepEqual(syncAgyAgentDefinitions(dir), []);
+    assert.deepEqual(syncAgyAgentDefinitions(dir, AGY_1_4), ['bojubot', 'bojubot-chat']);
+    for (const name of AGY_AGENTS) assert.equal(readFileSync(agyAgentPath(dir, name), 'utf8'), agyAgentDefinition(name, AGY_1_4));
+    assert.deepEqual(syncAgyAgentDefinitions(dir, AGY_1_4), []);
   }));
 
   test('rewrites only a definition whose content changed', withDir((dir) => {
-    syncAgyAgentDefinitions(dir);
+    syncAgyAgentDefinitions(dir, AGY_1_4);
     writeFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'edited by hand', 'utf8');
-    assert.deepEqual(syncAgyAgentDefinitions(dir), ['bojubot-chat']);
-    assert.equal(readFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'utf8'), agyAgentDefinition(AGY_CHAT_AGENT));
+    assert.deepEqual(syncAgyAgentDefinitions(dir, AGY_1_4), ['bojubot-chat']);
+    assert.equal(readFileSync(agyAgentPath(dir, AGY_CHAT_AGENT), 'utf8'), agyAgentDefinition(AGY_CHAT_AGENT, AGY_1_4));
   }));
 
   test('never touches other files in the folder', withDir((dir) => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'my-agent.md'), 'mine', 'utf8');
     writeFileSync(join(dir, 'bojubot-full.md'), 'not ours to manage', 'utf8');
-    syncAgyAgentDefinitions(dir);
+    syncAgyAgentDefinitions(dir, AGY_1_4);
     assert.equal(readFileSync(join(dir, 'my-agent.md'), 'utf8'), 'mine');
     assert.equal(readFileSync(join(dir, 'bojubot-full.md'), 'utf8'), 'not ours to manage');
   }));
@@ -3383,8 +3406,165 @@ describe('syncAgyAgentDefinitions', () => {
   test('throws when the folder can\'t be written', withDir((dir) => {
     mkdirSync(join(dir, '..'), { recursive: true });
     writeFileSync(dir, 'a file where the folder should be', 'utf8');
-    assert.throws(() => syncAgyAgentDefinitions(dir));
+    assert.throws(() => syncAgyAgentDefinitions(dir, AGY_1_4));
   }));
+});
+
+describe('versionAtLeast', () => {
+  test('compares part by part as numbers', () => {
+    assert.equal(versionAtLeast('1.5.0', '1.5.0'), true);
+    assert.equal(versionAtLeast('1.5.14', '1.5.0'), true);
+    assert.equal(versionAtLeast('1.10.0', '1.5.0'), true);
+    assert.equal(versionAtLeast('2.0.0', '1.5.0'), true);
+    assert.equal(versionAtLeast('1.4.99', '1.5.0'), false);
+    assert.equal(versionAtLeast('1.4.8', '1.5.0'), false);
+    assert.equal(versionAtLeast('0.9.9', '1.5.0'), false);
+  });
+  test('missing parts count as 0', () => {
+    assert.equal(versionAtLeast('1.5', '1.5.0'), true);
+    assert.equal(versionAtLeast('1.4', '1.5.0'), false);
+  });
+  test('null when either side is not a dotted number', () => {
+    assert.equal(versionAtLeast(null, '1.5.0'), null);
+    assert.equal(versionAtLeast('', '1.5.0'), null);
+    assert.equal(versionAtLeast('1.5.0-beta', '1.5.0'), null);
+    assert.equal(versionAtLeast('1.5.0', 'x'), null);
+  });
+});
+
+describe('agyToolset (#443)', () => {
+  test('threshold is 1.5.0', () => {
+    assert.equal(AGY_NEW_FILE_TOOLS_VERSION, '1.5.0');
+    assert.equal(agyToolset('1.4.99'), 'legacy');
+    assert.equal(agyToolset('1.5.0'), 'current');
+  });
+  test('old, new and unknown versions', () => {
+    assert.equal(agyToolset('1.4.4'), 'legacy');
+    assert.equal(agyToolset('1.4.8'), 'legacy');
+    assert.equal(agyToolset('1.5.14'), 'current');
+    assert.equal(agyToolset('2.0.0'), 'current');
+    assert.equal(agyToolset(null), 'unknown');
+  });
+});
+
+describe('agyAgentDefinition per agy version (#443)', () => {
+  const body = (text: string) => text.slice(text.indexOf('\n---\n') + 5);
+  const tools = (text: string) => text.slice(text.indexOf('## Tools\n'), text.indexOf('## Renaming'));
+  const OLD_TOOL_NAMES = ['list_dir', 'view_file', 'find_by_name', 'grep_search', 'write_to_file', 'replace_file_content'];
+  const NEW_TOOL_NAMES = ['read_file', 'write_file', 'edit_file'];
+
+  test('agy < 1.5 keeps the old tool list word for word', () => {
+    assert.equal(tools(agyAgentDefinition(AGY_MAIN_AGENT, '1.4.99')), [
+      '## Tools',
+      'Use your built-in tools, not shell commands, for files:',
+      '- List a folder: list_dir, not dir, ls or Get-ChildItem.',
+      '- Read a file: view_file, not cat, type or Get-Content.',
+      '- Find files by name: find_by_name, not dir /s or find.',
+      '- Search inside files: grep_search, not grep, findstr or Select-String.',
+      '- Create or change a file: write_to_file, replace_file_content or multi_replace_file_content, not echo, Set-Content or redirection.',
+      '',
+      '',
+    ].join('\n'));
+    assert.ok(!body(agyAgentDefinition(AGY_MAIN_AGENT, '1.4.99')).includes('"query"'));
+  });
+
+  test('agy 1.5: read_file, write_file, edit_file; listing and searching through vault queries, not the shell', () => {
+    const t = tools(agyAgentDefinition(AGY_MAIN_AGENT, '1.5.0'));
+    assert.match(t, /- Read a file: read_file, not cat, type or Get-Content\./);
+    assert.match(t, /- Create a file: write_file, not echo, Set-Content or redirection\./);
+    assert.match(t, /- Change a file: edit_file\./);
+    for (const name of OLD_TOOL_NAMES) assert.ok(!t.includes(name), name);
+    assert.ok(t.includes('You have no tool that lists folders, finds files or searches inside them.'));
+    assert.ok(t.includes('\n- List a folder: @@BOJU {"query":"file-list","folder":"<folder>","mode":"inject"}\n'));
+    assert.ok(t.includes('\n- Find files by name: @@BOJU {"query":"file-list","name":"<part of the file name>","folder":"<optional folder>","mode":"inject"}\n'));
+    assert.ok(t.includes('\n- Search inside notes: @@BOJU {"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}\n'));
+    assert.match(t, /Don't use shell commands \(dir, ls, Get-ChildItem, find, grep, findstr, Select-String\) for this, even when they're allowed\./);
+    assert.match(t, /If the conversation doesn't describe vault queries, you can't list or search the vault: read the files you already know about, or ask the user/);
+  });
+
+  test('unknown version names no file tool but still points to the vault queries', () => {
+    const t = tools(agyAgentDefinition(AGY_MAIN_AGENT, null));
+    assert.match(t, /Use your built-in file tools, not shell commands, to read, create and change files\./);
+    for (const name of [...OLD_TOOL_NAMES, ...NEW_TOOL_NAMES]) assert.ok(!t.includes(name), name);
+    assert.ok(t.includes('@@BOJU {"query":"search","text":"<words to find>"'));
+    assert.ok(t.includes('@@BOJU {"query":"file-list","name":"<part of the file name>"'));
+  });
+
+  test('only the Tools section changes; the frontmatter and Chat only agent stay the same', () => {
+    for (const version of ['1.4.8', '1.5.14', null]) {
+      const main = agyAgentDefinition(AGY_MAIN_AGENT, version);
+      assert.equal(main.split('\n---\n')[0], agyAgentDefinition(AGY_MAIN_AGENT, '1.4.8').split('\n---\n')[0], String(version));
+      assert.match(main, /## Permission modes\n/);
+      assert.match(main, /## Renaming, moving and deleting notes\n/);
+      assert.ok(main.endsWith('"reason":"<why>"}\n'));
+      assert.equal(agyAgentDefinition(AGY_CHAT_AGENT, version), agyAgentDefinition(AGY_CHAT_AGENT, '1.4.8'), String(version));
+    }
+  });
+
+  test('an agy update rewrites the main definition on the next sync', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bojubot-agy-agents-'));
+    const dir = join(root, 'agents');
+    try {
+      assert.deepEqual(syncAgyAgentDefinitions(dir, '1.4.8'), ['bojubot', 'bojubot-chat']);
+      assert.deepEqual(syncAgyAgentDefinitions(dir, '1.4.8'), []);
+      assert.deepEqual(syncAgyAgentDefinitions(dir, '1.5.14'), ['bojubot']);
+      assert.equal(readFileSync(agyAgentPath(dir, AGY_MAIN_AGENT), 'utf8'), agyAgentDefinition(AGY_MAIN_AGENT, '1.5.14'));
+      assert.deepEqual(syncAgyAgentDefinitions(dir, '1.5.15'), []);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
+describe('antigravityOrientation (#443)', () => {
+  const caps = (version: string | null): CliCapabilities => ({ ...UNKNOWN_CAPABILITIES, version });
+  const OLD_TOOL_NAMES = ['view_file', 'grep_search', 'find_by_name', 'list_dir', 'write_to_file', 'replace_file_content'];
+  const NEW_TOOL_NAMES = ['read_file', 'write_file', 'edit_file'];
+  const texts = (o: ReturnType<typeof antigravityOrientation>) =>
+    [o.editToolHint, ...Object.values(o.permissions).flatMap(p => [p.summary, p.can, p.cannot])].join('\n');
+
+  test('agy < 1.5 gets the old orientation unchanged', () => {
+    assert.equal(antigravityOrientation('1.4.99'), ANTIGRAVITY_ORIENTATION);
+    assert.equal(ANTIGRAVITY_ORIENTATION.editToolHint, 'your file tools (write_to_file or replace_file_content)');
+    assert.equal(ANTIGRAVITY_ORIENTATION.permissions.readonly.can, 'read vault files (view_file, grep_search, find_by_name, list_dir), read web pages, and search the web');
+    assert.equal(ANTIGRAVITY_ORIENTATION.permissions.standard.can, 'read and write vault files (view_file, write_to_file, replace_file_content), read web pages, and search the web');
+  });
+
+  test('agy 1.5 names read_file, write_file, edit_file and the vault queries', () => {
+    const o = antigravityOrientation('1.5.0');
+    assert.equal(o.editToolHint, 'your file tools (write_file or edit_file)');
+    assert.match(o.permissions.readonly.can, /^read vault files \(read_file; list folders, find files and search notes with the vault queries, not shell commands\)/);
+    assert.match(o.permissions.standard.can, /^read and write vault files \(read_file, write_file, edit_file; list folders, find files and search notes with the vault queries, not shell commands\)/);
+    assert.match(o.permissions.standard.cannot, /^run shell commands \(run_command\)\. Use your file tools and the vault queries instead/);
+    for (const name of OLD_TOOL_NAMES) assert.ok(!texts(o).includes(name), name);
+  });
+
+  test('unknown version names no file tool', () => {
+    const o = antigravityOrientation(null);
+    assert.equal(o.editToolHint, 'your built-in file tools');
+    for (const name of [...OLD_TOOL_NAMES, ...NEW_TOOL_NAMES]) assert.ok(!texts(o).includes(name), name);
+    assert.match(o.permissions.standard.can, /with your built-in file tools \(list folders, find files and search notes with the vault queries/);
+  });
+
+  test('every version keeps the wording that has no file tools in it', () => {
+    for (const version of ['1.4.8', '1.5.14', null]) {
+      const o = antigravityOrientation(version);
+      assert.equal(o.agentLabel, 'Antigravity CLI');
+      assert.equal(o.environmentNote, ANTIGRAVITY_ORIENTATION.environmentNote);
+      assert.deepEqual(o.permissions.restricted, ANTIGRAVITY_ORIENTATION.permissions.restricted);
+      assert.deepEqual(o.permissions.full, ANTIGRAVITY_ORIENTATION.permissions.full);
+      assert.equal(o.permissions.readonly.cannot, ANTIGRAVITY_ORIENTATION.permissions.readonly.cannot);
+      for (const mode of ['standard', 'readonly', 'full', 'restricted'] as const) assert.ok(o.permissions[mode].summary, mode);
+    }
+  });
+
+  test('backendOrientation picks by the installed CLI; Claude Code is unaffected', () => {
+    assert.equal(backendOrientation(antigravityBackend, caps('1.5.14')), antigravityOrientation('1.5.14'));
+    assert.equal(backendOrientation(antigravityBackend, caps('1.4.8')), ANTIGRAVITY_ORIENTATION);
+    assert.equal(backendOrientation(antigravityBackend, UNKNOWN_CAPABILITIES), antigravityOrientation(null));
+    assert.equal(antigravityBackend.orientation, antigravityOrientation(null));
+    const claude = getBackend('claude-code');
+    assert.equal(claude.orientationFor, undefined);
+    assert.equal(backendOrientation(claude, caps('9.9.9')), claude.orientation);
+  });
 });
 
 describe('withAgyAgentDefinitions', () => {

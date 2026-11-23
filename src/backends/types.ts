@@ -149,7 +149,13 @@ export interface AgentBackend {
   /** Images the CLI's own tools saved outside the vault (Antigravity's
    *  generate_image, #427). Optional — omitted means the CLI makes none. */
   generatedImages?: GeneratedImageSource;
+  /** Orientation wording when the CLI's capabilities aren't known yet. */
   orientation: BackendOrientation;
+  /** Orientation wording for the installed CLI (`caps`), when it depends on the
+   *  version (Antigravity's file tools changed in 1.5, #443). Optional —
+   *  omitted means `orientation` always. Read it through backendOrientation()
+   *  (backends/index.ts). */
+  orientationFor?(caps: CliCapabilities): BackendOrientation;
 }
 
 export interface GeneratedImageSource {

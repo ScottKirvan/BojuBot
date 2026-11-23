@@ -16,12 +16,15 @@ export function contextGenStatusForTool(tool: string): string {
     case 'list_dir':
     case 'grep_search':
     case 'find_by_name':
+    case 'read_file':
       return 'Scanning vault…';
     case 'Write':
     case 'Edit':
     case 'write_to_file':
     case 'replace_file_content':
     case 'multi_replace_file_content':
+    case 'write_file':
+    case 'edit_file':
       return 'Writing your context file…';
     case 'ToolSearch':
       return 'Loading tools…';
@@ -43,8 +46,9 @@ export function extractToolDetail(tool: string, input: unknown): string {
   const inp = input as Record<string, unknown>;
 
   // Try path-like fields first (covers Read, Write, Edit, Glob, Grep, LS…;
-  // AbsolutePath/TargetFile are Antigravity's view_file/write_to_file)
-  const pathVal = (inp.file_path ?? inp.path ?? inp.filePath ?? inp.AbsolutePath ?? inp.TargetFile) as string | undefined;
+  // AbsolutePath/TargetFile are Antigravity 1.4's view_file/write_to_file,
+  // Path its 1.5 read_file/write_file/edit_file)
+  const pathVal = (inp.file_path ?? inp.path ?? inp.filePath ?? inp.AbsolutePath ?? inp.TargetFile ?? inp.Path) as string | undefined;
   if (pathVal) {
     // For commands that benefit from showing just the filename
     const key = tool.toLowerCase();

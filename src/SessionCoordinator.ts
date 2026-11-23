@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 import type { ChildProcess } from 'child_process';
-import type { AgentBackend, BackendId, ModelOption, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
+import type { AgentBackend, BackendId, BackendOrientation, ModelOption, PermissionMode, PermissionDenial, TokenUsage } from './backends/types';
 import { killProcess } from './backends/process';
-import { sentenceStart } from './backends';
+import { backendOrientation, sentenceStart } from './backends';
 import { resolveSpawnCwd } from './backends/modes';
 import { VaultQuery } from './QueryHandler';
 import { BOJU_PREFIX } from './constants';
@@ -269,6 +269,12 @@ export class SessionCoordinator {
   /** Read fresh on every spawn so a probe that finishes mid-session applies from the next turn. */
   get capabilities(): CliCapabilities {
     return this.host.getCliCapabilities?.(this._s.backend) ?? UNKNOWN_CAPABILITIES;
+  }
+
+  /** The session backend's orientation wording for the installed CLI (its tool
+   *  names can depend on the version, #443). */
+  get orientation(): BackendOrientation {
+    return backendOrientation(this.backend, this.capabilities);
   }
 
   /** The open session's own mode. The global default only applies while no
