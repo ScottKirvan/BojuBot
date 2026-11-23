@@ -20,7 +20,7 @@ import { ReportModal } from './src/modals/ReportModal';
 import { REPORT_RELAY_URL } from './src/constants';
 import { isWhiteLabeled } from './src/brand';
 import * as os from 'os';
-import { countSessionsIn, getLegacySessionsDirs, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
+import { countSessionsIn, getLegacySessionsDirs, getSessionsDir, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
 import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from './src/utils/storageLayout';
 import { MoveSessionsModal } from './src/modals/MoveSessionsModal';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
@@ -719,10 +719,10 @@ export default class BojuBotPlugin extends Plugin {
     if ((saved?.storageLayout ?? 0) < STORAGE_LAYOUT_VERSION) {
       const vaultRoot = this.getVaultRoot();
       const configDir = this.app.vault.configDir;
-      const legacy = legacyStoragePaths(this.brand.name, configDir);
+      const legacy = legacyStoragePaths(this.brand.name);
       const exists = (rel: string) => existsSync(join(vaultRoot, rel));
-      const legacySessions = [join(vaultRoot, legacy.sessions), ...getLegacySessionsDirs(vaultRoot, configDir)];
-      if (isExistingVault(saved !== null, exists, legacy) || legacySessions.some(d => countSessionsIn(d) > 0)) {
+      const sessionDirs = [getSessionsDir(vaultRoot, configDir), ...getLegacySessionsDirs(vaultRoot, configDir)];
+      if (isExistingVault(saved !== null, exists, legacy) || sessionDirs.some(d => countSessionsIn(d) > 0)) {
         Object.assign(this.settings, pinnedLegacyPaths(this.settings, saved?.contextFilePath, legacy));
       }
       this.settings.storageLayout = STORAGE_LAYOUT_VERSION;

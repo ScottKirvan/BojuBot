@@ -180,7 +180,7 @@ describe('session storage', () => {
 
   test('saveSession creates a JSON file', () => {
     const s = makeSession('s1');
-    const dir = getSessionsDir(tmpDir);
+    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
     saveSession(tmpDir, s, dir);
     const { existsSync } = require('node:fs');
     assert.ok(existsSync(join(dir, 's1.json')));
@@ -188,7 +188,7 @@ describe('session storage', () => {
 
   test('loadAllSessions returns saved session', () => {
     const s = makeSession('s2');
-    const dir = getSessionsDir(tmpDir);
+    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
     saveSession(tmpDir, s, dir);
     const sessions = loadAllSessions(tmpDir, dir, TEST_CONFIG_DIR);
     const found = sessions.find(x => x.id === 's2');
@@ -199,7 +199,7 @@ describe('session storage', () => {
   test('loadAllSessions sorts by updatedAt descending', () => {
     const older = { ...makeSession('s3'), updatedAt: '2024-01-01T00:00:00.000Z' };
     const newer = { ...makeSession('s4'), updatedAt: '2025-01-01T00:00:00.000Z' };
-    const dir = getSessionsDir(tmpDir);
+    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
     saveSession(tmpDir, older, dir);
     saveSession(tmpDir, newer, dir);
     const sessions = loadAllSessions(tmpDir, dir, TEST_CONFIG_DIR);
@@ -209,7 +209,7 @@ describe('session storage', () => {
 
   test('deleteSession removes the file', () => {
     const s = makeSession('s5');
-    const dir = getSessionsDir(tmpDir);
+    const dir = getSessionsDir(tmpDir, TEST_CONFIG_DIR);
     saveSession(tmpDir, s, dir);
     deleteSession(tmpDir, 's5', undefined, dir);
     const sessions = loadAllSessions(tmpDir, dir, TEST_CONFIG_DIR);
@@ -1700,13 +1700,13 @@ describe('resolveSessionsDir', () => {
 
   test('undefined customPath → default sessions dir', () => {
     const result = resolveSessionsDir('/vault', undefined, CONFIG);
-    const expected = getSessionsDir('/vault');
+    const expected = getSessionsDir('/vault', CONFIG);
     assert.equal(result, expected);
   });
 
   test('whitespace-only customPath → default sessions dir', () => {
     const result = resolveSessionsDir('/vault', '   ', CONFIG);
-    const expected = getSessionsDir('/vault');
+    const expected = getSessionsDir('/vault', CONFIG);
     assert.equal(result, expected);
   });
 
@@ -6695,7 +6695,6 @@ describe('storageLayout (_BojuBot folder)', () => {
       contextFile: '_BojuBot/_bojubot-context.md',
       skills: '_BojuBot/Skills',
       exports: '_BojuBot/Exports',
-      sessions: '_BojuBot/Sessions',
     });
   });
 
@@ -6705,39 +6704,35 @@ describe('storageLayout (_BojuBot folder)', () => {
       contextFile: '_Acme Bot/_acme-bot-context.md',
       skills: '_Acme Bot/Skills',
       exports: '_Acme Bot/Exports',
-      sessions: '_Acme Bot/Sessions',
     });
     assert.equal(defaultStoragePaths('A/B:C?').folder, '_ABC');
     assert.equal(defaultStoragePaths('  ').folder, '_BojuBot');
   });
 
   test('the old defaults', () => {
-    assert.deepEqual(legacyStoragePaths('BojuBot', '.obsidian'), {
+    assert.deepEqual(legacyStoragePaths('BojuBot'), {
       contextFile: '_claude-context.md',
       skills: '_BojuBot Skills',
       exports: 'BojuBot Exports',
-      sessions: '.obsidian/bojubot/sessions',
     });
   });
 
-  const legacy = legacyStoragePaths('BojuBot', '.obsidian');
-  const empty = { contextFilePath: '_BojuBot/_bojubot-context.md', commandsFolder: '', exportFolder: '', sessionStoragePath: '' };
+  const legacy = legacyStoragePaths('BojuBot');
+  const empty = { contextFilePath: '_BojuBot/_bojubot-context.md', commandsFolder: '', exportFolder: '' };
 
   test('an existing vault on defaults keeps every old location', () => {
     assert.deepEqual(pinnedLegacyPaths(empty, undefined, legacy), {
       contextFilePath: '_claude-context.md',
       commandsFolder: '_BojuBot Skills',
       exportFolder: 'BojuBot Exports',
-      sessionStoragePath: '.obsidian/bojubot/sessions',
     });
   });
 
   test('locations the user set are left alone', () => {
-    const set = { contextFilePath: 'Meta/memory.md', commandsFolder: 'Skills', exportFolder: 'Chats', sessionStoragePath: '/abs/sessions' };
+    const set = { contextFilePath: 'Meta/memory.md', commandsFolder: 'Skills', exportFolder: 'Chats' };
     assert.deepEqual(pinnedLegacyPaths(set, 'Meta/memory.md', legacy), {});
     assert.deepEqual(pinnedLegacyPaths({ ...empty, commandsFolder: 'Skills' }, '_claude-context.md', legacy), {
       exportFolder: 'BojuBot Exports',
-      sessionStoragePath: '.obsidian/bojubot/sessions',
     });
   });
 
