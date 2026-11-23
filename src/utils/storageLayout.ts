@@ -1,9 +1,10 @@
 /**
  * Where BojuBot keeps its files in the vault.
  *
- * New vaults: everything under one folder at the vault root, `_<brand name>/`
- * (`_BojuBot/` for stock builds): the context file, skills, exports and
- * sessions. Vaults that already used BojuBot before this layout keep the old
+ * New vaults: one folder at the vault root, `_<brand name>/` (`_BojuBot/` for
+ * stock builds), for the context file, skills and exports. Session files stay
+ * in Obsidian's config folder (`<configDir>/bojubot/sessions`) in every vault:
+ * they hold machine-specific conversation IDs and paths. Vaults that already used BojuBot before this layout keep the old
  * locations: `pinnedLegacyPaths()` writes them into the settings once, and
  * nothing is moved. A user who changes a location moves the files themselves.
  *
@@ -19,7 +20,6 @@ export interface StoragePaths {
   contextFile: string;
   skills: string;
   exports: string;
-  sessions: string;
 }
 
 /** The brand name made safe as a folder or file name. */
@@ -37,17 +37,15 @@ export function defaultStoragePaths(brandName: string): StoragePaths {
     contextFile: `${folder}/_${name.toLowerCase().replace(/\s+/g, '-')}-context.md`,
     skills: `${folder}/Skills`,
     exports: `${folder}/Exports`,
-    sessions: `${folder}/Sessions`,
   };
 }
 
 /** Where older versions kept each kind of file, vault-relative. */
-export function legacyStoragePaths(brandName: string, configDir: string): Omit<StoragePaths, 'folder'> {
+export function legacyStoragePaths(brandName: string): Omit<StoragePaths, 'folder'> {
   return {
     contextFile: '_claude-context.md',
     skills: '_BojuBot Skills',
     exports: `${brandName} Exports`,
-    sessions: `${configDir}/bojubot/sessions`,
   };
 }
 
@@ -56,7 +54,6 @@ export interface StorageSettings {
   contextFilePath: string;
   commandsFolder: string;
   exportFolder: string;
-  sessionStoragePath: string;
 }
 
 /**
@@ -74,7 +71,6 @@ export function pinnedLegacyPaths(
   if (!savedContextFile?.trim()) out.contextFilePath = legacy.contextFile;
   if (!current.commandsFolder.trim()) out.commandsFolder = legacy.skills;
   if (!current.exportFolder.trim()) out.exportFolder = legacy.exports;
-  if (!current.sessionStoragePath.trim()) out.sessionStoragePath = legacy.sessions;
   return out;
 }
 

@@ -147,14 +147,13 @@ Gemini sessions don't use this file: their models come from the Antigravity CLI.
 
 ## Session storage location
 
-By default, session files are stored in `_BojuBot/Sessions/` inside your vault, so they sync and back up with it. Vaults that used BojuBot before BojuBot kept its files in `_BojuBot/` keep their earlier locations (`_claude-context.md`, `_BojuBot Skills/`, `BojuBot Exports/` and `.obsidian/bojubot/sessions/`): BojuBot writes them into the settings once and never moves your files.
+By default, session files are stored in `.obsidian/bojubot/sessions/` inside your vault. This folder is typically gitignored, so sessions don't appear in your git history.
 
 You can change this in **Settings → BojuBot → Session storage path**:
 
 | Value                            | Behaviour                                                                           |
 | -------------------------------- | ----------------------------------------------------------------------------------- |
-| *(empty)*                        | Default — `_BojuBot/Sessions/`.                                                     |
-| `.obsidian/bojubot/sessions` (vault-relative) | Inside Obsidian's config folder, which is often left out of git and sync. |
+| *(empty)*                        | Default — `.obsidian/bojubot/sessions/`. Gitignored.                                |
 | `_sessions` (vault-relative)     | Sessions stored at `_sessions/` in your vault root. Tracked by git if not excluded. |
 | `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely.                                         |
 

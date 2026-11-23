@@ -120,7 +120,7 @@ When a session you can't see finishes, stops with an error or needs you, a notic
 
 ## Storage Location
 
-Sessions are stored as JSON files in `_BojuBot/Sessions/` by default, with BojuBot's transcripts of Gemini sessions next to them. Because that folder is in your vault, sessions travel with it when you sync or back it up. Vaults that used BojuBot before the `_BojuBot/` folder keep their sessions in `.obsidian/bojubot/sessions/`. You can change the location to any vault-relative or absolute path in **Settings → BojuBot → Session storage path**.
+Sessions are stored as JSON files in `.obsidian/bojubot/sessions/` by default (gitignored). You can change this to a vault-relative or absolute path in **Settings → BojuBot → Session storage path** — for example, to track sessions in git alongside your notes.
 
 ::: warning
 When you change the storage path, BojuBot offers to move your existing sessions to the new folder as soon as you close settings. See [Session storage location](./settings#session-storage-location).
