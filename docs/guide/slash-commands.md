@@ -20,9 +20,14 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | Category    | Command           | What it does                             |
 | ----------- | ----------------- | ---------------------------------------- |
 | **Session** | Stop reply        | Stop the reply that's running; shown only while one is |
+| **Session** | Change permission mode <Badge type="warning" text="Beta" /> | Choose what the agent may do in this session — see [Permissions](./permissions) |
 | **Session** | New session       | Start a fresh conversation               |
+| **Session** | Open new chat tab <Badge type="warning" text="Beta" /> | Start a new session in another tab |
+| **Session** | Rename session <Badge type="warning" text="Beta" /> | Give the current session a new name; shown once the session has started |
 | **Session** | Show sessions     | Browse and resume past sessions in the [Sessions panel](./sessions#sessions-panel) |
 | **Session** | Export session    | Save the current session to your vault   |
+| **Session** | Copy last response <Badge type="warning" text="Beta" /> | Copy the last reply to the clipboard as Markdown |
+| **Session** | Copy conversation <Badge type="warning" text="Beta" /> | Copy the whole conversation to the clipboard as Markdown |
 | **Session** | Switch model      | Change model; the session continues     |
 | **Session** | Switch effort     | Change effort level (`/effort`); shown only when the session's agent CLI supports it |
 | **Session** | Usage             | Show how much of your plan or quota you've used (`/usage`): Claude plan limits for Claude, Antigravity quota per model group for Gemini. Free, and not sent to the model |
@@ -33,6 +38,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Help**    | Report a problem  | Report a bug, request a feature or send feedback (`/bug`) — see [Reporting a problem](./chat-panel#reporting-a-problem) |
 | **Help**    | Help              | Open Help & resources (`/help`): docs, help, report a problem, version info |
 | **Security** | Audit memory file | Ask the agent to review your context file for suspicious content — see [Commands](./commands#context-memory) |
+| **Skills** | Reload skills <Badge type="warning" text="Beta" /> | Pick up added or removed skill files in the Command Palette; shown when **Register skills as Ctrl+P commands** is on |
 
 ## Skills
 
