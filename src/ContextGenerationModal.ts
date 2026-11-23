@@ -1,6 +1,7 @@
 import { App, FuzzySuggestModal, Modal, Notice, TFile } from 'obsidian';
 import type BojuBotPlugin from '../main';
 import { killProcess } from './backends/process';
+import { backendOrientation } from './backends';
 import { ContextManager } from './ContextManager';
 import { VIEW_TYPE_CLAUDE } from './ClaudeView';
 import { log } from './utils/logger';
@@ -201,7 +202,7 @@ export class ContextGenerationModal extends Modal {
     const backend = this.plugin.getBackend();
     const ctx = new ContextManager(
       this.app,
-      backend.orientation,
+      backendOrientation(backend, this.plugin.getCapabilities(backend.id)),
       this.contextFilePath,
       this.plugin.settings.autonomousMemory,
       this.vaultTreeDepth,

@@ -66,6 +66,8 @@ const STOP_REPLY_TIMEOUT_MS = 10_000;
 
 // Maps from lowercase tool name to display values.
 // Claude Code sends PascalCase names (Read, Write, Bash…) so we normalise to lowercase for lookup.
+// Antigravity's snake_case names: 1.5 has read_file/write_file/edit_file (#443),
+// 1.4 had view_file, list_dir, grep_search, find_by_name, write_to_file…
 const TOOL_STATUS: Record<string, string> = {
   read: 'Reading…',
   write: 'Writing…',
@@ -79,6 +81,19 @@ const TOOL_STATUS: Record<string, string> = {
   websearch: 'Searching the web…',
   todowrite: 'Updating tasks…',
   todoread: 'Reading tasks…',
+  read_file: 'Reading…',
+  write_file: 'Writing…',
+  edit_file: 'Editing…',
+  view_file: 'Reading…',
+  write_to_file: 'Writing…',
+  replace_file_content: 'Editing…',
+  multi_replace_file_content: 'Editing…',
+  list_dir: 'Listing…',
+  find_by_name: 'Scanning vault…',
+  grep_search: 'Searching…',
+  run_command: 'Running command…',
+  read_url_content: 'Fetching…',
+  search_web: 'Searching the web…',
 };
 
 const TOOL_ICONS: Record<string, string> = {
@@ -94,6 +109,19 @@ const TOOL_ICONS: Record<string, string> = {
   websearch: 'globe',
   todowrite: 'check-square',
   todoread: 'check-square',
+  read_file: 'file-text',
+  write_file: 'file-edit',
+  edit_file: 'file-edit',
+  view_file: 'file-text',
+  write_to_file: 'file-edit',
+  replace_file_content: 'file-edit',
+  multi_replace_file_content: 'file-edit',
+  list_dir: 'folder',
+  find_by_name: 'folder',
+  grep_search: 'search',
+  run_command: 'terminal',
+  read_url_content: 'globe',
+  search_web: 'globe',
 };
 
 const SPONSOR_MESSAGE = `**Thank you for using BojuBot!**
@@ -1072,7 +1100,7 @@ export class ClaudeView extends ItemView {
       name: this.appInternal.commands.commands[id]?.name ?? id,
     }));
     this.coordinator.setPendingSystemMessage(
-      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands,
+      modeChangeNote(this.coordinator.orientation.permissions[after], before, after, commands,
         `${this.app.vault.configDir}/plugins/bojubot/obsidian-commands.md`),
     );
   }
@@ -1275,7 +1303,7 @@ export class ClaudeView extends ItemView {
       const effectiveMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
         this.app,
-        this.coordinator.backend.orientation,
+        this.coordinator.orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
@@ -1530,7 +1558,7 @@ export class ClaudeView extends ItemView {
     const effectiveMode = this.coordinator.getEffectivePermissionMode();
     const ctx = new ContextManager(
       this.app,
-      this.coordinator.backend.orientation,
+      this.coordinator.orientation,
       this.plugin.settings.contextFilePath,
       this.plugin.settings.autonomousMemory,
       this.plugin.settings.vaultTreeDepth,
@@ -1830,7 +1858,7 @@ export class ClaudeView extends ItemView {
       const effectiveCwd = this.coordinator.sessionCwd ?? vaultRoot;
       const ctx = new ContextManager(
         this.app,
-        this.coordinator.backend.orientation,
+        this.coordinator.orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
