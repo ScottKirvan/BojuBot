@@ -1733,6 +1733,17 @@
   font-size: 0.9em;
 }
 
+/* A search card's matching lines, under each note (#443) */
+.bojubot-vault-query-lines {
+  margin: 0 0 4px 0;
+  padding-left: 14px;
+  list-style: none;
+  color: var(--text-faint);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .bojubot-vault-query-empty,
 .bojubot-vault-query-error {
   color: var(--text-faint);
