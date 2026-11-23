@@ -9,6 +9,8 @@ import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
 import { formatCliVersion } from './utils/cliCapabilities';
 import { GITHUB_SPONSORS_URL, KOFI_URL, SUPPORT_PAGE_URL } from './constants';
 import { renderSettingDefinitions } from './settingsFallback';
+import { defaultStoragePaths, STORAGE_LAYOUT_VERSION } from './utils/storageLayout';
+import { ensureParentFolder } from './utils/vaultFolders';
 import {
   asText,
   BrandField,
@@ -85,16 +87,19 @@ export interface BojuBotSettings {
   exportFolder: string;
   /**
    * Where session JSON files are stored.
-   * Empty = default (.obsidian/bojubot/sessions — gitignored).
+   * Empty = default (_BojuBot/Sessions, see src/utils/storageLayout.ts).
    * Vault-relative path (e.g. "_sessions") or absolute path.
    */
   sessionStoragePath: string;
   /**
    * Folder containing skill files (.md files).
-   * Empty = default (plugin dir/commands — gitignored).
+   * Empty = default (_BojuBot/Skills).
    * Vault-relative path or absolute path.
    */
   commandsFolder: string;
+  /** Storage layout check done (src/utils/storageLayout.ts): vaults from before
+   *  the _BojuBot folder had their old locations written into the settings. */
+  storageLayout: number;
   /**
    * Register skills as Obsidian Ctrl+P commands.
    * Use "Reload skills" from the palette after adding or removing skill files.
@@ -133,7 +138,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   agyBinaryPath: '',
   agyDefaultModel: '',
   agyDefaultEffort: '',
-  contextFilePath: '_claude-context.md',
+  contextFilePath: defaultStoragePaths(DEFAULT_BRAND.name).contextFile,
   sendOnEnter: true,
   resumeLastSession: true,
   autonomousMemory: true,
@@ -153,6 +158,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   exportFolder: '',
   sessionStoragePath: '',
   commandsFolder: '',
+  storageLayout: STORAGE_LAYOUT_VERSION,
   registerSkillsAsCommands: true,
   persistFullAccess: false,
   canvasMaxChars: 50000,
@@ -419,7 +425,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           setting
             .addText((text) =>
               text
-                .setPlaceholder('_claude-context.md')
+                .setPlaceholder(defaultStoragePaths(brandName()).contextFile)
                 .setValue(settings().contextFilePath)
                 .onChange(async (value) => {
                   await this.setControlValue('contextFilePath', value);
@@ -432,6 +438,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
                 .onClick(async () => {
                   let file = this.app.vault.getFileByPath(settings().contextFilePath);
                   if (!file) {
+                    await ensureParentFolder(this.app, settings().contextFilePath);
                     file = await this.app.vault.create(settings().contextFilePath, '');
                   }
                   await this.app.workspace.getLeaf(false).openFile(file);
@@ -676,12 +683,16 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         name: 'Session storage path',
         get desc() {
           return 'Where session files are stored. ' +
-            'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
+            `Leave empty for the default location (${defaultStoragePaths(brandName()).sessions}). ` +
             'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
             'or an absolute path to store them outside the vault entirely. ' +
             `When you close settings after changing it, ${brandName()} offers to move your existing sessions.`;
         },
-        control: { type: 'folder', key: 'sessionStoragePath', placeholder: 'Default (Obsidian config folder/BojuBot/sessions)' },
+        control: {
+          type: 'folder',
+          key: 'sessionStoragePath',
+          get placeholder() { return `Default (${defaultStoragePaths(brandName()).sessions})`; },
+        },
       },
       {
         name: 'Export folder',
@@ -689,7 +700,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         control: {
           type: 'folder',
           key: 'exportFolder',
-          get placeholder() { return `${brandName()} exports`; },
+          get placeholder() { return `Default (${defaultStoragePaths(brandName()).exports})`; },
         },
       },
     ];
@@ -701,12 +712,16 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     return [
       {
         name: 'Skills folder',
-        desc:
-          'Folder containing your skill files (.md files). ' +
-          'Leave empty for the default location (plugin dir/commands). ' +
-          'Use a vault-relative path (e.g. _skills) to keep skills in your vault, ' +
-          'or an absolute path. Skills reload each time you open the / menu.',
-        control: { type: 'folder', key: 'commandsFolder', placeholder: 'Default (plugin dir/commands)' },
+        get desc() {
+          return 'Folder containing your skill files (.md files). ' +
+            `Leave empty for the default location (${defaultStoragePaths(brandName()).skills}). ` +
+            'Use another vault-relative path, or an absolute path. Skills reload each time you open the / menu.';
+        },
+        control: {
+          type: 'folder',
+          key: 'commandsFolder',
+          get placeholder() { return `Default (${defaultStoragePaths(brandName()).skills})`; },
+        },
       },
       {
         name: 'Register skills as Ctrl+P commands',

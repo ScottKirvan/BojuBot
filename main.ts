@@ -1,5 +1,5 @@
 import { Plugin, Notice, addIcon, debounce, WorkspaceLeaf } from 'obsidian';
-import { writeFileSync } from 'fs';
+import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { ClaudeView, VIEW_TYPE_CLAUDE } from './src/ClaudeView';
 import { SessionsView, VIEW_TYPE_SESSIONS } from './src/SessionsView';
@@ -20,7 +20,8 @@ import { ReportModal } from './src/modals/ReportModal';
 import { REPORT_RELAY_URL } from './src/constants';
 import { isWhiteLabeled } from './src/brand';
 import * as os from 'os';
-import { countSessionsIn, loadAllSessions, loadSessionFile, moveSessionFiles, resolveSessionsDir, saveSession, StoredSession } from './src/utils/sessionStorage';
+import { countSessionsIn, getLegacySessionsDirs, loadAllSessions, loadSessionFile, moveSessionFiles, resolveSessionsDir, saveSession, StoredSession } from './src/utils/sessionStorage';
+import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from './src/utils/storageLayout';
 import { MoveSessionsModal } from './src/modals/MoveSessionsModal';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_STORAGE_KEY, PluginState, stripPluginState } from './src/utils/pluginState';
@@ -699,7 +700,7 @@ export default class BojuBotPlugin extends Plugin {
   }
 
   openContextFile() {
-    const contextPath = this.settings.contextFilePath || '_claude-context.md';
+    const contextPath = this.settings.contextFilePath || defaultStoragePaths(this.brand.name).contextFile;
     const file = this.app.vault.getAbstractFileByPath(contextPath);
     if (file) {
       void this.app.workspace.openLinkText(contextPath, '', false);
@@ -724,6 +725,21 @@ export default class BojuBotPlugin extends Plugin {
   async loadSettings() {
     const saved = await this.loadData() as Partial<BojuBotSettings> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+    this.refreshBrand();
+    // New vaults keep BojuBot's files in _BojuBot/. A vault that used BojuBot before
+    // keeps its old locations, written into the settings once; nothing is moved.
+    if ((saved?.storageLayout ?? 0) < STORAGE_LAYOUT_VERSION) {
+      const vaultRoot = this.getVaultRoot();
+      const configDir = this.app.vault.configDir;
+      const legacy = legacyStoragePaths(this.brand.name, configDir);
+      const exists = (rel: string) => existsSync(join(vaultRoot, rel));
+      const legacySessions = [join(vaultRoot, legacy.sessions), ...getLegacySessionsDirs(vaultRoot, configDir)];
+      if (isExistingVault(saved !== null, exists, legacy) || legacySessions.some(d => countSessionsIn(d) > 0)) {
+        Object.assign(this.settings, pinnedLegacyPaths(this.settings, saved?.contextFilePath, legacy));
+      }
+      this.settings.storageLayout = STORAGE_LAYOUT_VERSION;
+      await this.saveData(this.settings);
+    }
     // Runtime state lives in this computer's localStorage, not data.json (#447):
     // move what older installs kept in data.json, then drop it from settings
     let stored: unknown = null;
@@ -776,12 +792,6 @@ export default class BojuBotPlugin extends Plugin {
     // Resolve empty log path to a configDir-relative default at load time
     if (!this.settings.logFilePath) {
       this.settings.logFilePath = `${this.app.vault.configDir}/plugins/bojubot/bojubot-debug.log`;
-    }
-    // Migrate old hardcoded export folder → empty so the brand-aware dynamic
-    // default (resolveExportFolder, applied at point of use) takes over
-    if (this.settings.exportFolder === 'BojuBot Exports') {
-      this.settings.exportFolder = '';
-      await this.saveSettings();
     }
   }
 
