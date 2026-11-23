@@ -66,13 +66,25 @@ Sessions are grouped by when they were last active: **Today**, **This week** (th
 | -------------------- | -------------------------------------------------------------------- |
 | **Open a session**   | Click its row (or select it and press **Enter**). See below for which tab it opens in |
 | **Open in a new tab** | **Ctrl/Cmd+click** the row, or right-click → **Open in new tab**    |
-| **New session**      | Click the **+** button next to the filter (**Ctrl/Cmd+click** for a new tab) |
-| **Filter**           | Type in the filter box at the top                                    |
+| **New session**      | Click the **+** button next to the search box (**Ctrl/Cmd+click** for a new tab) |
+| **Search**           | Type in the search box at the top: see [Searching sessions](#searching-sessions) |
 | **Rename**           | Right-click the row, or click **⋯** → **Rename** → edit → **Enter**  |
 | **Pin / Unpin**      | Right-click or **⋯** → **Pin** keeps the session at the top          |
 | **Save to vault**    | Right-click or **⋯** → **Save to vault** → enter the export path     |
 | **Delete**           | Right-click or **⋯** → **Delete** → confirm                          |
 | **Reorder**          | Drag a row up or down within its group                               |
+
+### Searching sessions <Badge type="warning" text="Beta" />
+
+::: warning Not released yet
+Searching inside conversations is only in [beta builds](./beta-builds) so far.
+:::
+
+Type in the search box at the top of the panel. Sessions whose name matches are listed first, in their usual groups. From two characters on, BojuBot also searches what was said in each session, and lists sessions that only match there under **In conversations**, with the matching line and who wrote it.
+
+- The search ignores case and matches the text exactly as you type it.
+- **Compacted: no longer in the agent's context** under a match means every match is from before the conversation was last [compacted](./chat-panel#context-gauge): the text is still in the session's history, but the agent no longer remembers it.
+- Sessions whose history isn't on this computer (shown as remote) are searched by name only.
 
 ### Active session
 
@@ -121,7 +133,7 @@ Inside each group, sessions are listed most-recent-first by default. Once you dr
 A session can only be dragged within its own group: to move a session to the top, pin it.
 
 ::: tip
-Dragging is turned off while the filter is active. Filtering shows a subset, so reordering would produce confusing results.
+Dragging is turned off while you search. A search shows a subset, so reordering would produce confusing results.
 :::
 
 ---

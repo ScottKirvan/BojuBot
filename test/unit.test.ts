@@ -52,6 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
+import { CONTENT_SEARCH_MIN_CHARS, matchSessionContent, searchableMessages, searchSessions } from '../src/utils/sessionList';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -6684,5 +6685,72 @@ describe('pluginState (#447)', () => {
     assert.equal(stripPluginState(s), true);
     assert.deepEqual(s, { backend: 'antigravity', backendChosen: true });
     assert.equal(stripPluginState(s), false);
+  });
+});
+
+describe('searching inside sessions (#133)', () => {
+  const ts = '2026-11-23T00:00:00Z';
+  const msg = (role: 'user' | 'assistant' | 'separator', content: string) => ({ role, content, timestamp: ts });
+
+  test('searchableMessages drops separators and blanks, marking what came before the last compaction', () => {
+    const out = searchableMessages([
+      msg('user', 'old question'), msg('assistant', 'old answer'), msg('separator', '─── conversation compacted ───'),
+      msg('user', 'middle'), msg('separator', '───'), msg('assistant', '  '), msg('user', 'newest'),
+    ]);
+    assert.deepEqual(out, [
+      { role: 'user', text: 'old question', compacted: true },
+      { role: 'assistant', text: 'old answer', compacted: true },
+      { role: 'user', text: 'middle', compacted: true },
+      { role: 'user', text: 'newest', compacted: false },
+    ]);
+    assert.deepEqual(searchableMessages([msg('user', 'a')]), [{ role: 'user', text: 'a', compacted: false }]);
+  });
+
+  test('matchSessionContent: case-insensitive, literal, counts messages, snippet from the matching line', () => {
+    const m = searchableMessages([msg('user', 'first line\nWhere is the SNAIL note?'), msg('assistant', 'The snail is in Animals/snail.md'), msg('user', 'thanks')]);
+    assert.deepEqual(matchSessionContent(m, 'snail'), { snippet: 'The snail is in Animals/snail.md', role: 'assistant', messages: 2, compacted: false });
+    assert.equal(matchSessionContent(m, 'sn.il'), null);
+    assert.equal(matchSessionContent(m, 'missing'), null);
+  });
+
+  test('queries shorter than two characters never search content', () => {
+    assert.equal(CONTENT_SEARCH_MIN_CHARS, 2);
+    assert.equal(matchSessionContent(searchableMessages([msg('user', 'a b c')]), 'a'), null);
+    assert.equal(matchSessionContent(searchableMessages([msg('user', 'a b c')]), '  '), null);
+  });
+
+  test('the snippet prefers a match the agent still has; all-compacted matches are flagged', () => {
+    const mixed = searchableMessages([msg('user', 'snail one'), msg('separator', '─'), msg('assistant', 'snail two')]);
+    assert.deepEqual(matchSessionContent(mixed, 'snail'), { snippet: 'snail two', role: 'assistant', messages: 2, compacted: false });
+    const old = searchableMessages([msg('user', 'snail one'), msg('assistant', 'snail again'), msg('separator', '─'), msg('user', 'later')]);
+    assert.deepEqual(matchSessionContent(old, 'snail'), { snippet: 'snail again', role: 'assistant', messages: 2, compacted: true });
+  });
+
+  test('long lines are clipped around the match', () => {
+    const long = `${'x'.repeat(300)} snail ${'y'.repeat(300)}`;
+    const snippet = matchSessionContent(searchableMessages([msg('user', long)]), 'snail')?.snippet ?? '';
+    assert.ok(snippet.includes('snail'));
+    assert.ok(snippet.startsWith('…') && snippet.endsWith('…'));
+    assert.ok(snippet.length <= 122);
+  });
+
+  test('searchSessions: title matches first, content-only matches after, never both', () => {
+    const sessions = [{ id: 'a', title: 'Snail research' }, { id: 'b', title: 'Groceries' }, { id: 'c', title: 'Garden' }];
+    const content: Record<string, string> = { a: 'snail facts', b: 'buy milk', c: 'a snail ate the lettuce' };
+    const calls: string[] = [];
+    const r = searchSessions(sessions, 'snail', (s) => {
+      calls.push(s.id);
+      return matchSessionContent(searchableMessages([msg('user', content[s.id])]), 'snail');
+    });
+    assert.deepEqual(r.byTitle.map(s => s.id), ['a']);
+    assert.deepEqual(r.byContent.map(c => c.session.id), ['c']);
+    assert.deepEqual(calls, ['b', 'c']);
+  });
+
+  test('searchSessions: an empty or one-character query only filters titles', () => {
+    const sessions = [{ title: 'Alpha' }, { title: 'Beta' }];
+    const never = () => { throw new Error('content searched'); };
+    assert.deepEqual(searchSessions(sessions, '', never), { byTitle: sessions, byContent: [] });
+    assert.deepEqual(searchSessions(sessions, 'b', never), { byTitle: [sessions[1]], byContent: [] });
   });
 });
