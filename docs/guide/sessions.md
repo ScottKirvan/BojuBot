@@ -16,7 +16,7 @@ Click the **+** button in the toolbar to start a new session with default settin
 | **Effort** | Pre-filled with your current global [effort](./chat-panel.md#effort) level. Pick a level to pin this session to it; **Default** leaves it unpinned so it follows the global setting. Hidden when the chosen agent's CLI doesn't support effort levels. |
 | **Raw session** | Skips *all* BojuBot context injection — no orientation, vault tree, context file, active-note note, or UI Bridge. The CLI still reads its own instruction files (e.g. Claude Code's `CLAUDE.md`) from the working directory, exactly as it would from a terminal. This is the per-session equivalent of the global Minimal mode setting. |
 | **Initial instructions** | A system prompt injected at session start — role, focus, standing rules. Leave blank for none. |
-| **Include vault context** | Checked by default. Uncheck to suppress the vault tree, `_claude-context.md`, and pinned notes — useful for focused code sessions where Obsidian-specific context is noise. The system orientation (permission mode, tools) is always injected regardless. Ignored when "Raw session" is on, since that already suppresses everything. |
+| **Include vault context** | Checked by default. Uncheck to suppress the vault tree, the context file, and pinned notes — useful for focused code sessions where Obsidian-specific context is noise. The system orientation (permission mode, tools) is always injected regardless. Ignored when "Raw session" is on, since that already suppresses everything. |
 | **Context attachments** | Attach files, vault notes, or URLs before the first message. Same attachment support as the main chat. |
 
 Empty fields fall back to normal defaults — you can fill in one field and leave the rest blank.
@@ -120,7 +120,7 @@ When a session you can't see finishes, stops with an error or needs you, a notic
 
 ## Storage Location
 
-Sessions are stored as JSON files in `.obsidian/bojubot/sessions/` by default (gitignored). You can change this to a vault-relative or absolute path in **Settings → BojuBot → Session storage path** — for example, to track sessions in git alongside your notes.
+Sessions are stored as JSON files in `_BojuBot/Sessions/` by default, with BojuBot's transcripts of Gemini sessions next to them. Because that folder is in your vault, sessions travel with it when you sync or back it up. Vaults that used BojuBot before the `_BojuBot/` folder keep their sessions in `.obsidian/bojubot/sessions/`. You can change the location to any vault-relative or absolute path in **Settings → BojuBot → Session storage path**.
 
 ::: warning
 When you change the storage path, BojuBot offers to move your existing sessions to the new folder as soon as you close settings. See [Session storage location](./settings#session-storage-location).

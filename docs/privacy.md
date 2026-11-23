@@ -41,7 +41,7 @@ Each agent also keeps its own conversation history on your computer: Claude Code
 
 Everything BojuBot saves stays on your computer: in your vault, in Obsidian's config folder (usually `.obsidian`), in Obsidian's own browser storage, or, for Antigravity, in Antigravity's agents folder:
 
-- **Session files.** A small JSON file per session with its name, settings and the agent's conversation ID, in `.obsidian/bojubot/sessions/` by default. You can choose another folder in settings.
+- **Session files.** A small JSON file per session with its name, settings and the agent's conversation ID, in `_BojuBot/Sessions/` by default (`.obsidian/bojubot/sessions/` in vaults that used BojuBot before the `_BojuBot/` folder). You can choose another folder in settings.
 - **Transcripts for Antigravity sessions.** Antigravity's own history can't be read back, so BojuBot keeps a copy of each conversation next to the session file (`<id>.transcript.jsonl`).
 - **Settings.** Your BojuBot settings, in `.obsidian/plugins/bojubot/data.json`. The same file holds your name if the agent learns it (when you tell it what to call you), so the welcome screen can greet you. The file only changes when a setting does, so it's safe to sync between computers.
 - **Usage records.** A few records about your use, described under [Analytics](#analytics-crash-reporting-and-telemetry), and which session was open last, kept in Obsidian's local storage for this vault. They stay on this computer: they aren't in your vault's files, so syncing or backing up the vault doesn't copy them.
@@ -50,7 +50,7 @@ Everything BojuBot saves stays on your computer: in your vault, in Obsidian's co
 - **Open chat tabs.** Obsidian's workspace file (`.obsidian/workspace.json`) remembers which session each chat tab shows, so your tabs come back after a restart.
 - **Antigravity agent definitions.** When Antigravity is installed, BojuBot writes two files to `~/.gemini/config/agents/`: `bojubot.md` and `bojubot-chat.md`. They hold BojuBot's rules for the agent (how to write links, which tools to use) and nothing about you or your vault. They're the only files BojuBot writes outside your vault, and BojuBot never changes any other file in that folder.
 - **The command reference.** A list of your Obsidian commands, written to `.obsidian/plugins/bojubot/obsidian-commands.md` so the agent can look up command IDs.
-- **The context file.** A note in your vault (`_claude-context.md` by default) that describes your vault to the agent. With autonomous memory on (the default), the agent updates this note itself as it learns. Turn autonomous memory off if your vault is shared or public.
+- **The context file.** A note in your vault (`_BojuBot/_bojubot-context.md` by default) that describes your vault to the agent. With autonomous memory on (the default), the agent updates this note itself as it learns. Turn autonomous memory off if your vault is shared or public.
 - **Exports.** Session transcripts you choose to export are saved as notes where you tell BojuBot to put them.
 
 If you sync or back up your vault, these files go wherever your vault goes.
@@ -99,6 +99,7 @@ Every change to this policy, newest first. The version is the first BojuBot rele
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-11-23 | 3.9.0 | New vaults keep BojuBot's files in a `_BojuBot/` folder, including session files and Gemini transcripts, which therefore travel with the vault; vaults that used BojuBot before keep their earlier locations. |
 | 2026-11-23 | 3.8.2 | The usage records and the last open session moved from the settings file to Obsidian's local storage on your computer, so they no longer travel with a synced vault. |
 | 2026-10-27 | 3.8.0 | Listed the records BojuBot keeps on your computer to decide when to show its support message and thank-you card, and the name the agent learns for the welcome screen. |
 | 2026-10-27 | 3.8.0 | Added **Send** to the Report a problem form: the first network request BojuBot makes itself, and only when you click it. Described the report service it uses (stores nothing, runs on Cloudflare) and that sent reports become public GitHub issues filed by BojuBot's GitHub app. The short version no longer says BojuBot has no servers, and Third parties now names Cloudflare and GitHub for sent reports. |

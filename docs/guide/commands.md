@@ -33,7 +33,7 @@ With several chat panels open, commands that act on a chat panel use the one you
 
 | Command                                | ID                    | Description                                                                                                                        |
 | ----------------------------------------| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **BojuBot: Open context file**         | `open-context-file`   | Open `_claude-context.md` (or your configured path) for editing.                                                                   |
+| **BojuBot: Open context file**         | `open-context-file`   | Open the context file (`_BojuBot/_bojubot-context.md`, or your configured path) for editing.                                                                   |
 | **BojuBot: Refresh session context**   | `refresh-context`     | Re-inject the context file, command allowlist, and frontmatter into the active session. Queued and sent with your next message.    |
 | **BojuBot: Audit memory file**         | `audit-memory-file`   | Starts a new session and asks the agent to review your context file for prompt-injection-style content — instructions or directives that look out of place, encoded/obfuscated text, or anything a third party may have slipped in. Run this if autonomous memory is on and you want a sanity check. |
 | **BojuBot: Send selection as context** | `send-selection`      | Highlight text in any note, then run this command to attach it as context.                                                         |

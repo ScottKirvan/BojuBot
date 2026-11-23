@@ -26,7 +26,7 @@ Ensure Safe Mode is disabled (**Settings → Community Plugins**) and that the `
 
 **The agent doesn't seem to know about my vault structure**
 
-Check that your context file exists at the configured path (`_claude-context.md` by default) and contains useful information about your vault. If the agent seems unaware of your vault's folder structure, enable **Vault tree depth** in settings (1–3 levels is a good starting point) so the structure is injected at session start.
+Check that your context file exists at the configured path (`_BojuBot/_bojubot-context.md` by default, `_claude-context.md` in older vaults) and contains useful information about your vault. If the agent seems unaware of your vault's folder structure, enable **Vault tree depth** in settings (1–3 levels is a good starting point) so the structure is injected at session start.
 
 ---
 
@@ -139,7 +139,7 @@ The log file is not visible in Obsidian's file browser — no `.gitignore` entry
 - **Desktop only** — Obsidian mobile is not supported (Node.js APIs unavailable on mobile)
 - **Claude Code must be installed via a terminal** — on Windows use PowerShell; on Mac/Linux use Terminal
 - In Standard and Full access, the agent operates with full vault access — no per-file infrastructure enforcement (see [Per-note Frontmatter](./context-system#5-per-note-frontmatter-context) for convention-based protection)
-- Sessions are stored in `.obsidian/bojubot/sessions/` which is typically gitignored; sessions do not sync across devices
+- Session files sync with the vault when they're in it (`_BojuBot/Sessions/` by default), but the agent's own conversation history stays on the computer the session ran on, so a session can only be continued there
 
 ---
 

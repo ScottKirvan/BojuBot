@@ -26,7 +26,7 @@ On Obsidian 1.13 or later you can also find any BojuBot setting with the search 
 | ------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Minimal mode**                     | Off                                                    | Skip all context injection — no orientation, vault tree, context file, or active note. Reduces session start cost to zero. UI Bridge actions and vault queries will not work. Skills still work. Affected settings are greyed out when enabled. |
 | **Show context file setup prompt**       | On        | Show the setup dialog on launch when no context file is found (see [Context System](./context-system#getting-started)). Disable if you prefer to create the file manually.                                                    |
-| **Context file path**                | `_claude-context.md`                                 | Vault-relative path to the context file injected at session start.                                                                                                                                                              |
+| **Context file path**                | `_BojuBot/_bojubot-context.md`                       | Vault-relative path to the context file injected at session start.                                                                                                                                                              |
 | **Vault tree depth**                 | Off                                                    | Levels of folder/file names injected at session start. `0` = off (default), `1`–`10` = N levels, `-1` = unlimited. Names only — no file contents. The agent discovers structure on demand via the vault query protocol when off.  |
 | **Autonomous memory**                | On                                                     | The agent updates the context file as it learns about your vault. Disable if you prefer manual control or if your vault is shared. Disabled in minimal mode.                                                                      |
 | **Memory file size limit (tokens)**  | `0` (no limit)                                        | When the context file exceeds this token count, the agent is instructed to compact it before the session ends — summarizing redundant entries and dropping outdated observations. `0` disables the cap. Disabled in minimal mode. |
@@ -55,13 +55,13 @@ On Obsidian 1.13 or later you can also find any BojuBot setting with the search 
 | Setting                              | Default                                              | Description                                                                                                                                                                                                                     |
 | ------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Session storage path**             | *(empty — default location)*                          | Where session JSON files are stored. See [Session storage location](#session-storage-location) below.                                                                                                                          |
-| **Export folder**                    | `BojuBot Exports`                                     | Default folder for **Export session to vault**. Created automatically if it doesn't exist. Follows the display name set under [Branding](#branding) — e.g. `Acme Exports` on a white-labeled build.                            |
+| **Export folder**                    | `_BojuBot/Exports`                                    | Default folder for **Export session to vault**. Created automatically if it doesn't exist. Follows the display name set under [Branding](#branding) — e.g. `_Acme/Exports` on a white-labeled build.                            |
 
 ## Skills
 
 | Setting                              | Default                                              | Description                                                                                                                                                                                                                     |
 | ------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Skills folder**                    | *(empty — default: `_BojuBot Skills/` at vault root)* | Folder containing skill files. See [Slash commands](./slash-commands).                                                                                                                                                         |
+| **Skills folder**                    | *(empty — default: `_BojuBot/Skills/`)*               | Folder containing skill files. See [Slash commands](./slash-commands).                                                                                                                                                         |
 | **Register skills as Ctrl+P commands** | On                                                   | Expose each skill as a command palette entry (prefixed "Skill: …"). Run **BojuBot: Reload skills** after adding or removing skill files. Disable if the extra commands clutter your palette.                                   |
 
 ## Branding
@@ -147,13 +147,14 @@ Gemini sessions don't use this file: their models come from the Antigravity CLI.
 
 ## Session storage location
 
-By default, session files are stored in `.obsidian/bojubot/sessions/` inside your vault. This folder is typically gitignored, so sessions don't appear in your git history.
+By default, session files are stored in `_BojuBot/Sessions/` inside your vault, so they sync and back up with it. Vaults that used BojuBot before BojuBot kept its files in `_BojuBot/` keep their earlier locations (`_claude-context.md`, `_BojuBot Skills/`, `BojuBot Exports/` and `.obsidian/bojubot/sessions/`): BojuBot writes them into the settings once and never moves your files.
 
 You can change this in **Settings → BojuBot → Session storage path**:
 
 | Value                            | Behaviour                                                                           |
 | -------------------------------- | ----------------------------------------------------------------------------------- |
-| *(empty)*                        | Default — `.obsidian/bojubot/sessions/`. Gitignored.                                |
+| *(empty)*                        | Default — `_BojuBot/Sessions/`.                                                     |
+| `.obsidian/bojubot/sessions` (vault-relative) | Inside Obsidian's config folder, which is often left out of git and sync. |
 | `_sessions` (vault-relative)     | Sessions stored at `_sessions/` in your vault root. Tracked by git if not excluded. |
 | `/Users/you/sessions` (absolute) | Sessions stored outside the vault entirely.                                         |
 
