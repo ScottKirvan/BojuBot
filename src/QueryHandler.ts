@@ -1,39 +1,22 @@
 import { App, TFolder } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { buildVaultTree } from './utils/fileTree';
-import { neutralizeTriggers } from './constants';
 import { activeBrand, applyIdentityName } from './brand';
 import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
 import canvasRef from './references/canvas.md';
+import { VaultQuery, VaultQueryResult, filterFileList, inFolder, searchError, searchNotes } from './utils/vaultQuery';
 
-export type VaultQueryType = 'backlinks' | 'outlinks' | 'tags' | 'file-list' | 'help';
-export type VaultQueryMode = 'show' | 'inject';
+export type { VaultQueryType, VaultQueryMode, VaultQuery, VaultQueryResult } from './utils/vaultQuery';
+export { queryLabel, buildInjectMessage } from './utils/vaultQuery';
 
-export interface VaultQuery {
-  id?: string;
-  query: VaultQueryType;
-  /** Required for backlinks, outlinks, and per-file tags. */
-  path?: string;
-  /** For tags query: find all files with this tag. */
-  tag?: string;
-  /** For file-list: restrict to this folder prefix. */
-  folder?: string;
-  /** For file-list: return an indented tree to this depth instead of a flat list. 1–N levels, -1 = unlimited. */
-  depth?: number;
-  mode: VaultQueryMode;
-  /** For help queries: which reference bundle to inject. */
-  topic?: 'ui-bridge' | 'vault-query' | 'canvas';
-}
-
-export interface VaultQueryResult {
-  query: VaultQuery;
-  result: unknown;
-  error?: string;
-}
-
-export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
-  log('QueryHandler: resolving', query.query, query.path ?? query.tag ?? query.folder ?? '');
+/**
+ * Resolve a vault query against the live vault. Async because search reads note
+ * contents (`cachedRead`); every other type resolves straight from the vault's
+ * metadata. Callers apply the mode gate (`refuseQuery`) first.
+ */
+export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQueryResult> {
+  log('QueryHandler: resolving', query.query, query.path ?? query.tag ?? query.text ?? query.name ?? query.folder ?? '');
   try {
     switch (query.query) {
 
@@ -91,6 +74,12 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
       }
 
       case 'file-list': {
+        if (query.name) {
+          // Find files by name: every file type (attachments, canvases), not just notes
+          const files = filterFileList(app.vault.getFiles().map(f => f.path), query);
+          log('QueryHandler: file-list (name) —', files.length, 'files');
+          return { query, result: { files } };
+        }
         if (query.depth !== undefined && query.depth !== 0) {
           let startFolder: TFolder | undefined;
           if (query.folder) {
@@ -111,6 +100,16 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
           .sort();
         log('QueryHandler: file-list —', files.length, 'files');
         return { query, result: { files } };
+      }
+
+      case 'search': {
+        const error = searchError(query);
+        if (error) return { query, result: null, error };
+        const files = app.vault.getMarkdownFiles().filter(f => inFolder(f.path, query.folder));
+        const notes = await Promise.all(files.map(async f => ({ path: f.path, content: await app.vault.cachedRead(f) })));
+        const result = searchNotes(notes, query.text ?? '', query.folder);
+        log('QueryHandler: search —', result.notes.length, 'notes shown of', files.length, 'searched');
+        return { query, result };
       }
 
       case 'help': {
@@ -136,39 +135,4 @@ export function resolveQuery(app: App, query: VaultQuery): VaultQueryResult {
     warn('QueryHandler: error resolving query:', err);
     return { query, result: null, error: String(err) };
   }
-}
-
-/** Build a human-readable label for display in the UI. */
-export function queryLabel(query: VaultQuery): string {
-  switch (query.query) {
-    case 'backlinks': return `Backlinks for "${query.path}"`;
-    case 'outlinks': return `Outlinks for "${query.path}"`;
-    case 'tags': return query.path ? `Tags on "${query.path}"` : `Files tagged #${query.tag}`;
-    case 'file-list': {
-      const scope = query.folder ? ` in "${query.folder}"` : '';
-      return query.depth !== undefined ? `Vault tree (${query.depth} levels)${scope}` : `Files${scope || ' in vault'}`;
-    }
-    case 'help': return `Reference: ${query.topic ?? 'unknown'}`;
-    default: return query.query;
-  }
-}
-
-/** Serialize results for injection back to Claude as a structured message. */
-export function buildInjectMessage(results: VaultQueryResult[]): string {
-  const parts = results.map(r => {
-    const label = queryLabel(r.query);
-    const body = r.error
-      ? `Error: ${r.error}`
-      : typeof r.result === 'string'
-        ? r.result
-        : JSON.stringify(r.result, null, 2);
-    // backlinks/outlinks/tags/file-list results are vault-derived file and folder
-    // names — untrusted content a malicious or planted file could craft to look
-    // like a live @@BOJU line. Neutralize them like every other vault-content
-    // injection path. Help topics return BojuBot's own static reference docs,
-    // which legitimately contain @@BOJU examples, so they're left untouched.
-    const safeBody = r.query.query === 'help' ? body : neutralizeTriggers(body);
-    return `Query: ${label}\nResult:\n${safeBody}`;
-  });
-  return `[BOJU_VAULT_RESPONSE]\n${parts.join('\n\n')}\n[/BOJU_VAULT_RESPONSE]`;
 }

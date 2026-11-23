@@ -183,6 +183,23 @@ While the agent is working, tool calls appear above the response bubble in real 
 
 ---
 
+## Vault Searches
+
+The agent can ask BojuBot about your vault instead of using its own tools or shell commands:
+
+- **Search your notes** <Badge type="warning" text="Beta" /> for a word or phrase. BojuBot looks through every note (or one folder), ignoring capitals, and returns the notes that contain it with up to three matching lines from each. A search returns at most 30 notes; when more match, the agent is told how many more so it can search more precisely.
+- **Find files by name** <Badge type="warning" text="Beta" />: every file, of any type, whose name contains what it's looking for, in the whole vault or one folder.
+- **List files** in the vault or a folder, or the folder tree a few levels deep.
+- **Backlinks, outgoing links and tags** of a note, and the notes with a given tag.
+
+::: warning Not released yet
+Searching notes and finding files by name are only in [beta builds](./beta-builds.md) so far.
+:::
+
+Depending on what the agent needs, the result either appears as a card in the chat (click a note to open it) or goes straight back to the agent so it can carry on answering. Searching and listing work this way with both agents, including in Read only and Standard, where the agent's own shell commands for searching are blocked. They don't work in Chat only, where BojuBot shares nothing about your vault (see [Chat only](./permissions.md#chat-only)).
+
+---
+
 ## Running Obsidian Commands
 
 The agent can execute Obsidian commands directly. Three are pre-approved by default:

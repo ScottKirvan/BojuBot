@@ -1,6 +1,6 @@
 import type { PermissionDescription, PermissionMode } from '../backends/types';
 import { canWrite } from '../backends/modes';
-import type { VaultQuery, VaultQueryResult } from '../QueryHandler';
+import type { VaultQuery, VaultQueryResult } from './vaultQuery';
 
 /**
  * Gates for BojuBot's own channels to the agent (#406). The CLI's permission

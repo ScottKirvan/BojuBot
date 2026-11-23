@@ -63,7 +63,7 @@ These fire in order during an agent turn:
 | `turn:action`       | `(action: BojuBotAction)`      | UI bridge action parsed (excludes `request-permission`)          |
 | `turn:tool-call`    | `(tool, input, toolUseId)`     | The agent initiated a tool call                                  |
 | `turn:tool-result`  | `(toolUseId, content)`         | Tool result received                                             |
-| `turn:query`        | `(query: VaultQuery)`          | The agent issued a vault query (backlinks, outlinks, tags, file-list) |
+| `turn:query`        | `(query: VaultQuery)`          | The agent issued a vault query (backlinks, outlinks, tags, file-list, search) |
 | `turn:usage`        | `(usage: TokenUsage)`          | Token usage statistics                                           |
 | `turn:stderr`       | `(err: string)`                | stderr output (non-fatal)                                        |
 | `turn:error`        | `(err: string)`                | Fatal process error — no `turn:done` follows                     |

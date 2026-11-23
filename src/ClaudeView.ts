@@ -20,10 +20,11 @@ import { extractActions, executeAction, promptPermissionRequest } from './UIBrid
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
+import type { SearchResult } from './utils/vaultQuery';
 import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE, modeChangeNote } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
-import { log, estimateTokens, formatTokenCount } from './utils/logger';
+import { log, warn, estimateTokens, formatTokenCount } from './utils/logger';
 import { BACKEND_IDS, sentenceStart } from './backends';
 import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
@@ -498,7 +499,7 @@ export class ClaudeView extends ItemView {
         const showQueries = result.pendingQueries.filter(q => q.mode === 'show');
         const injectQueries = result.pendingQueries.filter(q => q.mode === 'inject');
         for (const q of showQueries) {
-          this.renderQueryResultCard(responseGroupEl, this.resolveQueryForSession(q));
+          void this.showQueryCard(responseGroupEl, q);
         }
         if (injectQueries.length > 0) {
           this.handleVaultInject(injectQueries, responseGroupEl, unlock);
@@ -615,6 +616,8 @@ export class ClaudeView extends ItemView {
   /** Fallback in case no view state ever arrives. */
   private initTimer: number | null = null;
   private setupShown = false;
+  /** Set once the panel closes, so a pending vault query follow-up isn't sent. */
+  private closed = false;
 
   getState(): Record<string, unknown> {
     const state = super.getState();
@@ -1013,6 +1016,7 @@ export class ClaudeView extends ItemView {
   }
 
   async onClose() {
+    this.closed = true;
     if (this.initTimer !== null) window.clearTimeout(this.initTimer);
     // Closing the tab ends its reply: nothing would be left to show or save it
     if (this.coordinator.isBusy) this.coordinator.cancel();
@@ -1320,7 +1324,7 @@ export class ClaudeView extends ItemView {
   }
 
   /** Build export markdown from DOM messages (active session). */
-  private buildExportMarkdown(title: string, sessionId: string, userLabel: string, assistantLabel: string): string {
+  private async buildExportMarkdown(title: string, sessionId: string, userLabel: string, assistantLabel: string): Promise<string> {
     const msgEls = Array.from(
       this.messagesEl.querySelectorAll<HTMLElement>('.bojubot-message.bojubot-user, .bojubot-message.bojubot-assistant')
     );
@@ -1332,7 +1336,7 @@ export class ClaudeView extends ItemView {
       if (el.classList.contains('bojubot-assistant')) {
         const text = (el.dataset.markdown ?? '').trim();
         const queryMd = el.dataset.queries
-          ? this.resolveQueriesToMarkdown(JSON.parse(el.dataset.queries) as VaultQuery[])
+          ? await this.resolveQueriesToMarkdown(JSON.parse(el.dataset.queries) as VaultQuery[], this.coordinator.getEffectivePermissionMode())
           : '';
         const combined = [text, queryMd].filter(Boolean).join('\n\n');
         if (!combined) continue;
@@ -1380,7 +1384,7 @@ export class ClaudeView extends ItemView {
     const folder = resolveExportFolder(this.plugin.settings.exportFolder, this.plugin.brand);
     const defaultPath = `${folder}/${safeName} ${date}.md`;
     new ExportToVaultModal(this.app, defaultPath, async (notePath, openAfter) => {
-      const content = this.buildExportMarkdown(title, sessionId, this.currentUserLabel, this.currentAssistantLabel);
+      const content = await this.buildExportMarkdown(title, sessionId, this.currentUserLabel, this.currentAssistantLabel);
       await this.writeExportNote(notePath, content);
       if (openAfter) await this.openExportedNote(notePath);
     }).open();
@@ -1402,7 +1406,8 @@ export class ClaudeView extends ItemView {
         const label = msg.role === 'user' ? (session.userLabel ?? 'User') : (session.assistantLabel ?? this.plugin.brand.name);
         if (msg.role === 'assistant') {
           const text = this.cleanContent(msg.content).trim();
-          const queryMd = this.queryResultsAsMarkdown(msg.content);
+          // Re-resolved under the session's own mode: Chat only exports refusals, as its agent got (#406)
+          const queryMd = await this.queryResultsAsMarkdown(msg.content, session.permissionMode ?? 'standard');
           const combined = [text, queryMd].filter(Boolean).join('\n\n');
           if (!combined) continue; // skip blank assistant turns (protocol-only responses)
           md += `**${label}:**\n${combined}\n\n`;
@@ -1643,7 +1648,7 @@ export class ClaudeView extends ItemView {
                 const q = parsed as unknown as VaultQuery;
                 if (q.query === 'help') continue; // reference injections have no replay card
                 replayQueries.push(q);
-                this.renderQueryResultCard(this.messagesEl, this.resolveQueryForSession(q));
+                void this.showQueryCard(this.messagesEl, q);
               } catch { /* skip malformed query lines */ }
             }
             if (replayQueries.length > 0) {
@@ -2463,21 +2468,39 @@ export class ClaudeView extends ItemView {
     }
   }
 
-  /** Render a vault query result card inside a response group (mode: show). */
-  private renderQueryResultCard(containerEl: HTMLElement, result: VaultQueryResult) {
+  /**
+   * Add a vault query card to a response group, resolve the query (through the
+   * mode gate) and fill the card in. The card is placed right away, so cards keep
+   * their order however long a search takes. Resolves with the result.
+   */
+  private async showQueryCard(containerEl: HTMLElement, q: VaultQuery): Promise<VaultQueryResult> {
     const card = containerEl.createDiv({ cls: 'bojubot-vault-query-card' });
     const header = card.createDiv({ cls: 'bojubot-vault-query-header' });
     const iconEl = header.createSpan({ cls: 'bojubot-vault-query-icon' });
-    setIcon(iconEl, 'git-branch');
-    header.createSpan({ cls: 'bojubot-vault-query-label', text: queryLabel(result.query) });
-
+    setIcon(iconEl, q.query === 'search' ? 'search' : 'git-branch');
+    header.createSpan({ cls: 'bojubot-vault-query-label', text: queryLabel(q) });
     const body = card.createDiv({ cls: 'bojubot-vault-query-body' });
+    const pending = q.query === 'search'
+      ? body.createSpan({ cls: 'bojubot-vault-query-empty', text: 'Searching…' })
+      : null;
+    const result = await this.resolveQueryForSession(q);
+    pending?.remove();
+    this.fillQueryCard(body, result);
+    return result;
+  }
+
+  /** Render a vault query result into its card's body. */
+  private fillQueryCard(body: HTMLElement, result: VaultQueryResult) {
     if (result.error) {
       body.createSpan({ cls: 'bojubot-vault-query-error', text: `Error: ${result.error}` });
       return;
     }
 
     const r = result.result as Record<string, unknown>;
+    if (Array.isArray(r.notes)) {
+      this.fillSearchCard(body, r as unknown as SearchResult);
+      return;
+    }
     const isTags = Array.isArray(r.tags);
     const items: string[] = Array.isArray(r.backlinks) ? r.backlinks as string[]
       : Array.isArray(r.outlinks) ? r.outlinks as string[]
@@ -2505,21 +2528,36 @@ export class ClaudeView extends ItemView {
     this.scrollToBottom();
   }
 
-  /** Resolve a vault query, or refuse it when the session's mode shares no vault information (#406). */
-  private resolveQueryForSession(q: VaultQuery): VaultQueryResult {
-    return refuseQuery(q, this.coordinator.getEffectivePermissionMode()) ?? resolveQuery(this.app, q);
+  /** A search card: each matching note as a link, with its matching lines under it. */
+  private fillSearchCard(body: HTMLElement, r: SearchResult) {
+    if (r.notes.length === 0) {
+      body.createSpan({ cls: 'bojubot-vault-query-empty', text: 'No results.' });
+    } else {
+      const list = body.createEl('ul', { cls: 'bojubot-vault-query-list' });
+      for (const note of r.notes) {
+        const li = list.createEl('li');
+        const a = li.createEl('a', { cls: 'internal-link', text: note.path });
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          void this.app.workspace.openLinkText(note.path, '/', false);
+        });
+        const lines = li.createEl('ul', { cls: 'bojubot-vault-query-lines' });
+        for (const line of note.lines) lines.createEl('li', { text: `${line.line}: ${line.text}` });
+      }
+    }
+    if (r.more) body.createDiv({ cls: 'bojubot-vault-query-empty', text: r.more });
+    this.scrollToBottom();
+  }
+
+  /** Resolve a vault query, or refuse it when the mode (by default the session's) shares no vault information (#406). */
+  private async resolveQueryForSession(q: VaultQuery, mode = this.coordinator.getEffectivePermissionMode()): Promise<VaultQueryResult> {
+    return refuseQuery(q, mode) ?? await resolveQuery(this.app, q);
   }
 
   /** Auto-fire a --resume turn injecting vault query results, then call unlock when done. */
   private handleVaultInject(queries: VaultQuery[], prevGroupEl: HTMLElement, unlock: () => void) {
-    const results = queries.map(q => this.resolveQueryForSession(q));
-
     // Render a compact card for each inject query so the user can see what was queried
-    for (const r of results) {
-      this.renderQueryResultCard(prevGroupEl, r);
-    }
-
-    const injectPrompt = buildInjectMessage(results);
+    const pending = Promise.all(queries.map(q => this.showQueryCard(prevGroupEl, q)));
 
     // New response group for Claude's continuation (no user message bubble)
     const responseGroupEl = this.messagesEl.createDiv({ cls: 'bojubot-response-group' });
@@ -2539,7 +2577,20 @@ export class ClaudeView extends ItemView {
       turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null, thanked: false,
       unlock, isInjectTurn: true,
     };
-    this.coordinator.send(injectPrompt);
+    // A search reads notes, so the results can take a moment: send them only to
+    // the session that asked, in a panel that's still open.
+    const fileId = this.coordinator.sessionFileId;
+    void pending.then(results => {
+      if (this.closed || this.coordinator.sessionFileId !== fileId) {
+        log('Vault query follow-up dropped: the panel closed or switched session');
+        unlock();
+        return;
+      }
+      this.coordinator.send(buildInjectMessage(results));
+    }).catch((e: unknown) => {
+      warn('Vault query follow-up failed:', e);
+      unlock();
+    });
   }
 
   /**
@@ -2604,16 +2655,25 @@ export class ClaudeView extends ItemView {
    * the active-session export (queries stored on el.dataset.queries) and the
    * historical-session export (queries parsed from raw JSONL content).
    */
-  private resolveQueriesToMarkdown(queries: VaultQuery[]): string {
+  private async resolveQueriesToMarkdown(queries: VaultQuery[], mode: PermissionMode): Promise<string> {
     const blocks: string[] = [];
     for (const q of queries) {
-      const result = resolveQuery(this.app, q);
+      const result = await this.resolveQueryForSession(q, mode);
       const label = queryLabel(q);
       if (result.error) {
         blocks.push(`> **${label}:** Error: ${result.error}`);
         continue;
       }
       const r = result.result as Record<string, unknown>;
+      if (Array.isArray(r.notes)) {
+        const search = r as unknown as SearchResult;
+        const rows = search.notes.map(n =>
+          [`> - [[${n.path.replace(/\.md$/, '')}]]`, ...n.lines.map(l => `>   - ${l.line}: ${l.text}`)].join('\n')
+        );
+        if (search.more) rows.push(`> ${search.more}`);
+        blocks.push(rows.length ? `> **${label}:**\n${rows.join('\n')}` : `> **${label}:** No results.`);
+        continue;
+      }
       const isTags = Array.isArray(r.tags);
       const items: string[] = Array.isArray(r.backlinks) ? r.backlinks as string[]
         : Array.isArray(r.outlinks) ? r.outlinks as string[]
@@ -2633,7 +2693,7 @@ export class ClaudeView extends ItemView {
   }
 
   /** Parse @@BOJU_QUERY lines from raw content and resolve them to markdown. */
-  private queryResultsAsMarkdown(content: string): string {
+  private queryResultsAsMarkdown(content: string, mode: PermissionMode): Promise<string> {
     const queries: VaultQuery[] = [];
     for (const line of content.split('\n')) {
       if (!line.startsWith(BOJU_PREFIX)) continue;
@@ -2643,7 +2703,7 @@ export class ClaudeView extends ItemView {
         queries.push(parsed as unknown as VaultQuery);
       } catch { /* skip malformed */ }
     }
-    return this.resolveQueriesToMarkdown(queries);
+    return this.resolveQueriesToMarkdown(queries, mode);
   }
 
   private appendMessage(role: 'user' | 'assistant' | 'system', text: string): HTMLElement {

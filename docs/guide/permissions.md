@@ -50,7 +50,7 @@ None of the automatic session-start context is injected in this mode — the vau
 
 BojuBot itself also keeps vault information away from the agent in Chat only:
 
-- **No vault queries.** The agent can't ask BojuBot for your file list, backlinks, outgoing links or tags. If it tries, BojuBot refuses and tells it vault queries aren't available in Chat only. (The agent can still ask for BojuBot's own reference pages, which contain nothing from your vault.)
+- **No vault queries.** The agent can't ask BojuBot for your file list, backlinks, outgoing links or tags, or to search your notes. If it tries, BojuBot refuses and tells it vault queries aren't available in Chat only. (The agent can still ask for BojuBot's own reference pages, which contain nothing from your vault.)
 - **No open-note paths.** BojuBot doesn't tell the agent which note you have open, or which notes are open in a split or in stacked tabs.
 - **No Obsidian commands.** The agent can't run Obsidian commands, and isn't given your command allowlist.
 - **No files, notes or selections.** Attaching something counts as reading it, so Chat only sends links only. Files of any type, pasted screenshots, @-mentioned notes, **Send selection as context**, skill fields that pull in a note and Custom Session attachments are all held back: BojuBot shows a notice and doesn't send the message until you remove them or switch mode. Text you type or paste into the message itself is sent as usual.
