@@ -52,6 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
+import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS } from '../src/utils/bridgeValidation';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -6684,5 +6685,57 @@ describe('pluginState (#447)', () => {
     assert.equal(stripPluginState(s), true);
     assert.deepEqual(s, { backend: 'antigravity', backendChosen: true });
     assert.equal(stripPluginState(s), false);
+  });
+});
+
+describe('bridgeValidation (#172)', () => {
+  test('noticePayload caps the message and bounds the duration', () => {
+    assert.deepEqual(noticePayload('hi', undefined), { message: 'hi', duration: 4000 });
+    assert.deepEqual(noticePayload('hi', 0), { message: 'hi', duration: 1000 });
+    assert.deepEqual(noticePayload('hi', 999999), { message: 'hi', duration: 15000 });
+    assert.deepEqual(noticePayload('hi', 2500.4), { message: 'hi', duration: 2500 });
+    assert.deepEqual(noticePayload('hi', NaN), { message: 'hi', duration: 4000 });
+    assert.deepEqual(noticePayload('hi', '9000'), { message: 'hi', duration: 4000 });
+    assert.equal(noticePayload(42, 1).message, '');
+    const long = noticePayload('x'.repeat(NOTICE_MAX_CHARS + 50), 4000).message;
+    assert.equal(long.length, NOTICE_MAX_CHARS);
+    assert.ok(long.endsWith('…'));
+    assert.equal(noticePayload('x'.repeat(NOTICE_MAX_CHARS), 4000).message.length, NOTICE_MAX_CHARS);
+  });
+
+  test('destinationProblem accepts vault-relative paths', () => {
+    for (const p of ['note.md', 'Notes/a b.md', 'deep/er/x.png', '_BojuBot/Exports/s.md', '.hidden-note.md']) assert.equal(destinationProblem(p, '.obsidian'), null, p);
+  });
+
+  test('destinationProblem refuses absolute, traversal, backslash, empty segments and the config folder', () => {
+    const cases: [unknown, string][] = [
+      ['', 'missing path'], [undefined, 'missing path'], [5, 'missing path'],
+      ['/etc/x.md', 'absolute path'], ['C:/x.md', 'absolute path'], ['c:x.md', 'absolute path'],
+      ['a\\b.md', 'backslash in path'],
+      ['../x.md', 'empty, "." or ".." segment'], ['a/../../x.md', 'empty, "." or ".." segment'], ['a//b.md', 'empty, "." or ".." segment'], ['./a.md', 'empty, "." or ".." segment'], ['a/', 'empty, "." or ".." segment'],
+      ['.obsidian/plugins/x/main.js', 'inside the config folder'], ['.Obsidian/a.md', 'inside the config folder'],
+      ['x'.repeat(1001), 'path too long'],
+    ];
+    for (const [p, why] of cases) assert.equal(destinationProblem(p, '.obsidian'), why, String(p));
+    assert.equal(destinationProblem('.config/a.md', '.config'), 'inside the config folder');
+    assert.equal(destinationProblem('.obsidian/a.md', '.config'), null);
+  });
+
+  test('newNameProblem allows a name only', () => {
+    assert.equal(newNameProblem('New name.md'), null);
+    assert.equal(newNameProblem('a/b.md'), 'newName contains a folder separator (use move-file)');
+    assert.equal(newNameProblem('a\\b.md'),'newName contains a folder separator (use move-file)');
+    assert.equal(newNameProblem('..'), 'invalid name');
+    assert.equal(newNameProblem(''), 'missing newName');
+    assert.equal(newNameProblem(undefined), 'missing newName');
+    assert.equal(newNameProblem('x'.repeat(256)), 'name too long');
+  });
+
+  test('knownSettingsTab only passes IDs that exist', () => {
+    const ids = ['editor', 'bojubot', 'community-plugins'];
+    assert.equal(knownSettingsTab('bojubot', ids), 'bojubot');
+    assert.equal(knownSettingsTab('nope', ids), null);
+    assert.equal(knownSettingsTab(undefined, ids), null);
+    assert.equal(knownSettingsTab(3, ids), null);
   });
 });

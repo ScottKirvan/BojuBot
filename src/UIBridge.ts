@@ -3,6 +3,7 @@ import { log, warn } from './utils/logger';
 import { brandName } from './brand';
 import { canWrite } from './backends/modes';
 import { bridgeActionAllowed } from './utils/modeGates';
+import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload } from './utils/bridgeValidation';
 import type { PermissionMode } from './backends/types';
 import { ReportPrefill, reportPrefill } from './utils/report';
 export { BOJU_PREFIX } from './constants';
@@ -10,7 +11,12 @@ export { BojuBotAction, extractActions } from './utils/actionParser';
 import type { BojuBotAction } from './utils/actionParser';
 
 interface UIBridgeInternal {
-  setting: { open(): void; openTabById(id: string): void };
+  setting: {
+    open(): void;
+    openTabById(id: string): void;
+    settingTabs?: { id: string }[];
+    pluginTabs?: { id: string }[];
+  };
   commands: {
     commands: Record<string, { id: string; name: string }>;
     executeCommandById(id: string): boolean;
@@ -191,12 +197,22 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
         break;
       }
       const file = app.vault.getFileByPath(action.path as string);
-      const newName = action.newName as string | undefined;
-      if (!file || !newName) {
-        warn('UIBridge: rename-file — file not found or missing newName:', action.path);
+      if (!file) {
+        warn('UIBridge: rename-file — file not found:', action.path);
         break;
       }
-      const newPath = file.parent ? `${file.parent.path}/${newName}` : newName;
+      const nameProblem = newNameProblem(action.newName);
+      if (nameProblem) {
+        warn('UIBridge: rename-file — refused,', nameProblem + ':', action.newName);
+        break;
+      }
+      const newName = action.newName as string;
+      const newPath = file.parent && file.parent.path !== '/' ? `${file.parent.path}/${newName}` : newName;
+      const renameProblem = destinationProblem(newPath, app.vault.configDir);
+      if (renameProblem) {
+        warn('UIBridge: rename-file — refused,', renameProblem + ':', newPath);
+        break;
+      }
       await app.fileManager.renameFile(file, newPath);
       break;
     }
@@ -208,12 +224,16 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
         break;
       }
       const file = app.vault.getFileByPath(action.path as string);
-      const newPath = action.newPath as string | undefined;
-      if (!file || !newPath) {
-        warn('UIBridge: move-file — file not found or missing newPath:', action.path);
+      if (!file) {
+        warn('UIBridge: move-file — file not found:', action.path);
         break;
       }
-      await app.fileManager.renameFile(file, newPath);
+      const moveProblem = destinationProblem(action.newPath, app.vault.configDir);
+      if (moveProblem) {
+        warn('UIBridge: move-file — refused,', moveProblem + ':', action.newPath);
+        break;
+      }
+      await app.fileManager.renameFile(file, action.newPath as string);
       break;
     }
 
@@ -256,9 +276,9 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     }
 
     case 'show-notice': {
-      const msg = (action.message as string) ?? '';
-      const duration = typeof action.duration === 'number' ? action.duration : 4000;
-      new Notice(msg, duration);
+      // Bounded length and duration: a notice can't fill the screen or stay forever (#172)
+      const { message, duration } = noticePayload(action.message, action.duration);
+      if (message) new Notice(message, duration);
       break;
     }
 
@@ -268,9 +288,13 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     }
 
     case 'open-settings': {
-      const tab = action.tab as string | undefined;
-      (app as unknown as UIBridgeInternal).setting.open();
-      if (tab) (app as unknown as UIBridgeInternal).setting.openTabById(tab);
+      const setting = (app as unknown as UIBridgeInternal).setting;
+      const ids = [...(setting.settingTabs ?? []), ...(setting.pluginTabs ?? [])].map(t => t.id);
+      setting.open();
+      // Only a tab that exists (#172); anything else just opens settings
+      const tab = knownSettingsTab(action.tab, ids);
+      if (tab) setting.openTabById(tab);
+      else if (action.tab !== undefined) warn('UIBridge: open-settings — unknown tab, opening settings only:', action.tab);
       break;
     }
 
