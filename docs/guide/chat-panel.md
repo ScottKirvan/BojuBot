@@ -75,12 +75,12 @@ Non-Markdown files show their extension in the dropdown. By default all vault fi
 
 ### Paste from clipboard
 
-Paste images directly with **Ctrl+V** / **Cmd+V**:
+Paste with **Ctrl+V** / **Cmd+V**:
 
-- **Screenshots** — take a screenshot, paste into BojuBot
-- **Files from Explorer/Finder** — copy a `.png`, `.jpg`, `.gif`, `.webp`, or `.pdf` and paste
+- **Screenshots** — take a screenshot, paste into BojuBot. Screenshots are saved to `.obsidian/plugins/bojubot/tmp/` and are not automatically cleaned up.
+- **Files from Explorer/Finder** — copy one or more files of any type and paste. Each file is read where it is, not copied. Text files (`.md`, `.txt`, `.json`, code and so on) up to 512 KB are attached inline; images, PDFs, larger text files and other types are passed by their location for the agent to open.
 
-Pasted images appear in the context bar. They're saved to `.obsidian/plugins/bojubot/tmp/` and are not automatically cleaned up.
+Pasted items appear in the context bar.
 
 ### Drag and drop
 
