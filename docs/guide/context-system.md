@@ -26,6 +26,28 @@ Configure depth in **Settings → BojuBot → Vault tree depth**:
 
 With **Off**, the agent uses the vault query protocol to list files when it needs them, so nothing is paid upfront (except in Chat only, where vault queries are refused). Enable a depth if you find the agent frequently needs to browse the vault and you'd prefer it to have that awareness from the start of the session.
 
+A folder holding more than 30 files of the same type is listed as one line, such as `[214 .png files: IMG_0001.png … IMG_0214.png]`, so large attachment or daily-note folders don't cost a line per file. <Badge type="warning" text="Beta" />
+
+### Leaving folders out <Badge type="warning" text="Beta" />
+
+::: warning Not released yet
+Vault exclusions are only in [beta builds](./beta-builds) so far.
+:::
+
+List folders and files in **Settings → BojuBot → Leave out of the vault tree and searches**, one per line. BojuBot then leaves them out of the vault tree and out of vault query results (file lists, searches and tag lookups):
+
+| Line | Leaves out |
+| --- | --- |
+| `Archive` | the `Archive` folder and everything in it (or a file named `Archive`) |
+| `Private/diary.md` | that one note |
+| `*.png` | every PNG, in any folder |
+| `Media/**` | everything under `Media` |
+| `**/drafts` | every `drafts` folder, at any depth |
+
+`*` matches within one name, `**` across folders and `?` one character; case doesn't matter. Lines starting with `#` are ignored.
+
+This trims what BojuBot shows the agent; it isn't a lock. In Standard and Full access the agent can still open a left-out file with its own tools when it knows the name. To keep a note's contents from the agent, use [per-note frontmatter](#5-per-note-frontmatter-context).
+
 ---
 
 ## 3. Context File (Persistent Memory)

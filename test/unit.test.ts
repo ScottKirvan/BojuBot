@@ -56,6 +56,7 @@ import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NO
 import { attachmentKind, fileExtension, fileNameOf, IMAGE_EXTS, PASTE_TEXT_MAX_BYTES, TEXT_EXTS } from '../src/utils/attachmentKind';
 import { CONTENT_SEARCH_MIN_CHARS, matchSessionContent, searchableMessages, searchSessions } from '../src/utils/sessionList';
 import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from '../src/utils/storageLayout';
+import { exclusionMatcher, isExcluded, isExcludedPath, parseExclusions, setVaultExclusions, summarizeFileNames, TREE_COLLAPSE_THRESHOLD, vaultExclusions } from '../src/utils/vaultExclusions';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -6903,5 +6904,73 @@ describe('storageLayout (_BojuBot folder)', () => {
 
   test('the layout version marks the check as done', () => {
     assert.equal(STORAGE_LAYOUT_VERSION, 2);
+  });
+});
+
+describe('vault exclusions (#125)', () => {
+  test('parseExclusions: one per line, trimmed, comments and blanks dropped, separators normalized', () => {
+    assert.deepEqual(parseExclusions('Archive\n\n  # a note\n*.png  \r\n./Private\\diary.md\n/Media/'), ['Archive', '*.png', 'Private/diary.md', 'Media/']);
+    assert.deepEqual(parseExclusions(''), []);
+  });
+
+  test('a plain path matches that file, or that folder and everything in it', () => {
+    const m = exclusionMatcher('Archive');
+    for (const p of ['Archive', 'Archive/old.md', 'Archive/2020/x.png']) assert.equal(m(p), true, p);
+    for (const p of ['Archives/x.md', 'Notes/Archive.md']) assert.equal(m(p), false, p);
+    assert.equal(exclusionMatcher('Archive/')('Archive/a.md'), true);
+    assert.equal(exclusionMatcher('Private/diary.md')('Private/diary.md'), true);
+    assert.equal(exclusionMatcher('Private/diary.md')('Private/other.md'), false);
+  });
+
+  test('a pattern without a slash matches at any depth', () => {
+    const png = exclusionMatcher('*.png');
+    for (const p of ['a.png', 'Media/b.PNG', 'x/y/z.png']) assert.equal(png(p), true, p);
+    assert.equal(png('a.png.md'), false);
+    assert.equal(exclusionMatcher('drafts')('Projects/drafts/one.md'), true);
+  });
+
+  test('* stays inside one name, ** crosses folders, ? is one character', () => {
+    assert.equal(exclusionMatcher('Media/*.png')('Media/a.png'), true);
+    assert.equal(exclusionMatcher('Media/*.png')('Media/sub/a.png'), false);
+    assert.equal(exclusionMatcher('Media/**/*.png')('Media/sub/deep/a.png'), true);
+    assert.equal(exclusionMatcher('Media/**')('Media/sub/a.md'), true);
+    assert.equal(exclusionMatcher('**/drafts')('a/b/drafts/c.md'), true);
+    assert.equal(exclusionMatcher('Day-??.md')('Day-01.md'), true);
+    assert.equal(exclusionMatcher('Day-??.md')('Day-1.md'), false);
+  });
+
+  test('regex characters in names are literal; matching ignores case', () => {
+    assert.equal(exclusionMatcher('a+b (1).md')('a+b (1).md'), true);
+    assert.equal(exclusionMatcher('a+b (1).md')('aab (1).md'), false);
+    assert.equal(exclusionMatcher('ARCHIVE')('archive/x.md'), true);
+  });
+
+  test('isExcludedPath and the active list', () => {
+    assert.equal(isExcludedPath('Media/a.png', ['Archive', '*.png']), true);
+    assert.equal(isExcludedPath('Notes/a.md', ['Archive', '*.png']), false);
+    assert.equal(isExcludedPath('a.md', []), false);
+    setVaultExclusions(['Archive']);
+    try {
+      assert.deepEqual([...vaultExclusions()], ['Archive']);
+      assert.equal(isExcluded('Archive/x.md'), true);
+      assert.equal(isExcluded('Notes/x.md'), false);
+    } finally {
+      setVaultExclusions([]);
+    }
+    assert.equal(isExcluded('Archive/x.md'), false);
+  });
+
+  test('summarizeFileNames collapses many files of one type into one line', () => {
+    const imgs = Array.from({ length: 31 }, (_, i) => `IMG_${String(i + 1).padStart(4, '0')}.png`);
+    assert.deepEqual(summarizeFileNames(['readme.md', ...imgs.reverse(), 'notes.md']), ['readme.md', '[31 .png files: IMG_0001.png … IMG_0031.png]', 'notes.md']);
+  });
+
+  test('summarizeFileNames keeps folders at or under the threshold, and files without an extension', () => {
+    const thirty = Array.from({ length: 30 }, (_, i) => `n${i}.md`);
+    assert.deepEqual(summarizeFileNames(thirty), thirty);
+    assert.deepEqual(summarizeFileNames(['a.md', 'b.md', 'c.md'], 2), ['[3 .md files: a.md … c.md]']);
+    const bare = ['LICENSE', 'Makefile', 'README'];
+    assert.deepEqual(summarizeFileNames(bare, 2), bare);
+    assert.equal(TREE_COLLAPSE_THRESHOLD, 30);
   });
 });
