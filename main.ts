@@ -23,6 +23,7 @@ import * as os from 'os';
 import { countSessionsIn, loadAllSessions, moveSessionFiles, resolveSessionsDir, StoredSession } from './src/utils/sessionStorage';
 import { MoveSessionsModal } from './src/modals/MoveSessionsModal';
 import { seedSponsorProgress } from './src/utils/sponsorGate';
+import { parseExclusions, setVaultExclusions } from './src/utils/vaultExclusions';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_STORAGE_KEY, PluginState, stripPluginState } from './src/utils/pluginState';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './src/utils/cliCapabilities';
 import { resolveShellEnv } from './src/utils/shellEnv';
@@ -74,6 +75,7 @@ export default class BojuBotPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+    this.applyVaultExclusions();
     this.sessionsDirInUse = this.getSessionsDir();
 
     if (this.settings.permissionMode === 'full' && !this.settings.persistFullAccess) {
@@ -771,6 +773,11 @@ export default class BojuBotPlugin extends Plugin {
       this.settings.exportFolder = '';
       await this.saveSettings();
     }
+  }
+
+  /** Put the "Leave out of the vault tree and searches" patterns into effect (#125). */
+  applyVaultExclusions(): void {
+    setVaultExclusions(parseExclusions(this.settings.vaultExclusions ?? ''));
   }
 
   async saveSettings() {

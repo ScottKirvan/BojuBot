@@ -57,6 +57,8 @@ export interface BojuBotSettings {
   autonomousMemory: boolean;
   /** Vault tree depth injected at session start. 0=off, 1=root only, N=N levels, -1=unlimited. */
   vaultTreeDepth: number;
+  /** Folders and files left out of the vault tree and vault query results, one pattern per line (#125). */
+  vaultExclusions: string;
   /** User dismissed the context file setup modal and doesn't want to see it again. */
   skipContextFilePrompt: boolean;
   /** Allow Claude to trigger Obsidian UI actions (open files, show notices, etc.) */
@@ -138,6 +140,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   resumeLastSession: true,
   autonomousMemory: true,
   vaultTreeDepth: 0,
+  vaultExclusions: '',
   skipContextFilePrompt: false,
   uiBridgeEnabled: true,
   commandAllowlist: ['switcher:open', 'editor:open-search'],
@@ -293,6 +296,9 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       case 'logFilePath':
       case 'logVerbosity':
         this.plugin.reconfigureLogger();
+        break;
+      case 'vaultExclusions':
+        this.plugin.applyVaultExclusions();
         break;
     }
   }
@@ -468,6 +474,14 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           },
           disabled: muted,
         },
+      },
+      {
+        name: 'Leave out of the vault tree and searches',
+        desc:
+          'Folders or files the agent is not shown in the vault tree, and that vault queries (file lists, searches, tags) leave out. ' +
+          'One per line: a folder or file path (Archive, Private/diary.md), or a pattern (*.png, Media/**, **/drafts). ' +
+          'Lines starting with # are ignored. The agent can still open these files with its own tools when it knows their names.',
+        control: { type: 'textarea', key: 'vaultExclusions', placeholder: 'Attachments\n*.png', rows: 4, disabled: muted },
       },
       {
         name: 'Autonomous memory',
