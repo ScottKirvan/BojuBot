@@ -1104,7 +1104,7 @@ export class ClaudeView extends ItemView {
       name: this.appInternal.commands.commands[id]?.name ?? id,
     }));
     this.coordinator.setPendingSystemMessage(
-      modeChangeNote(this.coordinator.orientation.permissions[after], before, after, commands,
+      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands,
         `${this.app.vault.configDir}/plugins/bojubot/obsidian-commands.md`),
     );
   }
@@ -1307,7 +1307,7 @@ export class ClaudeView extends ItemView {
       const effectiveMode = this.coordinator.getEffectivePermissionMode();
       const ctx = new ContextManager(
         this.app,
-        this.coordinator.orientation,
+        this.coordinator.backend.orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,
@@ -1563,7 +1563,7 @@ export class ClaudeView extends ItemView {
     const effectiveMode = this.coordinator.getEffectivePermissionMode();
     const ctx = new ContextManager(
       this.app,
-      this.coordinator.orientation,
+      this.coordinator.backend.orientation,
       this.plugin.settings.contextFilePath,
       this.plugin.settings.autonomousMemory,
       this.plugin.settings.vaultTreeDepth,
@@ -1863,7 +1863,7 @@ export class ClaudeView extends ItemView {
       const effectiveCwd = this.coordinator.sessionCwd ?? vaultRoot;
       const ctx = new ContextManager(
         this.app,
-        this.coordinator.orientation,
+        this.coordinator.backend.orientation,
         this.plugin.settings.contextFilePath,
         this.plugin.settings.autonomousMemory,
         this.plugin.settings.vaultTreeDepth,

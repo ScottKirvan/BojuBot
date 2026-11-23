@@ -1,7 +1,6 @@
 import { claudeCodeBackend } from './claudeCode';
 import { antigravityBackend } from './antigravity';
-import type { AgentBackend, BackendId, BackendOrientation } from './types';
-import type { CliCapabilities } from '../utils/cliCapabilities';
+import type { AgentBackend, BackendId } from './types';
 
 const BACKENDS: Record<BackendId, AgentBackend> = {
   'claude-code': claudeCodeBackend,
@@ -23,10 +22,4 @@ export function sentenceStart(phrase: string): string {
 
 export function getBackend(id: BackendId = DEFAULT_BACKEND_ID): AgentBackend {
   return BACKENDS[id];
-}
-
-/** The orientation wording `backend` uses with the installed CLI (`caps`):
- *  its `orientationFor()` when it has one, else its static `orientation`. */
-export function backendOrientation(backend: AgentBackend, caps: CliCapabilities): BackendOrientation {
-  return backend.orientationFor?.(caps) ?? backend.orientation;
 }
