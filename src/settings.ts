@@ -87,7 +87,7 @@ export interface BojuBotSettings {
   exportFolder: string;
   /**
    * Where session JSON files are stored.
-   * Empty = default (_BojuBot/Sessions, see src/utils/storageLayout.ts).
+   * Empty = default (.obsidian/bojubot/sessions — gitignored).
    * Vault-relative path (e.g. "_sessions") or absolute path.
    */
   sessionStoragePath: string;
@@ -683,16 +683,12 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         name: 'Session storage path',
         get desc() {
           return 'Where session files are stored. ' +
-            `Leave empty for the default location (${defaultStoragePaths(brandName()).sessions}). ` +
+            'Leave empty for the default location (Obsidian config folder/bojubot/sessions). ' +
             'Use a vault-relative path (e.g. _sessions) to track sessions in git alongside your notes, ' +
             'or an absolute path to store them outside the vault entirely. ' +
             `When you close settings after changing it, ${brandName()} offers to move your existing sessions.`;
         },
-        control: {
-          type: 'folder',
-          key: 'sessionStoragePath',
-          get placeholder() { return `Default (${defaultStoragePaths(brandName()).sessions})`; },
-        },
+        control: { type: 'folder', key: 'sessionStoragePath', placeholder: 'Default (Obsidian config folder/BojuBot/sessions)' },
       },
       {
         name: 'Export folder',
