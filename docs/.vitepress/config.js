@@ -19,6 +19,7 @@ export default {
 
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Cookbook', link: '/cookbook/' },
       { text: 'Reference', link: '/guide/commands' },
       {
         text: 'Community',
@@ -49,6 +50,20 @@ export default {
           { text: 'Skills', link: '/guide/skills' },
           { text: 'Session Manager', link: '/guide/sessions' },
           { text: 'Context System', link: '/guide/context-system' },
+        ]
+      },
+      {
+        text: 'Cookbook',
+        items: [
+          { text: 'Overview', link: '/cookbook/' },
+          { text: '1. Quick-Hit Chat Recipes', link: '/cookbook/quick-hits' },
+          { text: '2. Daily Notes & PKM', link: '/cookbook/pkm' },
+          { text: '3. Academic & Literature Research', link: '/cookbook/academic' },
+          { text: '4. Creative Writing & Fiction', link: '/cookbook/creative-writing' },
+          { text: '5. Books & Long-Form Publishing', link: '/cookbook/publishing' },
+          { text: '6. Blogging & Social Media', link: '/cookbook/blogging' },
+          { text: '7. Video Studio & Multimedia', link: '/cookbook/video' },
+          { text: '8. Developer & Multi-Agent', link: '/cookbook/development' },
         ]
       },
       {
