@@ -1551,8 +1551,14 @@ export class ClaudeView extends ItemView {
    */
   private reportBridgeRefusal(refusal: BridgeRefusal, sessionFileId: string | null) {
     const brand = this.plugin.brand.name;
-    if (!refusal.byUser) new Notice(refusalNotice(brand, refusal), 8000);
-    if (this.closed || this.coordinator.sessionFileId !== sessionFileId) return;
+    // In the chat, under the reply that asked for it: that's where the user is
+    // looking. The notice is a backup for a panel that isn't on screen.
+    const sameSession = !this.closed && this.coordinator.sessionFileId === sessionFileId;
+    if (!refusal.byUser) {
+      if (sameSession) this.appendMessage('system', refusalNotice(brand, refusal));
+      new Notice(refusalNotice(brand, refusal), 8000);
+    }
+    if (!sameSession) return;
     if (!sharesVaultInfo(this.coordinator.getEffectivePermissionMode())) return;
     const note = refusalNote(brand, refusal);
     const queued = this.coordinator.getPendingSystemMessage();
