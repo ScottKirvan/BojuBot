@@ -104,6 +104,13 @@ Test vaults: `D:\2\deleteme\new_new` (current) and `D:\2\deleteme\BojuBotTest` �
 - Multi-machine (Windows). Keep notes resumable cold.
 - Project = "BojuBot" (not "BojuBot plugin", not "obsidian-claude").
 - No "Generated with Claude Code" credits or any AI advertisement in PR bodies, commit messages, or any other project-visible text.
+- **Rules live here, not only in agent memory.** Scott works on several machines and agent memory doesn't travel between them. When Scott states a working rule, add it to this file as well as to memory.
+- **Plain-text questions only.** Never use the multiple-choice question tool (AskUserQuestion); it breaks the flow. When Scott needs to decide something, ask in prose with the options as a short list.
+- **Hyperlink issue and PR numbers** in chat replies, e.g. [#457](https://github.com/ScottKirvan/BojuBot/pull/457) or [#153](https://github.com/ScottKirvan/BojuBot/issues/153), so they're clickable.
+- **Release cadence is Scott's call.** Agents never decide or label releases: no "release candidate" branches or PR titles, no "this makes 3.9.0" framing, no pushing merges toward a release. Describe a PR by what it contains. (PR #457 / `release/3.9-candidate` got that name from an agent; it's just #451–#456 combined.)
+- **Build only while iterating.** While Scott tests in Obsidian, run just `npm run build` after each edit. Run `npm run lint` and `npm test` once, after he says it's good and before committing.
+- **Design specs go in `notes/dev/specs/`** as `*-spec.md` files in the repo, never in a Claude Doc or other external doc. Match the existing ones (title "— Feature Design Spec", a **Status:** line, Overview, design sections, Open Questions), cover the full future scope rather than marking parts "for later", and mark verified facts as verified, with the CLI version tested. Small docs changes (CLAUDE.md, specs) can go on the current feature branch.
+- **Large implementation batches go to a subagent.** For several items at once, run one general-purpose agent in the background with `isolation: worktree` and one commit per item, from a brief that includes the agreed design, the commit subjects and the project rules (no attribution, no push or PR). Review its diffs, then `git worktree remove` it, check the branch out in the main repo and build: the test vault's junction points at the repo root, so Scott can only test what's checked out there.
 
 ## Code review / bug fix workflow
 Before implementing any fix — especially from a code review:
