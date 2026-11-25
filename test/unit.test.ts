@@ -49,7 +49,7 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
-import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
+import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES, searchSummary, canvasText, withModified, wantsModified, fileListError } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
 import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, parentFolder, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
@@ -3334,7 +3334,7 @@ describe('agyAgentDefinition', () => {
     assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
       '---',
       'name: bojubot-chat',
-      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v4), which rewrites this file when it changes."',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v5), which rewrites this file when it changes."',
       'tools:',
       '  - search_web',
       '  - read_url_content',
@@ -3434,7 +3434,8 @@ describe('agyAgentDefinition file tools (agy 1.5, #443)', () => {
     assert.ok(t.includes('You have no tool that lists folders, finds files or searches inside them.'));
     assert.ok(t.includes('\n- List a folder: @@BOJU {"query":"file-list","folder":"<folder>","mode":"inject"}\n'));
     assert.ok(t.includes('\n- Find files by name: @@BOJU {"query":"file-list","name":"<part of the file name>","folder":"<optional folder>","mode":"inject"}\n'));
-    assert.ok(t.includes('\n- Search inside notes: @@BOJU {"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}\n'));
+    assert.ok(t.includes('\n- Search inside notes: @@BOJU {"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}. It counts every match'));
+    assert.ok(t.includes('\n- Recently changed files: @@BOJU {"query":"file-list","sort":"modified","mode":"inject"}'));
     assert.match(t, /Don't use shell commands \(dir, ls, Get-ChildItem, find, grep, findstr, Select-String\) for this, even when they're allowed\./);
     assert.match(t, /If the conversation doesn't describe vault queries, you can't list or search the vault: read the files you already know about, or ask the user/);
   });
@@ -5308,8 +5309,9 @@ describe('queryAllowed / refuseQuery', () => {
 describe('matchNote (vault search, #443)', () => {
   test('matches case-insensitively and gives 1-based line numbers', () => {
     assert.deepEqual(matchNote('first\nA Snail here\nnothing\nsnail again', 'SNAIL'), {
-      lines: [{ line: 2, text: 'A Snail here' }, { line: 4, text: 'snail again' }],
+      matches: 2,
       matchingLines: 2,
+      lines: [{ line: 2, text: 'A Snail here' }, { line: 4, text: 'snail again' }],
     });
   });
 
@@ -5381,10 +5383,12 @@ describe('searchNotes', () => {
   test('returns matching notes in path order with their lines', () => {
     assert.deepEqual(searchNotes(notes, 'snail'), {
       text: 'snail',
+      totalMatches: 3,
+      totalNotes: 3,
       notes: [
-        { path: 'Inbox.md', lines: [{ line: 1, text: 'Snail mail' }], matchingLines: 1 },
-        { path: 'Projects/b.md', lines: [{ line: 1, text: 'a snail' }], matchingLines: 1 },
-        { path: 'ProjectsArchive/d.md', lines: [{ line: 1, text: 'snail' }], matchingLines: 1 },
+        { path: 'Inbox.md', matches: 1, matchingLines: 1, lines: [{ line: 1, text: 'Snail mail' }] },
+        { path: 'Projects/b.md', matches: 1, matchingLines: 1, lines: [{ line: 1, text: 'a snail' }] },
+        { path: 'ProjectsArchive/d.md', matches: 1, matchingLines: 1, lines: [{ line: 1, text: 'snail' }] },
       ],
     });
   });
@@ -5403,7 +5407,7 @@ describe('searchNotes', () => {
   });
 
   test('no matches gives an empty list and no more line', () => {
-    assert.deepEqual(searchNotes(notes, 'zebra'), { text: 'zebra', notes: [] });
+    assert.deepEqual(searchNotes(notes, 'zebra'), { text: 'zebra', totalMatches: 0, totalNotes: 0, notes: [] });
   });
 
   test('caps the notes and says how many more matched', () => {
@@ -5420,6 +5424,95 @@ describe('searchNotes', () => {
 
   test('exactly the cap gives no more line', () => {
     assert.equal(searchNotes(notes, 'snail', undefined, 3).more, undefined);
+  });
+});
+
+describe('search counts, whole word and match case', () => {
+  test('counts every occurrence, not just matching lines', () => {
+    const m = matchNote('move move\nremoved\nno', 'move');
+    assert.equal(m?.matches, 3);
+    assert.equal(m?.matchingLines, 2);
+  });
+
+  test('wholeWord skips the text inside longer words, but a hyphen still separates', () => {
+    const m = matchNote('move here\nremoved\nmove-file\nMoves', 'move', { wholeWord: true });
+    assert.equal(m?.matches, 2);
+    assert.deepEqual(m?.lines.map(l => l.line), [1, 3]);
+    assert.equal(matchNote('café crème', 'café', { wholeWord: true })?.matches, 1);
+    assert.equal(matchNote('cafés', 'café', { wholeWord: true }), null);
+  });
+
+  test('matchCase matches capitals exactly', () => {
+    assert.equal(matchNote('Move move MOVE', 'move', { matchCase: true })?.matches, 1);
+    assert.equal(matchNote('Move move MOVE', 'move')?.matches, 3);
+  });
+
+  test('totals cover notes past the cap, and options are echoed only when on', () => {
+    const many = Array.from({ length: SEARCH_MAX_NOTES + 2 }, (_, i) => ({ path: `n${String(i).padStart(3, '0')}.md`, content: 'hit hit' }));
+    const r = searchNotes(many, 'hit');
+    assert.equal(r.notes.length, SEARCH_MAX_NOTES);
+    assert.equal(r.totalNotes, SEARCH_MAX_NOTES + 2);
+    assert.equal(r.totalMatches, (SEARCH_MAX_NOTES + 2) * 2);
+    assert.equal('wholeWord' in r, false);
+    const w = searchNotes([{ path: 'a.md', content: 'hit' }], 'hit', undefined, undefined, { wholeWord: true, matchCase: true });
+    assert.equal(w.wholeWord, true);
+    assert.equal(w.matchCase, true);
+  });
+
+  test('searchSummary: totals in words, null for old results', () => {
+    assert.equal(searchSummary({ totalMatches: 12, totalNotes: 3 }), '12 matches in 3 notes');
+    assert.equal(searchSummary({ totalMatches: 1, totalNotes: 1 }), '1 match in 1 note');
+    assert.equal(searchSummary({}), null);
+  });
+});
+
+describe('canvasText', () => {
+  test("a canvas's text cards, one after another", () => {
+    const canvas = JSON.stringify({ nodes: [
+      { id: '1', type: 'text', text: 'First card\nline two' },
+      { id: '2', type: 'file', file: 'note.md' },
+      { id: '3', type: 'text', text: 'Second card' },
+    ], edges: [] });
+    assert.equal(canvasText(canvas), 'First card\nline two\nSecond card');
+  });
+
+  test('empty for anything that is not canvas JSON', () => {
+    assert.equal(canvasText('not json'), '');
+    assert.equal(canvasText('{}'), '');
+  });
+});
+
+describe('file-list by modified time', () => {
+  const files = [
+    { path: 'b.md', mtime: Date.parse('2026-11-20T10:00:00Z') },
+    { path: 'a.md', mtime: Date.parse('2026-11-25T09:00:00Z') },
+    { path: 'c.md', mtime: Date.parse('2026-11-25T12:00:00Z') },
+  ];
+
+  test('sort modified: newest first, with ISO times', () => {
+    assert.deepEqual(withModified(files, { sort: 'modified' }), {
+      files: ['c.md', 'a.md', 'b.md'],
+      modified: { 'c.md': '2026-11-25T12:00:00.000Z', 'a.md': '2026-11-25T09:00:00.000Z', 'b.md': '2026-11-20T10:00:00.000Z' },
+    });
+  });
+
+  test('modifiedSince keeps files changed on or after it, by path unless sorted', () => {
+    assert.deepEqual(withModified(files, { modifiedSince: '2026-11-25' }).files, ['a.md', 'c.md']);
+    assert.deepEqual(withModified(files, { modifiedSince: '2026-11-25T12:00:00Z', sort: 'modified' }).files, ['c.md']);
+  });
+
+  test('wantsModified and fileListError', () => {
+    assert.equal(wantsModified({ query: 'file-list', mode: 'inject' }), false);
+    assert.equal(wantsModified({ query: 'file-list', mode: 'inject', sort: 'modified' }), true);
+    assert.equal(wantsModified({ query: 'file-list', mode: 'inject', modifiedSince: '2026-11-25' }), true);
+    assert.equal(fileListError({ query: 'file-list', mode: 'inject', modifiedSince: '2026-11-25' }), undefined);
+    assert.match(fileListError({ query: 'file-list', mode: 'inject', modifiedSince: 'yesterday' }) ?? '', /modifiedSince must be a date/);
+  });
+
+  test('labels say what was asked', () => {
+    assert.equal(queryLabel({ query: 'file-list', mode: 'show', sort: 'modified' }), 'Files in vault, newest first');
+    assert.equal(queryLabel({ query: 'file-list', mode: 'show', folder: 'P', modifiedSince: '2026-11-25' }), 'Files in "P", changed since 2026-11-25');
+    assert.equal(queryLabel({ query: 'search', mode: 'show', text: 'move', wholeWord: true, matchCase: true }), 'Search for "move" (whole word, match case)');
   });
 });
 
@@ -5932,7 +6025,7 @@ describe('renderOrientation per permission mode (#406)', () => {
       const out = render(m);
       assert.ok(out.includes('focus-search · run-command(commandId)'), m);
       assert.ok(out.includes('Before run-command, get the command IDs (never guess them): @@BOJU {"query":"help","topic":"commands","mode":"inject"}'), m);
-      assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth,name]) · search(text[,folder])'), m);
+      assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth,name,sort:"modified",modifiedSince]) · search(text[,folder,wholeWord,matchCase])'), m);
       assert.ok(out.includes('## Canvas'), m);
       assert.ok(!out.includes('Not available in Chat only'), m);
       assert.ok(!out.includes('run-command is unavailable'), m);

@@ -22,7 +22,7 @@ import { BridgeRefusal, refusalNote, refusalNotice } from './utils/bridgeValidat
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import type { SearchResult } from './utils/vaultQuery';
+import { searchSummary, type SearchResult } from './utils/vaultQuery';
 import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE, modeChangeNote } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
@@ -2563,6 +2563,8 @@ export class ClaudeView extends ItemView {
     if (r.notes.length === 0) {
       body.createSpan({ cls: 'bojubot-vault-query-empty', text: 'No results.' });
     } else {
+      const summary = searchSummary(r);
+      if (summary) body.createDiv({ cls: 'bojubot-vault-query-empty', text: summary });
       const list = body.createEl('ul', { cls: 'bojubot-vault-query-list' });
       for (const note of r.notes) {
         const li = list.createEl('li');
@@ -2571,6 +2573,7 @@ export class ClaudeView extends ItemView {
           e.preventDefault();
           void this.app.workspace.openLinkText(note.path, '/', false);
         });
+        if (note.matches !== undefined) li.appendText(` (${note.matches})`);
         const lines = li.createEl('ul', { cls: 'bojubot-vault-query-lines' });
         for (const line of note.lines) lines.createEl('li', { text: `${line.line}: ${line.text}` });
       }
@@ -2698,8 +2701,10 @@ export class ClaudeView extends ItemView {
       if (Array.isArray(r.notes)) {
         const search = r as unknown as SearchResult;
         const rows = search.notes.map(n =>
-          [`> - [[${n.path.replace(/\.md$/, '')}]]`, ...n.lines.map(l => `>   - ${l.line}: ${l.text}`)].join('\n')
+          [`> - [[${n.path.replace(/\.md$/, '')}]]${n.matches !== undefined ? ` (${n.matches})` : ''}`, ...n.lines.map(l => `>   - ${l.line}: ${l.text}`)].join('\n')
         );
+        const summary = searchSummary(search);
+        if (summary && rows.length) rows.unshift(`> ${summary}`);
         if (search.more) rows.push(`> ${search.more}`);
         blocks.push(rows.length ? `> **${label}:**\n${rows.join('\n')}` : `> **${label}:** No results.`);
         continue;

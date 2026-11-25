@@ -26,7 +26,7 @@ import * as os from 'os';
 import { BOJU_PREFIX } from '../constants';
 
 /** Bump when the generated text changes, so the file says which version wrote it. */
-export const AGY_AGENT_VERSION = 4;
+export const AGY_AGENT_VERSION = 5;
 
 export const AGY_MAIN_AGENT = 'bojubot';
 export const AGY_CHAT_AGENT = 'bojubot-chat';
@@ -88,7 +88,8 @@ You have no tool that lists folders, finds files or searches inside them.
 For listing folders, finding files by name and searching inside notes, use BojuBot's vault queries when the session orientation describes them. Emit each on its own line:
 - List a folder: ${BOJU_PREFIX}{"query":"file-list","folder":"<folder>","mode":"inject"}
 - Find files by name: ${BOJU_PREFIX}{"query":"file-list","name":"<part of the file name>","folder":"<optional folder>","mode":"inject"}
-- Search inside notes: ${BOJU_PREFIX}{"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}
+- Search inside notes: ${BOJU_PREFIX}{"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}. It counts every match (totalMatches, and matches per note), so use the counts; don't read the notes to count. Add "wholeWord":true to skip matches inside longer words, "matchCase":true for exact capitals.
+- Recently changed files: ${BOJU_PREFIX}{"query":"file-list","sort":"modified","mode":"inject"}, or "modifiedSince":"<date>" for files changed since then.
 Don't use shell commands (dir, ls, Get-ChildItem, find, grep, findstr, Select-String) for this, even when they're allowed. If the conversation doesn't describe vault queries, you can't list or search the vault: read the files you already know about, or ask the user which notes to look at.
 
 ## Renaming, moving and deleting notes
