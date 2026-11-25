@@ -97,6 +97,14 @@ export interface BackendOrientation {
   environmentNote: string | null;
   /** How to name the file-editing tool in instructions, e.g. "the Write or Edit tool". */
   editToolHint: string;
+  /** How to name the file-reading tool in the orientation's tool order, e.g. "the Read tool". */
+  readToolHint: string;
+  /** The CLI's own listing/searching tools that work without the shell, offered
+   *  next to the vault queries ("Glob/Grep"). Null when it has none. */
+  searchToolHint: string | null;
+  /** What the write tool does about missing folders, added to the create/edit
+   *  line ("Write creates missing parent folders"). Null when unverified. */
+  writeFoldersNote: string | null;
   permissions: Record<PermissionMode, PermissionDescription>;
 }
 

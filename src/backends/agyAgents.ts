@@ -26,7 +26,7 @@ import * as os from 'os';
 import { BOJU_PREFIX } from '../constants';
 
 /** Bump when the generated text changes, so the file says which version wrote it. */
-export const AGY_AGENT_VERSION = 2;
+export const AGY_AGENT_VERSION = 3;
 
 export const AGY_MAIN_AGENT = 'bojubot';
 export const AGY_CHAT_AGENT = 'bojubot-chat';
@@ -83,6 +83,7 @@ Use your built-in tools, not shell commands, for files:
 - Read a file: read_file, not cat, type or Get-Content.
 - Create a file: write_file, not echo, Set-Content or redirection.
 - Change a file: edit_file.
+- Don't create folders with shell commands (mkdir, New-Item).
 You have no tool that lists folders, finds files or searches inside them.
 For listing folders, finding files by name and searching inside notes, use BojuBot's vault queries when the session orientation describes them. Emit each on its own line:
 - List a folder: ${BOJU_PREFIX}{"query":"file-list","folder":"<folder>","mode":"inject"}

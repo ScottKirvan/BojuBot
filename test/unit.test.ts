@@ -3319,7 +3319,7 @@ describe('agyAgentDefinition', () => {
     assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
       '---',
       'name: bojubot-chat',
-      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v2), which rewrites this file when it changes."',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v3), which rewrites this file when it changes."',
       'tools:',
       '  - search_web',
       '  - read_url_content',
@@ -3414,6 +3414,7 @@ describe('agyAgentDefinition file tools (agy 1.5, #443)', () => {
     assert.match(t, /- Read a file: read_file, not cat, type or Get-Content\./);
     assert.match(t, /- Create a file: write_file, not echo, Set-Content or redirection\./);
     assert.match(t, /- Change a file: edit_file\./);
+    assert.match(t, /- Don't create folders with shell commands \(mkdir, New-Item\)\./);
     for (const name of OLD_TOOL_NAMES) assert.ok(!t.includes(name), name);
     assert.ok(t.includes('You have no tool that lists folders, finds files or searches inside them.'));
     assert.ok(t.includes('\n- List a folder: @@BOJU {"query":"file-list","folder":"<folder>","mode":"inject"}\n'));
@@ -3432,8 +3433,9 @@ describe('ANTIGRAVITY_ORIENTATION file tools (agy 1.5, #443)', () => {
     assert.equal(o.editToolHint, 'your file tools (write_file or edit_file)');
     assert.equal(o.permissions.readonly.can, 'read vault files (read_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web');
     assert.equal(o.permissions.standard.can, 'read and write vault files (read_file, write_file, edit_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web');
-    assert.match(o.permissions.standard.cannot, /^run shell commands \(run_command\)\. Use your file tools and the vault queries instead/);
-    const all = [o.editToolHint, ...Object.values(o.permissions).flatMap(p => [p.summary, p.can, p.cannot])].join('\n');
+    assert.match(o.permissions.standard.cannot, /^run shell commands \(run_command\)\. Use your file tools, the vault queries and the UI Bridge file actions instead/);
+    assert.equal(o.readToolHint, 'read_file');
+    const all = [o.editToolHint, o.readToolHint, ...Object.values(o.permissions).flatMap(p => [p.summary, p.can, p.cannot])].join('\n');
     for (const name of OLD_TOOL_NAMES) assert.ok(!all.includes(name), name);
   });
 
@@ -5730,6 +5732,127 @@ describe('applyModeTags', () => {
   });
   test('a template without a trailing newline gets none', () => {
     assert.equal(applyModeTags('a\n{{IF_VAULT}}x', 'restricted'), 'a');
+  });
+});
+
+describe('applyModeTags tool-order tags (#462)', () => {
+  const t = [
+    'always',
+    '{{IF_WRITE}}write',
+    '{{IF_LIMITED_SHELL}}limited-shell',
+    '{{IF_FULL}}full',
+    '',
+  ].join('\n');
+
+  test('Chat only keeps none of them', () => {
+    assert.equal(applyModeTags(t, 'restricted'), 'always\n');
+  });
+  test('Read only: limited shell, no write lines', () => {
+    assert.equal(applyModeTags(t, 'readonly'), 'always\nlimited-shell\n');
+  });
+  test('Standard: write lines and limited shell', () => {
+    assert.equal(applyModeTags(t, 'standard'), 'always\nwrite\nlimited-shell\n');
+  });
+  test('Full: write lines and the full-shell line', () => {
+    assert.equal(applyModeTags(t, 'full'), 'always\nwrite\nfull\n');
+  });
+});
+
+describe('renderOrientation tool order (#462)', () => {
+  const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
+  const base = { identityName: 'BojuBot', supportLine: 'https://example.com', cwdDisplay: 'vault root', customCwd: false };
+  type Mode = 'restricted' | 'readonly' | 'standard' | 'full';
+  const section = (backend: typeof CLAUDE_CODE_ORIENTATION, permissionMode: Mode) => {
+    const out = renderOrientation(template, { ...base, backend, permissionMode });
+    const start = out.indexOf('## Tool order\n');
+    return start < 0 ? null : out.slice(start, out.indexOf('\n\n', start));
+  };
+  const RENAME = '- Rename/move/delete: UI Bridge rename-file / move-file / delete-file (updates links, uses trash), never mv/rm/del or copy+delete';
+  const LIMITED_SHELL = '- Shell: only when nothing above fits; if denied, emit request-permission(tool,reason) with the reason';
+  const FULL_SHELL = '- Shell: allowed, but only when nothing above fits';
+
+  test('Claude Code, Standard: the whole order, exactly', () => {
+    assert.equal(section(CLAUDE_CODE_ORIENTATION, 'standard'), [
+      '## Tool order',
+      'Vault work: use the first that fits, shell last.',
+      '- Read: the Read tool, not cat/type',
+      '- List/find/search: vault queries file-list / search (or Glob/Grep), not ls/dir/find/grep',
+      '- Create/edit: the Write or Edit tool (Write creates missing parent folders), not mkdir/echo/redirection',
+      RENAME,
+      LIMITED_SHELL,
+    ].join('\n'));
+  });
+
+  test('Antigravity, Standard: its own tool names, no Glob/Grep, no folder claim', () => {
+    assert.equal(section(ANTIGRAVITY_ORIENTATION, 'standard'), [
+      '## Tool order',
+      'Vault work: use the first that fits, shell last.',
+      '- Read: read_file, not cat/type',
+      '- List/find/search: vault queries file-list / search, not ls/dir/find/grep',
+      '- Create/edit: your file tools (write_file or edit_file), not mkdir/echo/redirection',
+      RENAME,
+      LIMITED_SHELL,
+    ].join('\n'));
+  });
+
+  test('Read only: read and list/search only, no create/edit or rename lines', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      const s = section(backend, 'readonly') ?? '';
+      assert.ok(s.includes('- Read: '), backend.agentLabel);
+      assert.ok(s.includes('- List/find/search: '), backend.agentLabel);
+      assert.ok(!s.includes('Create/edit'), backend.agentLabel);
+      assert.ok(!s.includes('Rename/move/delete'), backend.agentLabel);
+      assert.ok(s.endsWith(LIMITED_SHELL), backend.agentLabel);
+    }
+  });
+
+  test('Full: every line, and the shell is allowed but still last', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      const s = section(backend, 'full') ?? '';
+      assert.ok(s.includes('- Create/edit: '), backend.agentLabel);
+      assert.ok(s.includes(RENAME), backend.agentLabel);
+      assert.ok(s.endsWith(FULL_SHELL), backend.agentLabel);
+      assert.ok(!s.includes('request-permission'), backend.agentLabel);
+    }
+  });
+
+  test('Chat only: no tool order at all', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      assert.equal(section(backend, 'restricted'), null, backend.agentLabel);
+      const out = renderOrientation(template, { ...base, backend, permissionMode: 'restricted' });
+      assert.ok(!out.includes('Rename/move/delete:'), backend.agentLabel);
+      assert.ok(!out.includes('Write creates missing parent folders'), backend.agentLabel);
+    }
+  });
+
+  test('no placeholder is left in any mode on either backend', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      for (const m of ALL_MODES) assert.ok(!renderOrientation(template, { ...base, backend, permissionMode: m }).includes('{{'), `${backend.agentLabel} ${m}`);
+    }
+  });
+});
+
+describe('CLAUDE_CODE_ORIENTATION Standard wording (#462)', () => {
+  const p = CLAUDE_CODE_ORIENTATION.permissions.standard;
+
+  test("doesn't offer Bash for vault work", () => {
+    assert.equal(p.can, 'read and write vault files (Read, Write, Edit, Glob, Grep), rename/move/delete notes with the UI Bridge file actions, and fetch the web');
+    assert.ok(!p.can.includes('Bash'));
+    assert.ok(!/\bls\b/.test(p.can));
+  });
+
+  test('read-only commands stay an exception, not the route', () => {
+    assert.match(p.cannot, /^run shell commands that change anything \(mv, rm, mkdir, writing files, installs, downloads\) — they are denied\./);
+    assert.ok(p.cannot.includes('Read-only commands such as git status may run, but never use the shell for vault work.'));
+    assert.ok(p.cannot.endsWith('Request permission if a task genuinely needs a shell command'));
+  });
+
+  test('tool hints for the shared tool order', () => {
+    assert.equal(CLAUDE_CODE_ORIENTATION.readToolHint, 'the Read tool');
+    assert.equal(CLAUDE_CODE_ORIENTATION.searchToolHint, 'Glob/Grep');
+    assert.equal(CLAUDE_CODE_ORIENTATION.writeFoldersNote, 'Write creates missing parent folders');
+    assert.equal(ANTIGRAVITY_ORIENTATION.searchToolHint, null);
+    assert.equal(ANTIGRAVITY_ORIENTATION.writeFoldersNote, null);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { BackendOrientation, PermissionMode } from '../backends/types';
+import { canWrite } from '../backends/modes';
 import { canRunCommands, sharesVaultInfo } from './modeGates';
 
 export interface OrientationVars {
@@ -22,6 +23,11 @@ const LINE_TAGS: { tag: string; keep: (mode: PermissionMode) => boolean }[] = [
   { tag: '{{IF_NO_COMMANDS}}', keep: m => !canRunCommands(m) },
   { tag: '{{IF_VAULT}}', keep: sharesVaultInfo },
   { tag: '{{IF_NO_VAULT}}', keep: m => !sharesVaultInfo(m) },
+  // The tool order (#462): write and rename/move/delete lines only where the agent can write.
+  { tag: '{{IF_WRITE}}', keep: canWrite },
+  // Read only and Standard deny shell commands that change anything; Full allows them.
+  { tag: '{{IF_LIMITED_SHELL}}', keep: m => m === 'readonly' || m === 'standard' },
+  { tag: '{{IF_FULL}}', keep: m => m === 'full' },
 ];
 
 /** Apply the line tags for a mode. Pure — exported for tests. */
@@ -55,5 +61,9 @@ export function renderOrientation(template: string, v: OrientationVars): string 
     .replace('{{CWD_INSTRUCTION}}', cwdInstruction)
     .replace('{{PERMISSION_SUMMARY}}', perm.summary)
     .replace('{{PERMISSION_CAN}}', perm.can)
-    .replace('{{PERMISSION_CANNOT}}', perm.cannot);
+    .replace('{{PERMISSION_CANNOT}}', perm.cannot)
+    .replace('{{READ_TOOL}}', v.backend.readToolHint)
+    .replace('{{SEARCH_TOOLS}}', v.backend.searchToolHint ? ` (or ${v.backend.searchToolHint})` : '')
+    .replace('{{EDIT_TOOL}}', v.backend.editToolHint)
+    .replace('{{WRITE_FOLDERS}}', v.backend.writeFoldersNote ? ` (${v.backend.writeFoldersNote})` : '');
 }
