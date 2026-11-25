@@ -52,7 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
-import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
+import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, parentFolder, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
 import { attachmentKind, fileExtension, fileNameOf, IMAGE_EXTS, PASTE_TEXT_MAX_BYTES, TEXT_EXTS } from '../src/utils/attachmentKind';
 import { CONTENT_SEARCH_MIN_CHARS, matchSessionContent, searchableMessages, searchSessions } from '../src/utils/sessionList';
 import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from '../src/utils/storageLayout';
@@ -6741,6 +6741,18 @@ describe('bridgeValidation (#172)', () => {
     assert.equal(knownSettingsTab('nope', ids), null);
     assert.equal(knownSettingsTab(undefined, ids), null);
     assert.equal(knownSettingsTab(3, ids), null);
+  });
+});
+
+describe('parentFolder (move-file destination folder)', () => {
+  test('the folder part of a nested path', () => {
+    assert.equal(parentFolder('Sub/x.md'), 'Sub');
+    assert.equal(parentFolder('A/B/C/x.md'), 'A/B/C');
+  });
+
+  test('null at the vault root', () => {
+    assert.equal(parentFolder('x.md'), null);
+    assert.equal(parentFolder('/x.md'), null);
   });
 });
 

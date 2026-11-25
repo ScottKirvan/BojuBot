@@ -36,6 +36,12 @@ export function destinationProblem(path: unknown, configDir: string): string | n
   return null;
 }
 
+/** The folder part of a vault-relative path ("A/B/x.md" → "A/B"), or null at the vault root. */
+export function parentFolder(path: string): string | null {
+  const i = path.lastIndexOf('/');
+  return i > 0 ? path.slice(0, i) : null;
+}
+
 /** Why `newName` can't be a rename-file name (a name only, no folders), or null. */
 export function newNameProblem(newName: unknown): string | null {
   if (typeof newName !== 'string' || !newName.trim()) return 'missing newName';
