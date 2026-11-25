@@ -18,6 +18,7 @@ import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath
 import type BojuBotPlugin from '../main';
 import type { ModelOption, PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
+import { BridgeRefusal, refusalNote, refusalNotice } from './utils/bridgeValidation';
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
@@ -321,7 +322,10 @@ export class ClaudeView extends ItemView {
     this.coordinator.on('turn:action', (action) => {
       if (!this._activeTurnEls) return;
       this._activeTurnEls.uiBridgeActionCount++;
-      void executeAction(this.app, action, this.bridgeOptions());
+      const fileId = this.coordinator.sessionFileId;
+      void executeAction(this.app, action, this.bridgeOptions())
+        .then(refusal => { if (refusal) this.reportBridgeRefusal(refusal, fileId); })
+        .catch((e: unknown) => warn('UIBridge: action failed:', action.action, e));
     });
 
     this.coordinator.on('turn:tool-call', (tool, input, toolUseId) => {
@@ -1536,6 +1540,23 @@ export class ClaudeView extends ItemView {
 
   injectSelectionContext(selection: string, sourceName: string) {
     this.attachmentHandler.injectSelectionContext(selection, sourceName);
+  }
+
+  /**
+   * The UI Bridge didn't run an action: tell the user (unless they refused it
+   * themselves), and the agent with the next message, so a refused action
+   * never looks done. The note is added to any note already queued, never
+   * replacing it, and only for the session that emitted the action. Chat only
+   * gets no note: "no note at X" would tell the agent what's in the vault (#406).
+   */
+  private reportBridgeRefusal(refusal: BridgeRefusal, sessionFileId: string | null) {
+    const brand = this.plugin.brand.name;
+    if (!refusal.byUser) new Notice(refusalNotice(brand, refusal), 8000);
+    if (this.closed || this.coordinator.sessionFileId !== sessionFileId) return;
+    if (!sharesVaultInfo(this.coordinator.getEffectivePermissionMode())) return;
+    const note = refusalNote(brand, refusal);
+    const queued = this.coordinator.getPendingSystemMessage();
+    this.coordinator.setPendingSystemMessage(queued ? `${queued}\n\n${note}` : note);
   }
 
   injectAllowlistUpdate(newAllowlist: string[]) {

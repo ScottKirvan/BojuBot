@@ -52,7 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
-import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS } from '../src/utils/bridgeValidation';
+import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
 import { attachmentKind, fileExtension, fileNameOf, IMAGE_EXTS, PASTE_TEXT_MAX_BYTES, TEXT_EXTS } from '../src/utils/attachmentKind';
 import { CONTENT_SEARCH_MIN_CHARS, matchSessionContent, searchableMessages, searchSessions } from '../src/utils/sessionList';
 import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from '../src/utils/storageLayout';
@@ -6741,6 +6741,29 @@ describe('bridgeValidation (#172)', () => {
     assert.equal(knownSettingsTab('nope', ids), null);
     assert.equal(knownSettingsTab(undefined, ids), null);
     assert.equal(knownSettingsTab(3, ids), null);
+  });
+});
+
+describe('refusalNotice / refusalNote (refused UI Bridge actions)', () => {
+  const refusal = { action: 'rename-file', reason: 'newName contains a folder separator (use move-file) ("Sub/x.md")', byUser: false };
+
+  test('the notice names the action and the reason', () => {
+    assert.equal(
+      refusalNotice('BojuBot', refusal),
+      `BojuBot didn't run the agent's rename-file: newName contains a folder separator (use move-file) ("Sub/x.md").`,
+    );
+  });
+
+  test('the note tells the agent nothing changed and to correct a claim it was done', () => {
+    assert.equal(
+      refusalNote('BojuBot', refusal),
+      `[System: BojuBot didn't run your rename-file action: newName contains a folder separator (use move-file) ("Sub/x.md"). Nothing was changed. If you told the user it was done, correct that; then fix the action, or explain why it can't be done.]`,
+    );
+  });
+
+  test('both use the brand name given', () => {
+    assert.ok(refusalNotice('Acme', refusal).startsWith('Acme '));
+    assert.ok(refusalNote('Acme', refusal).startsWith('[System: Acme '));
   });
 });
 

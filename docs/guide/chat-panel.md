@@ -214,6 +214,14 @@ You can manage the full list in **Settings → BojuBot → UI Bridge & Commands*
 
 Commands only run in **Standard** and **Full access**. In Chat only and Read only, BojuBot blocks them (with a notice), because commands can create or change notes.
 
+### When BojuBot doesn't run an action <Badge type="warning" text="Beta" />
+
+Sometimes BojuBot won't carry out something the agent asked for: the note it names doesn't exist, a rename or move points somewhere it isn't allowed (outside the vault, or into Obsidian's config folder), the permission mode doesn't allow changes, or the command isn't available. BojuBot then shows a notice saying what it didn't do and why, and tells the agent with your next message, so it can correct itself instead of reporting the job as done. When you decline a command yourself, there's no notice, but the agent is still told. In Chat only the agent isn't told, because the reason could reveal what's in your vault.
+
+::: warning Not released yet
+These notices are only in [beta builds](./beta-builds.md) so far.
+:::
+
 ### How permission works
 
 | Situation                                     | What happens                                              |

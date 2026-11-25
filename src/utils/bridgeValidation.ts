@@ -45,6 +45,26 @@ export function newNameProblem(newName: unknown): string | null {
   return null;
 }
 
+/** An action the UI Bridge didn't run, and why. */
+export interface BridgeRefusal {
+  action: string;
+  /** Plain words, shown to the user and the agent: "no note at \"x.md\"". */
+  reason: string;
+  /** The user refused it themselves (denied the command, or denylisted it):
+   *  they don't need a notice, but the agent still needs to know. */
+  byUser: boolean;
+}
+
+/** The notice the user sees when an action isn't run. */
+export function refusalNotice(brand: string, r: BridgeRefusal): string {
+  return `${brand} didn't run the agent's ${r.action}: ${r.reason}.`;
+}
+
+/** The note the agent gets with the next message, so it doesn't report a refused action as done. */
+export function refusalNote(brand: string, r: BridgeRefusal): string {
+  return `[System: ${brand} didn't run your ${r.action} action: ${r.reason}. Nothing was changed. If you told the user it was done, correct that; then fix the action, or explain why it can't be done.]`;
+}
+
 /** The tab open-settings may open: a known tab ID, else null (settings open on their own). */
 export function knownSettingsTab(tab: unknown, knownIds: readonly string[]): string | null {
   return typeof tab === 'string' && knownIds.includes(tab) ? tab : null;
