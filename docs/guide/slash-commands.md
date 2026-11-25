@@ -23,7 +23,7 @@ The `/` menu gives you quick access to built-in BojuBot actions and your own **s
 | **Session** | Change permission mode <Badge type="warning" text="Beta" /> | Choose what the agent may do in this session — see [Permissions](./permissions) |
 | **Session** | New session       | Start a fresh conversation               |
 | **Session** | Open new chat tab <Badge type="warning" text="Beta" /> | Start a new session in another tab |
-| **Session** | Rename session <Badge type="warning" text="Beta" /> | Give the current session a new name; shown once the session has started |
+| **Session** | Rename session <Badge type="warning" text="Beta" /> | Give the current session a new name, also before its first message |
 | **Session** | Show sessions     | Browse and resume past sessions in the [Sessions panel](./sessions#sessions-panel) |
 | **Session** | Export session    | Save the current session to your vault   |
 | **Session** | Copy last response <Badge type="warning" text="Beta" /> | Copy the last reply to the clipboard as Markdown |
