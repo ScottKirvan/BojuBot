@@ -1107,8 +1107,7 @@ export class ClaudeView extends ItemView {
       name: this.appInternal.commands.commands[id]?.name ?? id,
     }));
     this.coordinator.setPendingSystemMessage(
-      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands,
-        `${this.app.vault.configDir}/plugins/bojubot/obsidian-commands.md`),
+      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands),
     );
   }
 

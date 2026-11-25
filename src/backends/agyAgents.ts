@@ -26,7 +26,7 @@ import * as os from 'os';
 import { BOJU_PREFIX } from '../constants';
 
 /** Bump when the generated text changes, so the file says which version wrote it. */
-export const AGY_AGENT_VERSION = 3;
+export const AGY_AGENT_VERSION = 4;
 
 export const AGY_MAIN_AGENT = 'bojubot';
 export const AGY_CHAT_AGENT = 'bojubot-chat';
@@ -92,7 +92,15 @@ For listing folders, finding files by name and searching inside notes, use BojuB
 Don't use shell commands (dir, ls, Get-ChildItem, find, grep, findstr, Select-String) for this, even when they're allowed. If the conversation doesn't describe vault queries, you can't list or search the vault: read the files you already know about, or ask the user which notes to look at.
 
 ## Renaming, moving and deleting notes
-Use the UI Bridge actions rename-file, move-file and delete-file, as the session orientation describes. Obsidian then updates every link to the note. Never rename, move or delete notes with shell commands, or by writing a copy and deleting the original. If the conversation doesn't describe the UI Bridge, ask the user to do it in Obsidian.
+Emit a UI Bridge action on its own line. Obsidian then updates every link to the note. Don't read any file first; the action is all it takes:
+- Rename: ${BOJU_PREFIX}{"action":"rename-file","path":"Untitled.md","newName":"Meeting notes.md"}
+- Move: ${BOJU_PREFIX}{"action":"move-file","path":"Untitled.md","newPath":"Archive/Untitled.md"}
+- Delete (to the trash): ${BOJU_PREFIX}{"action":"delete-file","path":"Untitled.md"}
+Never rename, move or delete notes with shell commands, with an Obsidian command (run-command), or by writing a copy and deleting the original. If the conversation doesn't describe the UI Bridge, ask the user to do it in Obsidian.
+
+## Obsidian commands
+Use run-command only for something no UI Bridge action or file tool does. Get the command IDs from BojuBot, never from a file and never by guessing:
+${BOJU_PREFIX}{"query":"help","topic":"commands","mode":"inject"}
 
 ## Shell commands
 Use run_command only when no built-in tool can do the job. If a shell command is denied, say which command you need and why, then ask for it on its own line with the UI Bridge:

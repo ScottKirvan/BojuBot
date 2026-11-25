@@ -23,7 +23,7 @@ import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, C
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
-import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
+import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, NO_COMMANDS_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
@@ -3319,7 +3319,7 @@ describe('agyAgentDefinition', () => {
     assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
       '---',
       'name: bojubot-chat',
-      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v3), which rewrites this file when it changes."',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v4), which rewrites this file when it changes."',
       'tools:',
       '  - search_web',
       '  - read_url_content',
@@ -3351,7 +3351,7 @@ describe('agyAgentDefinition', () => {
   test('bojubot ruleset is mode-neutral: file tools over shell, UI Bridge file ops, request-permission after a denial', () => {
     const b = body(agyAgentDefinition(AGY_MAIN_AGENT));
     assert.match(b, /Follow the latest permission note you were given\. When a tool call is denied, don't retry it/);
-    assert.match(b, /Use the UI Bridge actions rename-file, move-file and delete-file/);
+    assert.match(b, /Emit a UI Bridge action on its own line[\s\S]*"action":"rename-file"[\s\S]*"action":"move-file"[\s\S]*"action":"delete-file"/);
     assert.match(b, /If a shell command is denied, say which command you need and why/);
     assert.ok(b.includes('\n@@BOJU {"action":"request-permission","tool":"run_command","reason":"<why>"}\n'));
     for (const word of ['Standard mode', 'Read only mode', 'Full access mode']) assert.ok(!b.includes(word), word);
@@ -5230,6 +5230,22 @@ describe('canRunCommands', () => {
 describe('queryAllowed / refuseQuery', () => {
   const vaultTypes = ['file-list', 'backlinks', 'outlinks', 'tags', 'search'];
 
+  test('help topic commands: only where run-command works', () => {
+    assert.equal(queryAllowed('help', 'standard', 'commands'), true);
+    assert.equal(queryAllowed('help', 'full', 'commands'), true);
+    assert.equal(queryAllowed('help', 'readonly', 'commands'), false);
+    assert.equal(queryAllowed('help', 'restricted', 'commands'), false);
+    // other help topics stay allowed everywhere
+    assert.equal(queryAllowed('help', 'restricted', 'ui-bridge'), true);
+    assert.equal(queryAllowed('help', 'readonly'), true);
+  });
+
+  test('refusing the commands topic says run-command is unavailable', () => {
+    const q = { query: 'help' as const, topic: 'commands' as const, mode: 'inject' as const };
+    assert.deepEqual(refuseQuery(q, 'readonly'), { query: q, result: null, error: NO_COMMANDS_REFUSAL });
+    assert.equal(refuseQuery(q, 'standard'), null);
+  });
+
   test('Chat only refuses every vault query type', () => {
     for (const t of vaultTypes) assert.equal(queryAllowed(t, 'restricted'), false, t);
   });
@@ -5542,25 +5558,24 @@ describe('allowedCommandsSection', () => {
 
 describe('modeChangeNote', () => {
   const perm = { summary: 'Standard', can: 'write', cannot: 'shell' };
-  const F = 'cfg/plugins/bojubot/obsidian-commands.md';
   const cmds = [{ name: 'Quick switcher', id: 'switcher:open' }];
   test('the new mode\'s can and cannot', () => {
-    assert.equal(modeChangeNote(perm, 'standard', 'full', cmds, F), '[System: Permission mode changed to Standard. You can now: write. You cannot: shell.]');
+    assert.equal(modeChangeNote(perm, 'standard', 'full', cmds), '[System: Permission mode changed to Standard. You can now: write. You cannot: shell.]');
   });
   test('Read only → Standard: commands come back, with the allowlist (#406)', () => {
-    const note = modeChangeNote(perm, 'readonly', 'standard', cmds, F);
+    const note = modeChangeNote(perm, 'readonly', 'standard', cmds);
     assert.match(note, /run-command\(commandId\) works again/);
-    assert.ok(note.includes('read `cfg/plugins/bojubot/obsidian-commands.md` before run-command'));
+    assert.ok(note.includes('get the command IDs before run-command (never guess them): @@BOJU {"query":"help","topic":"commands","mode":"inject"}'));
     assert.ok(note.includes('| `Quick switcher` | `switcher:open` |'));
     assert.ok(note.endsWith(']'));
   });
   test('commands come back with an empty allowlist: no table', () => {
-    const note = modeChangeNote(perm, 'restricted', 'full', [], F);
+    const note = modeChangeNote(perm, 'restricted', 'full', []);
     assert.match(note, /works again/);
     assert.ok(!note.includes('## Allowed Obsidian commands'));
   });
   test('Standard → Read only: commands go away', () => {
-    const note = modeChangeNote(perm, 'standard', 'readonly', cmds, F);
+    const note = modeChangeNote(perm, 'standard', 'readonly', cmds);
     assert.match(note, /run-command is unavailable in this permission mode/);
     assert.ok(!note.includes('switcher:open'));
   });
@@ -5767,7 +5782,12 @@ describe('renderOrientation tool order (#462)', () => {
     const start = out.indexOf('## Tool order\n');
     return start < 0 ? null : out.slice(start, out.indexOf('\n\n', start));
   };
-  const RENAME = '- Rename/move/delete: UI Bridge rename-file / move-file / delete-file (updates links, uses trash), never mv/rm/del or copy+delete';
+  // Rename/move/delete with a worked example, then run-command as a last resort before the shell
+  const RENAME = [
+    '- Rename/move/delete: UI Bridge rename-file / move-file / delete-file (updates links, uses trash), never mv/rm/del, copy+delete or run-command. No file read needed first, e.g.',
+    '  @@BOJU {"action":"rename-file","path":"Untitled.md","newName":"Meeting notes.md"}',
+    '- Obsidian commands (run-command): only for what nothing above does',
+  ].join('\n');
   const LIMITED_SHELL = '- Shell: only when nothing above fits; if denied, emit request-permission(tool,reason) with the reason';
   const FULL_SHELL = '- Shell: allowed, but only when nothing above fits';
 
@@ -5802,6 +5822,7 @@ describe('renderOrientation tool order (#462)', () => {
       assert.ok(s.includes('- List/find/search: '), backend.agentLabel);
       assert.ok(!s.includes('Create/edit'), backend.agentLabel);
       assert.ok(!s.includes('Rename/move/delete'), backend.agentLabel);
+      assert.ok(!s.includes('Obsidian commands'), backend.agentLabel);
       assert.ok(s.endsWith(LIMITED_SHELL), backend.agentLabel);
     }
   });
@@ -5878,7 +5899,7 @@ describe('renderOrientation per permission mode (#406)', () => {
     assert.ok(!out.includes('file-list('));
     assert.ok(!out.includes('## Canvas'));
     assert.ok(!out.includes('run-command(commandId)'));
-    assert.ok(!out.includes('obsidian-commands.md'));
+    assert.ok(!out.includes('"topic":"commands"'));
     assert.ok(out.includes("Not available in Chat only: this session has no vault access. Don't emit vault queries; they're refused."));
     assert.ok(out.includes('run-command is unavailable in this permission mode'));
   });
@@ -5888,14 +5909,14 @@ describe('renderOrientation per permission mode (#406)', () => {
     assert.ok(out.includes('file-list('));
     assert.ok(out.includes('## Canvas'));
     assert.ok(!out.includes('run-command(commandId)'));
-    assert.ok(!out.includes('obsidian-commands.md'));
+    assert.ok(!out.includes('"topic":"commands"'));
   });
 
   test('Standard and Full keep every section', () => {
     for (const m of ['standard', 'full'] as const) {
       const out = render(m);
       assert.ok(out.includes('focus-search · run-command(commandId)'), m);
-      assert.ok(out.includes('Read `.obsidian/plugins/bojubot/obsidian-commands.md` before run-command'), m);
+      assert.ok(out.includes('Before run-command, get the command IDs (never guess them): @@BOJU {"query":"help","topic":"commands","mode":"inject"}'), m);
       assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth,name]) · search(text[,folder])'), m);
       assert.ok(out.includes('## Canvas'), m);
       assert.ok(!out.includes('Not available in Chat only'), m);

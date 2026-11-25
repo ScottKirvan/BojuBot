@@ -6,6 +6,7 @@ import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
 import canvasRef from './references/canvas.md';
 import { VaultQuery, VaultQueryResult, filterFileList, inFolder, searchError, searchNotes } from './utils/vaultQuery';
+import { buildCommandsReference, CommandInfo } from './utils/commandsReference';
 
 export type { VaultQueryType, VaultQueryMode, VaultQuery, VaultQueryResult } from './utils/vaultQuery';
 export { queryLabel, buildInjectMessage } from './utils/vaultQuery';
@@ -113,6 +114,13 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
       }
 
       case 'help': {
+        // The command reference, live: agents can't always read the
+        // generated file in the config folder (agy's headless mode denies it)
+        if (query.topic === 'commands') {
+          const commands = (app as unknown as { commands: { commands: Record<string, CommandInfo> } }).commands.commands;
+          log('QueryHandler: help — injecting the command reference');
+          return { query, result: buildCommandsReference(Object.values(commands), new Date().toISOString()) };
+        }
         const refs: Record<string, string> = {
           'ui-bridge': uiBridgeRef,
           'vault-query': vaultQueryRef,

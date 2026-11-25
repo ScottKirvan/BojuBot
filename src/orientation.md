@@ -12,7 +12,9 @@ Cannot: {{PERMISSION_CANNOT}}.
 {{IF_VAULT}}- Read: {{READ_TOOL}}, not cat/type
 {{IF_VAULT}}- List/find/search: vault queries file-list / search{{SEARCH_TOOLS}}, not ls/dir/find/grep
 {{IF_WRITE}}- Create/edit: {{EDIT_TOOL}}{{WRITE_FOLDERS}}, not mkdir/echo/redirection
-{{IF_WRITE}}- Rename/move/delete: UI Bridge rename-file / move-file / delete-file (updates links, uses trash), never mv/rm/del or copy+delete
+{{IF_WRITE}}- Rename/move/delete: UI Bridge rename-file / move-file / delete-file (updates links, uses trash), never mv/rm/del, copy+delete or run-command. No file read needed first, e.g.
+{{IF_WRITE}}  @@BOJU {"action":"rename-file","path":"Untitled.md","newName":"Meeting notes.md"}
+{{IF_WRITE}}- Obsidian commands (run-command): only for what nothing above does
 {{IF_LIMITED_SHELL}}- Shell: only when nothing above fits; if denied, emit request-permission(tool,reason) with the reason
 {{IF_FULL}}- Shell: allowed, but only when nothing above fits
 
@@ -27,7 +29,7 @@ File ops (immediate; require Standard/Full permission mode — no-op otherwise):
 {{IF_NO_COMMANDS}}run-command is unavailable in this permission mode (Obsidian commands can create or change notes).
 
 Always emit show-notice after any state-changing action.
-{{IF_COMMANDS}}Read `.obsidian/plugins/bojubot/obsidian-commands.md` before run-command — never guess IDs.
+{{IF_COMMANDS}}Before run-command, get the command IDs (never guess them): @@BOJU {"query":"help","topic":"commands","mode":"inject"}
 Full action reference+examples: @@BOJU {"query":"help","topic":"ui-bridge","mode":"inject"}
 
 ## Security

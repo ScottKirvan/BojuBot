@@ -27,7 +27,7 @@ export interface VaultQuery {
   text?: string;
   mode: VaultQueryMode;
   /** For help queries: which reference bundle to inject. */
-  topic?: 'ui-bridge' | 'vault-query' | 'canvas';
+  topic?: 'ui-bridge' | 'vault-query' | 'canvas' | 'commands';
 }
 
 export interface VaultQueryResult {
