@@ -1534,6 +1534,16 @@ describe('compact confirm panel', () => {
 // ---------------------------------------------------------------------------
 
 describe('extractActions', () => {
+  test('drops a bare "{}" line (Gemini noise) but keeps one inside a code block', () => {
+    const reply = '{}\n@@BOJU {"action":"rename-file","path":"a.md","newName":"b.md"}\n\nRenamed [[b]].';
+    const { clean, actions } = extractActions(reply);
+    assert.equal(clean, '\nRenamed [[b]].');
+    assert.equal(actions.length, 1);
+    assert.equal(extractActions('Empty object:\n```json\n{}\n```').clean, 'Empty object:\n```json\n{}\n```');
+    assert.equal(extractActions('  {}  \nok').clean, 'ok');
+    assert.equal(extractActions('{"a":1}').clean, '{"a":1}');
+  });
+
   test('returns empty actions and original text when no action lines present', () => {
     const { clean, actions } = extractActions('Hello\nworld\n');
     assert.equal(clean, 'Hello\nworld\n');
