@@ -1891,10 +1891,12 @@ export class ClaudeView extends ItemView {
       );
       this._customSuppressVaultContext = false;
       this._customInitialInstructions = '';
-      const context = await ctx.buildSessionContext();
       // The full context describes the current mode and allowlist, so notes
-      // queued before the first message would only repeat it, out of date (#459)
+      // queued before the first message would only repeat it, out of date (#459).
+      // Cleared before the build: a change made while it runs isn't in the
+      // context, so its note waits for the next turn.
       this.coordinator.clearSystemNotes();
+      const context = await ctx.buildSessionContext();
       if (ctx.needsCompaction) statusEl.textContent = 'Compacting memory…';
       const promptTokens = estimateTokens(finalPrompt);
       finalPrompt = ctx.injectContext(context, finalPrompt);
