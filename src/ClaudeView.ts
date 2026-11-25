@@ -10,13 +10,15 @@ import { IDLE_STATUS, SessionStatus, StatusEvent, StatusState, displayStatus, ne
 import { SlashMenu, SlashCommand } from './SlashMenu';
 import { SlashParamModal } from './modals/SlashParamModal';
 import { CustomSessionModal, CustomSessionOptions } from './modals/CustomSessionModal';
-import { PERMISSION_MODES, openPermissionPopover } from './modals/PermissionPickerModal';
+import { PERMISSION_MODES, PermissionPickerModal, openPermissionPopover } from './modals/PermissionPickerModal';
+import { RenameSessionModal } from './modals/RenameSessionModal';
 import { AtMentionController } from './AtMentionController';
 import { spawn } from 'child_process';
 import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath } from './SkillLoader';
 import type BojuBotPlugin from '../main';
 import type { ModelOption, PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
+import { BridgeRefusal, refusalNote, refusalNotice } from './utils/bridgeValidation';
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
@@ -320,7 +322,10 @@ export class ClaudeView extends ItemView {
     this.coordinator.on('turn:action', (action) => {
       if (!this._activeTurnEls) return;
       this._activeTurnEls.uiBridgeActionCount++;
-      void executeAction(this.app, action, this.bridgeOptions());
+      const fileId = this.coordinator.sessionFileId;
+      void executeAction(this.app, action, this.bridgeOptions())
+        .then(refusal => { if (refusal) this.reportBridgeRefusal(refusal, fileId); })
+        .catch((e: unknown) => warn('UIBridge: action failed:', action.action, e));
     });
 
     this.coordinator.on('turn:tool-call', (tool, input, toolUseId) => {
@@ -1536,6 +1541,29 @@ export class ClaudeView extends ItemView {
     this.attachmentHandler.injectSelectionContext(selection, sourceName);
   }
 
+  /**
+   * The UI Bridge didn't run an action: tell the user (unless they refused it
+   * themselves), and the agent with the next message, so a refused action
+   * never looks done. The note is added to any note already queued, never
+   * replacing it, and only for the session that emitted the action. Chat only
+   * gets no note: "no note at X" would tell the agent what's in the vault (#406).
+   */
+  private reportBridgeRefusal(refusal: BridgeRefusal, sessionFileId: string | null) {
+    const brand = this.plugin.brand.name;
+    // In the chat, under the reply that asked for it: that's where the user is
+    // looking. The notice is a backup for a panel that isn't on screen.
+    const sameSession = !this.closed && this.coordinator.sessionFileId === sessionFileId;
+    if (!refusal.byUser) {
+      if (sameSession) this.appendMessage('system', refusalNotice(brand, refusal));
+      new Notice(refusalNotice(brand, refusal), 8000);
+    }
+    if (!sameSession) return;
+    if (!sharesVaultInfo(this.coordinator.getEffectivePermissionMode())) return;
+    const note = refusalNote(brand, refusal);
+    const queued = this.coordinator.getPendingSystemMessage();
+    this.coordinator.setPendingSystemMessage(queued ? `${queued}\n\n${note}` : note);
+  }
+
   injectAllowlistUpdate(newAllowlist: string[]) {
     // Chat only and Read only refuse run-command, so the allowlist means nothing there (#406)
     if (!canRunCommands(this.coordinator.getEffectivePermissionMode())) return;
@@ -1838,7 +1866,7 @@ export class ClaudeView extends ItemView {
           if (c.type === 'url') return `<bojubot-context type="url" url="${escapeAttr(c.text)}"></bojubot-context>`;
           if (c.type === 'image') return `<bojubot-context type="image" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the image: ${c.text}</bojubot-context>`;
           if (c.type === 'pdf') return `<bojubot-context type="pdf" source="${escapeAttr(c.source)}" path="${escapeAttr(c.text)}">Read this file to view the document: ${c.text}</bojubot-context>`;
-          return `<bojubot-context type="attachment" source="${c.source}">${neutralizeTriggers(c.text)}</bojubot-context>`;
+          return `<bojubot-context type="attachment" source="${escapeAttr(c.source)}">${neutralizeTriggers(c.text)}</bojubot-context>`;
         })
         .join('\n\n');
       finalPrompt = `${contextBlock}\n\n${prompt}`;
@@ -3136,10 +3164,32 @@ export class ClaudeView extends ItemView {
       },
       {
         category: 'Session',
+        name: 'Change permission mode',
+        description: 'Choose what the agent may do in this session',
+        action: () => new PermissionPickerModal(this.app, this.plugin, this.coordinator.getEffectivePermissionMode()).open(),
+      },
+      {
+        category: 'Session',
         name: 'New session',
         description: 'Start a fresh conversation',
         action: () => this.startNewSession(),
       },
+      {
+        category: 'Session',
+        name: 'Open new chat tab',
+        description: 'Start a new session in another tab',
+        action: () => void this.plugin.newSession({ forceNewTab: true, near: this.leaf }),
+      },
+      ...(this.coordinator.sessionFileId ? [{
+        category: 'Session',
+        name: 'Rename session',
+        description: 'Give this session a new name',
+        action: () => {
+          const id = this.coordinator.sessionFileId;
+          if (!id) return;
+          new RenameSessionModal(this.app, this.coordinator.sessionTitle ?? '', (title) => this.plugin.renameSession(id, title)).open();
+        },
+      }] : []),
       {
         category: 'Session',
         name: 'Show sessions',
@@ -3157,6 +3207,18 @@ export class ClaudeView extends ItemView {
           if (session) void this.exportSessionToVault(session);
           else new Notice('Session not found.');
         },
+      },
+      {
+        category: 'Session',
+        name: 'Copy last response',
+        description: 'Copy the last reply to the clipboard as Markdown',
+        action: () => this.copyLastResponse(),
+      },
+      {
+        category: 'Session',
+        name: 'Copy conversation',
+        description: 'Copy the whole conversation to the clipboard as Markdown',
+        action: () => this.exportConversation(),
       },
       {
         category: 'Context',
@@ -3207,6 +3269,15 @@ export class ClaudeView extends ItemView {
         description: 'Ask the agent to review the context file for suspicious content',
         action: () => this.auditMemoryFile(),
       },
+      ...(this.plugin.settings.registerSkillsAsCommands ? [{
+        category: 'Skills',
+        name: 'Reload skills',
+        description: 'Pick up added or removed skill files in the command palette',
+        action: () => {
+          this.plugin.reloadSkillCommands();
+          new Notice(`${this.plugin.brand.name}: skills reloaded.`);
+        },
+      }] : []),
       ...this.loadSkillCommands(),
     ];
   }

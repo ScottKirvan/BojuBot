@@ -1,4 +1,5 @@
 import { TFolder, TFile, Vault } from 'obsidian';
+import { isExcluded, summarizeFileNames } from './vaultExclusions';
 
 /**
  * Build a text representation of the vault folder/file tree.
@@ -12,7 +13,9 @@ import { TFolder, TFile, Vault } from 'obsidian';
  *                   -1  = unlimited depth
  *
  * Only names are listed — file/folder names only, no file contents.
- * Hidden entries (names starting with '.') are skipped at every level.
+ * Hidden entries (names starting with '.') are skipped at every level, and so
+ * are the user's vault exclusions (#125). A folder with many files of one type
+ * lists them as a single summary line (summarizeFileNames()).
  */
 export function buildVaultTree(vault: Vault, depth: number, startFolder?: TFolder): string {
   if (depth === 0) return '';
@@ -26,16 +29,15 @@ export function buildVaultTree(vault: Vault, depth: number, startFolder?: TFolde
     const indent = '  '.repeat(currentDepth);
 
     for (const child of folder.children) {
-      if (child instanceof TFolder && !child.name.startsWith('.')) {
+      if (child instanceof TFolder && !child.name.startsWith('.') && !isExcluded(child.path)) {
         lines.push(`${indent}${child.name}/`);
         walk(child, currentDepth + 1);
       }
     }
-    for (const child of folder.children) {
-      if (child instanceof TFile && !child.name.startsWith('.')) {
-        lines.push(`${indent}${child.name}`);
-      }
-    }
+    const names = folder.children
+      .filter((child): child is TFile => child instanceof TFile && !child.name.startsWith('.') && !isExcluded(child.path))
+      .map(child => child.name);
+    for (const name of summarizeFileNames(names)) lines.push(`${indent}${name}`);
   }
 
   walk(root, 0);

@@ -56,3 +56,19 @@ export function getElectronClipboard(): ElectronClipboard | null {
     return null;
   }
 }
+
+/**
+ * The real path of a File from a paste or drop, or '' when it has none (a
+ * screenshot, or Electron's webUtils unavailable). Electron removed File.path
+ * in v32; webUtils.getPathForFile() replaced it.
+ */
+export function getPathForFile(file: File): string {
+  try {
+    const req = windowRequire();
+    const webUtils = req ? (req('electron') as { webUtils?: { getPathForFile(f: File): string } }).webUtils : undefined;
+    const path = webUtils?.getPathForFile(file);
+    if (path) return path;
+  } catch { /* fall back below */ }
+  const legacy = (file as File & { path?: unknown }).path;
+  return typeof legacy === 'string' ? legacy : '';
+}

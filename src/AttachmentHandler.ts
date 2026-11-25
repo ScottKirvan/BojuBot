@@ -1,8 +1,9 @@
 import { setIcon } from 'obsidian';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { canvasToText } from './utils/canvasParser';
-import { getElectronClipboard } from './utils/electronUtils';
+import { getElectronClipboard, getPathForFile } from './utils/electronUtils';
+import { attachmentKind, fileExtension, fileNameOf, PASTE_TEXT_MAX_BYTES } from './utils/attachmentKind';
 
 export type PendingContext = {
   text: string;
@@ -11,16 +12,6 @@ export type PendingContext = {
   /** 'file': a binary file sent by name only (the agent is asked to open it). */
   type?: 'text' | 'url' | 'image' | 'pdf' | 'file';
 };
-
-const TEXT_EXTS = new Set([
-  'txt', 'md', 'fountain', 'js', 'ts', 'jsx', 'tsx', 'json', 'canvas',
-  'css', 'html', 'xml', 'csv', 'yaml', 'yml', 'py', 'rb', 'go', 'rs',
-  'java', 'c', 'cpp', 'h', 'sh', 'bat', 'ps1',
-]);
-const IMAGE_EXTS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico',
-  'tiff', 'heic', 'heif', 'avif',
-]);
 
 export interface AttachmentHandlerHost {
   getVaultRoot(): string;
@@ -80,15 +71,14 @@ export class AttachmentHandler {
     input.onchange = async () => {
       const f = input.files?.[0];
       if (!f) return;
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
+      const kind = attachmentKind(f.name);
+      if (kind === 'image' || kind === 'pdf') {
         const filePath = this.saveBinaryToTmp(f.name, await f.arrayBuffer());
-        const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-        this.contexts.push({ text: filePath, source: f.name, pinned: false, type });
+        this.contexts.push({ text: filePath, source: f.name, pinned: false, type: kind });
+      } else if (kind === 'text') {
+        this.contexts.push({ text: this.textContent(f.name, await f.text()), source: f.name, pinned: false });
       } else {
-        let text = TEXT_EXTS.has(ext) ? await f.text() : f.name;
-        if (ext === 'canvas') text = canvasToText(f.name, text, this.host.getCanvasMaxChars());
-        this.contexts.push({ text, source: f.name, pinned: false, ...(!TEXT_EXTS.has(ext) && { type: 'file' as const }) });
+        this.contexts.push({ text: f.name, source: f.name, pinned: false, type: 'file' });
       }
       this.render();
       this.host.focusInput();
@@ -110,34 +100,44 @@ export class AttachmentHandler {
       const clipboard = getElectronClipboard();
       const filePaths = clipboard?.readFilePaths() ?? [];
       if (filePaths.length > 0) {
-        let handled = false;
-        for (const filePath of filePaths) {
-          const name = filePath.replace(/\\/g, '/').split('/').pop() ?? filePath;
-          const ext = name.split('.').pop()?.toLowerCase() ?? '';
-          if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
-            e.preventDefault();
-            const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-            this.contexts.push({ text: filePath, source: name, pinned: false, type });
-            handled = true;
-          }
-        }
-        if (handled) { this.render(); return; }
+        // Any file type, like drag and drop (#262): it's read where it is, never copied
+        e.preventDefault();
+        for (const filePath of filePaths) this.attachPath(filePath);
+        this.render();
+        this.host.focusInput();
+        return;
       }
     } catch { /* Electron API unavailable — fall through */ }
 
-    // clipboardData.files has the real filename even when readFilePaths() fails.
-    // file.path is unavailable (context isolation) so save binary data to tmp.
+    // clipboardData.files has the real file name even when readFilePaths() fails.
+    // When a file has no path, binary data is saved to tmp.
     // Always generate a unique paste name — Windows names every screenshot "image.jpg".
     const files = e.clipboardData?.files;
     if (files?.length) {
+      // A file copied in the file manager has a real path: read it where it is,
+      // any type (#262). Without one, images and PDFs are copied to tmp and
+      // small text files read inline.
+      const paths = Array.from(files).map(f => getPathForFile(f));
+      if (paths.every(p => p)) {
+        e.preventDefault();
+        for (const p of paths) this.attachPath(p);
+        this.render();
+        this.host.focusInput();
+        return;
+      }
       for (const f of Array.from(files)) {
-        const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-        if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
+        const kind = attachmentKind(f.name);
+        if (kind === 'image' || kind === 'pdf') {
           e.preventDefault();
-          const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
-          const uniqueName = `paste-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+          const uniqueName = `paste-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${fileExtension(f.name)}`;
           const filePath = this.saveBinaryToTmp(uniqueName, await f.arrayBuffer());
-          this.contexts.push({ text: filePath, source: uniqueName, pinned: false, type });
+          this.contexts.push({ text: filePath, source: uniqueName, pinned: false, type: kind });
+          this.render();
+          return;
+        }
+        if (kind === 'text' && f.size <= PASTE_TEXT_MAX_BYTES) {
+          e.preventDefault();
+          this.contexts.push({ text: this.textContent(f.name, await f.text()), source: f.name, pinned: false });
           this.render();
           return;
         }
@@ -164,15 +164,12 @@ export class AttachmentHandler {
 
   async handleDroppedFiles(files: FileList): Promise<void> {
     for (const f of Array.from(files)) {
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      if (IMAGE_EXTS.has(ext) || ext === 'pdf') {
-        const type = IMAGE_EXTS.has(ext) ? 'image' : 'pdf';
+      const kind = attachmentKind(f.name);
+      if (kind === 'image' || kind === 'pdf') {
         const filePath = this.saveBinaryToTmp(f.name, await f.arrayBuffer());
-        this.contexts.push({ text: filePath, source: f.name, pinned: false, type });
-      } else if (TEXT_EXTS.has(ext)) {
-        let text = await f.text();
-        if (ext === 'canvas') text = canvasToText(f.name, text, this.host.getCanvasMaxChars());
-        this.contexts.push({ text, source: f.name, pinned: false });
+        this.contexts.push({ text: filePath, source: f.name, pinned: false, type: kind });
+      } else if (kind === 'text') {
+        this.contexts.push({ text: this.textContent(f.name, await f.text()), source: f.name, pinned: false });
       } else {
         // Unknown binary — pass filename; Claude can attempt to read it
         this.contexts.push({ text: f.name, source: f.name, pinned: false, type: 'file' });
@@ -180,6 +177,34 @@ export class AttachmentHandler {
     }
     this.render();
     this.host.focusInput();
+  }
+
+  /** A text attachment's content; a canvas is turned into readable text. */
+  private textContent(name: string, text: string): string {
+    return fileExtension(name) === 'canvas' ? canvasToText(name, text, this.host.getCanvasMaxChars()) : text;
+  }
+
+  /**
+   * Attach a file the file manager put on the clipboard, by its real path.
+   * Images and PDFs, and text files over PASTE_TEXT_MAX_BYTES or that can't be
+   * read, are passed by path for the agent to open; other text files inline.
+   */
+  private attachPath(filePath: string): void {
+    const source = fileNameOf(filePath);
+    const kind = attachmentKind(filePath);
+    if (kind === 'image' || kind === 'pdf') {
+      this.contexts.push({ text: filePath, source, pinned: false, type: kind });
+      return;
+    }
+    if (kind === 'text') {
+      try {
+        if (statSync(filePath).size <= PASTE_TEXT_MAX_BYTES) {
+          this.contexts.push({ text: this.textContent(source, readFileSync(filePath, 'utf8')), source, pinned: false });
+          return;
+        }
+      } catch { /* unreadable: pass the path below */ }
+    }
+    this.contexts.push({ text: filePath, source, pinned: false, type: 'file' });
   }
 
   private saveBinaryToTmp(filename: string, data: ArrayBuffer): string {

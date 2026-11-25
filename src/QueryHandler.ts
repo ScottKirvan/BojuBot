@@ -1,6 +1,7 @@
 import { App, TFolder } from 'obsidian';
 import { log, warn } from './utils/logger';
 import { buildVaultTree } from './utils/fileTree';
+import { isExcluded } from './utils/vaultExclusions';
 import { activeBrand, applyIdentityName } from './brand';
 import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
@@ -61,6 +62,7 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
           const needle = query.tag.startsWith('#') ? query.tag : `#${query.tag}`;
           const files: string[] = [];
           for (const f of app.vault.getMarkdownFiles()) {
+            if (isExcluded(f.path)) continue;
             const cache = app.metadataCache.getFileCache(f);
             const fileTags = [
               ...(cache?.tags ?? []).map(t => t.tag),
@@ -77,7 +79,7 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
       case 'file-list': {
         if (query.name) {
           // Find files by name: every file type (attachments, canvases), not just notes
-          const files = filterFileList(app.vault.getFiles().map(f => f.path), query);
+          const files = filterFileList(app.vault.getFiles().map(f => f.path).filter(p => !isExcluded(p)), query);
           log('QueryHandler: file-list (name) —', files.length, 'files');
           return { query, result: { files } };
         }
@@ -96,7 +98,7 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
         }
         const prefix = query.folder ? query.folder.replace(/\/?$/, '/') : '';
         const files = app.vault.getMarkdownFiles()
-          .filter(f => prefix ? f.path.startsWith(prefix) : true)
+          .filter(f => (prefix ? f.path.startsWith(prefix) : true) && !isExcluded(f.path))
           .map(f => f.path)
           .sort();
         log('QueryHandler: file-list —', files.length, 'files');
@@ -106,7 +108,7 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
       case 'search': {
         const error = searchError(query);
         if (error) return { query, result: null, error };
-        const files = app.vault.getMarkdownFiles().filter(f => inFolder(f.path, query.folder));
+        const files = app.vault.getMarkdownFiles().filter(f => inFolder(f.path, query.folder) && !isExcluded(f.path));
         const notes = await Promise.all(files.map(async f => ({ path: f.path, content: await app.vault.cachedRead(f) })));
         const result = searchNotes(notes, query.text ?? '', query.folder);
         log('QueryHandler: search —', result.notes.length, 'notes shown of', files.length, 'searched');
