@@ -21,7 +21,7 @@ import { titleFromPrompt, saveSession, saveSessionAtTop, loadAllSessions, delete
 import { estimateTokens, formatTokenCount } from '../src/utils/logger';
 import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, CLAUDE_CODE_ORIENTATION } from '../src/backends/claudeCode';
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
-import { splitBojuLines } from '../src/utils/bojuLines';
+import { splitBojuLines, nextFenceState, fencedLines, parseBojuLine, liveBojuObjects, FenceTracker } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
 import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, NO_COMMANDS_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
@@ -43,7 +43,7 @@ import { extractToolDetail, contextGenStatusForTool } from '../src/utils/toolFor
 import { parseApiError, formatApiError, ApiError, parseUnrecognizedModel, unrecognizedModelNotice, claudeAuthFailure, claudeAuthReply, isAgyAuthFailure, CLAUDE_AUTH, AGY_AUTH, CLAUDE_SIGN_IN_HELP_URL, AGY_SIGN_IN_HELP_URL } from '../src/utils/apiError';
 import { parseCliCapabilities, has, formatCliVersion, UNKNOWN_CAPABILITIES, CliCapabilities } from '../src/utils/cliCapabilities';
 import { fileStamp } from '../src/utils/fileStamp';
-import { extractActions } from '../src/utils/actionParser';
+import { extractActions, BojuBotAction } from '../src/utils/actionParser';
 import { repairLinks, vaultTarget, LinkRepairContext } from '../src/utils/linkRepair';
 import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
@@ -52,7 +52,7 @@ import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
 import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES, searchSummary, canvasText, withModified, wantsModified, fileListError, queryFollowUp, queryLimitNote, MAX_QUERY_ROUNDS } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
-import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, parentFolder, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
+import { destinationProblem, isPlaceholder, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, parentFolder, placeholderProblem, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
 import { attachmentKind, fileExtension, fileNameOf, IMAGE_EXTS, PASTE_TEXT_MAX_BYTES, TEXT_EXTS } from '../src/utils/attachmentKind';
 import { CONTENT_SEARCH_MIN_CHARS, matchSessionContent, searchableMessages, searchSessions } from '../src/utils/sessionList';
 import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from '../src/utils/storageLayout';
@@ -1108,6 +1108,35 @@ describe('parseStreamOutput partial messages (live preview)', () => {
     assert.deepEqual(ev.filter(e => e.kind === 'text'), [{ kind: 'text', value: 'Done' }]);
   });
 
+  test('a fenced @@BOJU line is previewed and delivered as text, never as an action', async () => {
+    const actionLine = `${BOJU_PREFIX}{"action": "run-command", "commandId": "<id>"}`;
+    const ev = await run([
+      blockStart('text'), textDelta('Quoted:\n```\n'), textDelta(`${actionLine}\n`), textDelta('```\n'),
+      assistantText(`Quoted:\n\`\`\`\n${actionLine}\n\`\`\`\n`),
+    ]);
+    assert.deepEqual(ev, [
+      { kind: 'preview', value: 'Quoted:\n```\n' },
+      { kind: 'preview', value: `Quoted:\n\`\`\`\n${actionLine}\n` },
+      { kind: 'preview', value: `Quoted:\n\`\`\`\n${actionLine}\n\`\`\`\n` },
+      { kind: 'preview', value: '' },
+      { kind: 'text', value: `Quoted:\n\`\`\`\n${actionLine}\n\`\`\`\n` },
+    ]);
+  });
+
+  test('a fence opened in one text block of a message is still open in the next', async () => {
+    const actionLine = `${BOJU_PREFIX}{"action":"delete-file","path":"a.md"}`;
+    const liveLine = `${BOJU_PREFIX}{"action":"open-file","path":"b.md"}`;
+    const msg = (texts: string[]) => line({ type: 'assistant', message: { content: texts.map(text => ({ type: 'text', text })) }, parent_tool_use_id: null });
+    const ev = await run([msg(['Example:\n```\n', `${actionLine}\n\`\`\`\n${liveLine}`]), msg([actionLine])]);
+    assert.deepEqual(ev, [
+      { kind: 'text', value: 'Example:\n```\n' },
+      { kind: 'action', value: liveLine },
+      { kind: 'text', value: `${actionLine}\n\`\`\`` },
+      // A new message starts outside any fence
+      { kind: 'action', value: actionLine },
+    ]);
+  });
+
   test('subagent stream events are ignored', async () => {
     const ev = await run([blockStart('text', 'toolu_1'), textDelta('sub', 'toolu_1'), blockStart('text'), textDelta('main')]);
     assert.deepEqual(ev, [{ kind: 'preview', value: 'main' }]);
@@ -1187,6 +1216,24 @@ describe('previewForDisplay', () => {
   test('matches how the complete message is cleaned once the block is done', () => {
     const block = `Intro\n${BOJU_PREFIX}{"action":"show-notice","message":"x"}\nOutro`;
     assert.equal(previewForDisplay(block), extractActions(block).clean);
+    const fenced = `Intro\n\`\`\`\n${BOJU_PREFIX}{"action":"show-notice","message":"x"}\n\`\`\`\nOutro`;
+    assert.equal(previewForDisplay(fenced), extractActions(fenced).clean);
+  });
+
+  test('@@BOJU lines inside a code block are shown', () => {
+    const line = `${BOJU_PREFIX}{"action": "run-command", "commandId": "<id>"}`;
+    assert.equal(previewForDisplay(`Quoted:\n\`\`\`\n${line}\n\`\`\`\nDone`), `Quoted:\n\`\`\`\n${line}\n\`\`\`\nDone`);
+    assert.equal(previewForDisplay(`~~~\n${line}\n`), `~~~\n${line}\n`);
+  });
+
+  test('inside an open code block a trailing partial @@BOJU line is not held back', () => {
+    assert.equal(previewForDisplay('```\n@@BO'), '```\n@@BO');
+    assert.equal(previewForDisplay(`  \`\`\`\n${BOJU_PREFIX}{"action":"open-fi`), `  \`\`\`\n${BOJU_PREFIX}{"action":"open-fi`);
+  });
+
+  test('after the code block closes, @@BOJU lines are dropped again', () => {
+    assert.equal(previewForDisplay(`\`\`\`\nx\n\`\`\`\n${BOJU_PREFIX}{"query":"tags"}\nDone`), '```\nx\n```\nDone');
+    assert.equal(previewForDisplay('```\nx\n```\n@@BO'), '```\nx\n```\n');
   });
 });
 
@@ -1591,6 +1638,33 @@ describe('extractActions', () => {
     const { actions, clean } = extractActions(text);
     assert.equal(actions.length, 2);
     assert.equal(clean.trim(), '', 'clean output should be empty when all lines are actions');
+  });
+
+  test('action, query and malformed lines inside a code block are kept and never parsed', () => {
+    for (const fence of ['```', '~~~']) {
+      const text = [
+        'The note says:',
+        fence,
+        '@@BOJU {"action": "run-command", "commandId": "<id>"}',
+        '@@BOJU {"query":"tags","mode":"show"}',
+        '@@BOJU {not json',
+        fence,
+      ].join('\n');
+      assert.deepEqual(extractActions(text), { clean: text, actions: [] }, fence);
+    }
+  });
+
+  test('after the fence closes, lines are parsed again', () => {
+    const { clean, actions } = extractActions('```\n@@BOJU {"action":"delete-file","path":"a.md"}\n```\n@@BOJU {"action":"open-file","path":"b.md"}\nok');
+    assert.equal(clean, '```\n@@BOJU {"action":"delete-file","path":"a.md"}\n```\nok');
+    assert.deepEqual(actions, [{ action: 'open-file', path: 'b.md' }]);
+  });
+
+  test('an unclosed or indented fence keeps its lines', () => {
+    const unclosed = 'Example:\n```\n@@BOJU {"action":"open-file","path":"a.md"}';
+    assert.deepEqual(extractActions(unclosed), { clean: unclosed, actions: [] });
+    const indented = '1. Run:\n    ~~~\n@@BOJU {"action":"open-file","path":"a.md"}\n    ~~~';
+    assert.deepEqual(extractActions(indented), { clean: indented, actions: [] });
   });
 });
 
@@ -2278,6 +2352,128 @@ describe('splitBojuLines', () => {
   test('a block holding only protocol lines leaves no text', () => {
     assert.deepEqual(splitBojuLines(`${BOJU_PREFIX}{"action":"show-notice","message":"hi"}`).clean, '');
   });
+
+  const ACTION = `${BOJU_PREFIX}{"action": "run-command", "commandId": "<id>"}`;
+  const QUERY = `${BOJU_PREFIX}{"query":"tags","mode":"show"}`;
+
+  test('action and query lines inside ``` and ~~~ fences stay as text, unparsed', () => {
+    for (const fence of ['```', '~~~']) {
+      const raw = `Quoted:\n${fence}\n${ACTION}\n${QUERY}\n${fence}`;
+      assert.deepEqual(splitBojuLines(raw), { clean: raw, lines: [] }, fence);
+    }
+  });
+
+  test('lines after the fence closes are parsed again', () => {
+    const live = `${BOJU_PREFIX}{"action":"open-file","path":"A.md"}`;
+    assert.deepEqual(splitBojuLines(`\`\`\`text\n${ACTION}\n\`\`\`\n${live}\nDone.`), {
+      clean: `\`\`\`text\n${ACTION}\n\`\`\`\nDone.`,
+      lines: [{ kind: 'action', line: live }],
+    });
+  });
+
+  test('an unclosed fence runs to the end of the block', () => {
+    const raw = `Example:\n\`\`\`\n${ACTION}\n\nmore\n${QUERY}`;
+    assert.deepEqual(splitBojuLines(raw), { clean: raw, lines: [] });
+  });
+
+  test('indented fence markers count', () => {
+    const raw = `- step one\n   \`\`\`json\n${ACTION}\n   \`\`\`\n${QUERY}`;
+    assert.deepEqual(splitBojuLines(raw), {
+      clean: `- step one\n   \`\`\`json\n${ACTION}\n   \`\`\``,
+      lines: [{ kind: 'query', line: QUERY }],
+    });
+  });
+
+  test('a fence tracker carries an open fence from one block to the next', () => {
+    const fence: FenceTracker = { open: null };
+    assert.deepEqual(splitBojuLines('Here it is:\n```', fence), { clean: 'Here it is:\n```', lines: [] });
+    assert.equal(fence.open, '```');
+    assert.deepEqual(splitBojuLines(`${ACTION}\n\`\`\``, fence), { clean: `${ACTION}\n\`\`\``, lines: [] });
+    assert.equal(fence.open, null);
+    assert.deepEqual(splitBojuLines(QUERY, fence), { clean: '', lines: [{ kind: 'query', line: QUERY }] });
+  });
+
+  test('without a shared tracker each block starts outside a fence', () => {
+    splitBojuLines('```');
+    assert.deepEqual(splitBojuLines(QUERY).lines, [{ kind: 'query', line: QUERY }]);
+  });
+});
+
+describe('nextFenceState', () => {
+  test('``` or ~~~ (three or more) opens a fence, info string allowed', () => {
+    assert.equal(nextFenceState(null, '```'), '```');
+    assert.equal(nextFenceState(null, '~~~'), '~~~');
+    assert.equal(nextFenceState(null, '````markdown'), '````');
+    assert.equal(nextFenceState(null, '  ~~~ js'), '~~~');
+    assert.equal(nextFenceState(null, '\t```'), '```');
+  });
+
+  test('other lines leave the state alone', () => {
+    assert.equal(nextFenceState(null, 'text'), null);
+    assert.equal(nextFenceState(null, '``'), null);
+    assert.equal(nextFenceState(null, 'a ```'), null);
+    assert.equal(nextFenceState('```', 'code'), '```');
+  });
+
+  test('inline code with backticks after the marker is not a fence', () => {
+    assert.equal(nextFenceState(null, '```x```'), null);
+    assert.equal(nextFenceState(null, '~~~x~~~'), '~~~');
+  });
+
+  test('closed only by the same character, at least as long, with nothing after it', () => {
+    assert.equal(nextFenceState('```', '```'), null);
+    assert.equal(nextFenceState('```', '  ````  '), null);
+    assert.equal(nextFenceState('````', '```'), '````');
+    assert.equal(nextFenceState('```', '~~~'), '```');
+    assert.equal(nextFenceState('~~~', '```'), '~~~');
+    assert.equal(nextFenceState('```', '```js'), '```');
+  });
+});
+
+describe('fencedLines', () => {
+  test('marks fence lines and the lines between them, and updates the tracker', () => {
+    const tracker: FenceTracker = { open: null };
+    assert.deepEqual(fencedLines('a\n```\nb\n```\nc\n~~~\nd', tracker), [
+      { line: 'a', fenced: false },
+      { line: '```', fenced: true },
+      { line: 'b', fenced: true },
+      { line: '```', fenced: true },
+      { line: 'c', fenced: false },
+      { line: '~~~', fenced: true },
+      { line: 'd', fenced: true },
+    ]);
+    assert.equal(tracker.open, '~~~');
+    assert.deepEqual(fencedLines('~~~\ne', tracker), [{ line: '~~~', fenced: true }, { line: 'e', fenced: false }]);
+    assert.equal(tracker.open, null);
+  });
+});
+
+describe('parseBojuLine', () => {
+  test('null without the prefix, malformed for anything but a JSON object', () => {
+    assert.equal(parseBojuLine('text'), null);
+    assert.equal(parseBojuLine(` ${BOJU_PREFIX}{}`), null);
+    for (const rest of ['{bad', 'null', '42', '"s"', '[]']) assert.equal(parseBojuLine(`${BOJU_PREFIX}${rest}`), 'malformed', rest);
+    assert.deepEqual(parseBojuLine(`${BOJU_PREFIX}{"query":"tags"}`), { query: 'tags' });
+  });
+});
+
+describe('liveBojuObjects', () => {
+  test('parsed protocol lines outside code blocks, in order', () => {
+    const text = [
+      `${BOJU_PREFIX}{"query":"tags","mode":"show"}`,
+      '```',
+      `${BOJU_PREFIX}{"query":"backlinks","path":"<path>","mode":"show"}`,
+      '```',
+      `${BOJU_PREFIX}{bad`,
+      `${BOJU_PREFIX}{"action":"open-file","path":"A.md"}`,
+      '~~~',
+      `${BOJU_PREFIX}{"action":"delete-file","path":"A.md"}`,
+    ].join('\n');
+    assert.deepEqual(liveBojuObjects(text), [
+      { query: 'tags', mode: 'show' },
+      { action: 'open-file', path: 'A.md' },
+    ]);
+  });
 });
 
 describe('renderOrientation', () => {
@@ -2588,6 +2784,24 @@ describe('parseAgyStream', () => {
     assert.equal(r.texts.length, 1);
     assert.ok(!r.texts[0].includes('@@BOJU'));
     assert.ok(r.texts[0].includes("I've opened the note."));
+  });
+
+  test('a fence opened in one delta keeps @@BOJU lines in later deltas as text', async () => {
+    const step = (state: string, text_delta: string) => ({ event: 'step_update', step_update: { conversation_id: 'conv-f', step_index: 1, state, step_type: 'agent_response', text_delta } });
+    const quoted = '@@BOJU {"action": "run-command", "commandId": "<id>"}';
+    const live = '@@BOJU {"action":"open-file","path":"Plan.md"}';
+    const r = await runAgy([
+      { event: 'init', conversation_id: 'conv-f', init: { model: 'gemini-3.8-flash' } },
+      step('ACTIVE', 'It says:\n~~'),
+      step('ACTIVE', '~\n@@BOJU {"action": "run-com'),
+      step('ACTIVE', 'mand", "commandId": "<id>"}\n~~~\n'),
+      step('DONE', `${live}\nDone.`),
+      { event: 'result', result: { conversation_id: 'conv-f', status: 'SUCCESS', num_turns: 1 } },
+    ], { split: true });
+    assert.deepEqual(r.actions, [live]);
+    assert.deepEqual(r.texts, [`It says:\n~~~\n${quoted}\n~~~\nDone.`]);
+    // What the chat shows of each preview: the fenced line, even while it's partial
+    assert.deepEqual(r.previews.map(p => previewForDisplay(p)), ['It says:\n~~', 'It says:\n~~~\n@@BOJU {"action": "run-com', `It says:\n~~~\n${quoted}\n~~~\n`, '']);
   });
 
   test('resumed turn: step indexes continue, system_message ignored', async () => {
@@ -3643,6 +3857,26 @@ describe('SessionCoordinator Antigravity agents', () => {
     // The earlier turns hold vault information (#406)
     assert.equal(c.modeNeedsNewSession('restricted'), true);
     assert.equal('agent' in storedSessions(dir)[0], false);
+  }));
+});
+
+describe('SessionCoordinator fenced @@BOJU lines', () => {
+  test('an action the backend kept as text (in a code block) is shown, never run', withSessionsDir((dir) => {
+    const { host, claude } = twoBackendHost(dir, { isUiBridgeEnabled: () => true });
+    const coordinator = new SessionCoordinator(host);
+    const actions: BojuBotAction[] = [];
+    const texts: string[] = [];
+    coordinator.on('turn:action', (a) => actions.push(a));
+    coordinator.on('turn:text', (_display, committed) => texts.push(committed));
+    coordinator.startNewSession();
+    coordinator.send('quote it', 'quote it');
+    const cb = claude.streams[0];
+    cb.onText('Quoted:\n```\n');
+    cb.onText('@@BOJU {"action": "run-command", "commandId": "<id>"}\n```\n{}\n@@BOJU {bad\nDone.');
+    cb.onAction('@@BOJU {"action":"open-file","path":"a.md"}');
+    cb.onDone('conv-1', true);
+    assert.deepEqual(actions, [{ action: 'open-file', path: 'a.md' }]);
+    assert.equal(texts.at(-1), 'Quoted:\n```\n@@BOJU {"action": "run-command", "commandId": "<id>"}\n```\nDone.');
   }));
 });
 
@@ -7024,6 +7258,55 @@ describe('parentFolder (move-file destination folder)', () => {
   test('null at the vault root', () => {
     assert.equal(parentFolder('x.md'), null);
     assert.equal(parentFolder('/x.md'), null);
+  });
+});
+
+describe('isPlaceholder', () => {
+  test('a whole string of the form <…> is a placeholder', () => {
+    for (const v of ['<id>', '<path>', '<folder>', '<part of the file name>', ' <id> ']) {
+      assert.equal(isPlaceholder(v), true, v);
+    }
+  });
+
+  test('real values, empty strings and non-strings are not', () => {
+    for (const v of ['a<b>c', 'x.md', '', '<>', '<a><b>', '<id', 'id>', '<b>bold</b>', 'editor:toggle-bold', 42, null, undefined, true, ['<id>'], { a: '<id>' }]) {
+      assert.equal(isPlaceholder(v), false, JSON.stringify(v));
+    }
+  });
+});
+
+describe('placeholderProblem', () => {
+  test('an action whose value is a placeholder is refused, naming the key and value', () => {
+    assert.equal(
+      placeholderProblem({ action: 'run-command', commandId: '<id>' }, 'action'),
+      'the commandId "<id>" is a placeholder, not a real value',
+    );
+    assert.equal(
+      placeholderProblem({ action: 'move-file', path: 'a.md', newPath: '<folder>/a.md' }, 'action'),
+      null,
+    );
+    assert.equal(
+      placeholderProblem({ action: 'move-file', path: '<path>', newPath: '<newPath>' }, 'action'),
+      'the path "<path>" is a placeholder, not a real value',
+    );
+  });
+
+  test('a query whose value is a placeholder is refused', () => {
+    assert.equal(
+      placeholderProblem({ query: 'file-list', folder: '<folder>', mode: 'inject' }, 'query'),
+      'the folder "<folder>" is a placeholder, not a real value',
+    );
+  });
+
+  test('the key naming the action or query is not checked (it gets its own refusal)', () => {
+    assert.equal(placeholderProblem({ action: '<name>' }, 'action'), null);
+    assert.equal(placeholderProblem({ query: '<type>', mode: 'show' }, 'query'), null);
+  });
+
+  test('real values pass', () => {
+    assert.equal(placeholderProblem({ action: 'run-command', commandId: 'editor:toggle-bold' }, 'action'), null);
+    assert.equal(placeholderProblem({ action: 'show-notice', message: 'a<b>c', duration: 3000 }, 'action'), null);
+    assert.equal(placeholderProblem({ action: 'open-file', path: '' }, 'action'), null);
   });
 });
 

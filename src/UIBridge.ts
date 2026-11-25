@@ -3,7 +3,7 @@ import { log, warn } from './utils/logger';
 import { brandName } from './brand';
 import { canWrite } from './backends/modes';
 import { bridgeActionAllowed } from './utils/modeGates';
-import { BridgeRefusal, destinationProblem, knownSettingsTab, newNameProblem, noticePayload, parentFolder } from './utils/bridgeValidation';
+import { BridgeRefusal, destinationProblem, knownSettingsTab, newNameProblem, noticePayload, parentFolder, placeholderProblem } from './utils/bridgeValidation';
 import type { PermissionMode } from './backends/types';
 import { ReportPrefill, reportPrefill } from './utils/report';
 export { BOJU_PREFIX } from './constants';
@@ -180,6 +180,10 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
   };
   const noNote = (path: unknown) => refuse(`no note at "${shown(path)}"`);
   const noWrites = () => refuse("this session's permission mode doesn't allow vault changes");
+
+  // A value copied from a template ("<id>", "<path>") is never a real one
+  const placeholder = placeholderProblem(action, 'action');
+  if (placeholder) return refuse(placeholder);
 
   switch (action.action) {
 

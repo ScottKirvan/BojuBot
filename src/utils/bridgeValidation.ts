@@ -51,6 +51,28 @@ export function newNameProblem(newName: unknown): string | null {
   return null;
 }
 
+/**
+ * Whether `value` is a template placeholder rather than a real value: a whole
+ * string of the form `<…>` such as "<id>" or "<path>" (no other angle brackets
+ * inside). Agents copy these from examples; they're never a real argument.
+ */
+export function isPlaceholder(value: unknown): value is string {
+  return typeof value === 'string' && /^<[^<>]+>$/.test(value.trim());
+}
+
+/**
+ * Why an action or query can't run because one of its values is a template
+ * placeholder ('the commandId "<id>" is a placeholder, not a real value'), or
+ * null. `skipKey` is the key that names the action or query ("action",
+ * "query"): an unknown name gets its own refusal.
+ */
+export function placeholderProblem(payload: Record<string, unknown>, skipKey: string): string | null {
+  for (const [key, value] of Object.entries(payload)) {
+    if (key !== skipKey && isPlaceholder(value)) return `the ${key} "${value}" is a placeholder, not a real value`;
+  }
+  return null;
+}
+
 /** An action the UI Bridge didn't run, and why. */
 export interface BridgeRefusal {
   action: string;
