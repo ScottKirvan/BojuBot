@@ -26,6 +26,7 @@ import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './utils/cliCapabilities';
 import { migrateVariantModel, resolveTurnModel, TurnModel } from './utils/agentModels';
 import { needsFreshSessionForChatOnly } from './utils/modeGates';
+import { QueuedSystemNote, SystemNoteInput, queueSystemNote, joinSystemNotes } from './utils/systemNotes';
 import { composeStreamingText } from './utils/streamPreview';
 import { preserveUserFields } from './utils/sessionList';
 import type { TurnToolCall } from './utils/generatedImages';
@@ -173,8 +174,8 @@ export class SessionCoordinator {
 
   /** The session in the panel. Replaced (not mutated) when the panel switches session. */
   private _s: SessionState;
-  /** A note for the open session's next turn. Dropped whenever another session opens. */
-  private _pendingSystemMessage: string | null = null;
+  /** Notes for the open session's next turn (#459). Dropped whenever another session opens. */
+  private _systemNotes: QueuedSystemNote[] = [];
   private _activeProc: ChildProcess | null = null;
   /** stop() callers waiting for the running process to end. */
   private _turnEndWaiters: Array<() => void> = [];
@@ -308,16 +309,20 @@ export class SessionCoordinator {
     return true;
   }
 
-  getPendingSystemMessage(): string | null {
-    return this._pendingSystemMessage;
+  /** Queue a note for the open session's next turn (rules in `src/utils/systemNotes.ts`). */
+  queueSystemNote(note: SystemNoteInput): void {
+    this._systemNotes = queueSystemNote(this._systemNotes, note);
   }
 
-  setPendingSystemMessage(msg: string | null): void {
-    this._pendingSystemMessage = msg;
+  /** The queued notes joined in order, or null when none; clears the queue. */
+  takeSystemNotes(): string | null {
+    const text = joinSystemNotes(this._systemNotes);
+    this._systemNotes = [];
+    return text;
   }
 
-  clearPendingSystemMessage(): void {
-    this._pendingSystemMessage = null;
+  clearSystemNotes(): void {
+    this._systemNotes = [];
   }
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
@@ -334,7 +339,7 @@ export class SessionCoordinator {
     /** Omitted = the host's default backend. */
     backend?: BackendId;
   }): void {
-    this._pendingSystemMessage = null;
+    this._systemNotes = [];
     const vaultRoot = this.host.getVaultRoot();
     const now = new Date().toISOString();
     const sessionId = now.replace(/[:.]/g, '-');
@@ -446,7 +451,7 @@ export class SessionCoordinator {
 
   async loadSession(session: StoredSession): Promise<void> {
     session = this._settleSessionPermissionMode(session);
-    this._pendingSystemMessage = null;
+    this._systemNotes = [];
     const isNew = !session.claudeSessionId;
     // A model pinned as an effort variant ("gemini-3.8-flash-high", from before
     // models were collapsed) is the base model pinned at that level (#402).

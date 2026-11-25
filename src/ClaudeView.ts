@@ -518,9 +518,7 @@ export class ClaudeView extends ItemView {
         // Shown where the user is looking, and told to the agent with the next message
         const brand = this.plugin.brand.name;
         this.appendMessage('system', `${brand} stopped answering the agent's vault queries: one message allows ${MAX_QUERY_ROUNDS} rounds.`);
-        const queued = this.coordinator.getPendingSystemMessage();
-        const note = queryLimitNote(brand);
-        this.coordinator.setPendingSystemMessage(queued ? `${queued}\n\n${note}` : note);
+        this.coordinator.queueSystemNote({ kind: 'event', text: queryLimitNote(brand) });
       }
 
       if (permissionRequest) {
@@ -1119,9 +1117,15 @@ export class ClaudeView extends ItemView {
       id,
       name: this.appInternal.commands.commands[id]?.name ?? id,
     }));
-    this.coordinator.setPendingSystemMessage(
-      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands),
-    );
+    const perm = this.coordinator.backend.orientation.permissions[after];
+    // A mode change already queued keeps its "before": the note describes the
+    // change from there to `after` (#459)
+    this.coordinator.queueSystemNote({
+      kind: 'mode',
+      from: before,
+      to: after,
+      describe: from => modeChangeNote(perm, from, after, commands),
+    });
   }
 
   /** The default for new sessions changed (settings, or a picker in another
@@ -1141,7 +1145,7 @@ export class ClaudeView extends ItemView {
     this._customInitialInstructions = '';
     this._customSuppressVaultContext = false;
     this.pendingNewSessionMode = null;
-    this.coordinator.clearPendingSystemMessage();
+    this.coordinator.clearSystemNotes();
   }
 
   /**
@@ -1567,18 +1571,17 @@ export class ClaudeView extends ItemView {
     }
     if (!sameSession) return;
     if (!sharesVaultInfo(this.coordinator.getEffectivePermissionMode())) return;
-    const note = refusalNote(brand, refusal);
-    const queued = this.coordinator.getPendingSystemMessage();
-    this.coordinator.setPendingSystemMessage(queued ? `${queued}\n\n${note}` : note);
+    this.coordinator.queueSystemNote({ kind: 'event', text: refusalNote(brand, refusal) });
   }
 
   injectAllowlistUpdate(newAllowlist: string[]) {
     // Chat only and Read only refuse run-command, so the allowlist means nothing there (#406)
     if (!canRunCommands(this.coordinator.getEffectivePermissionMode())) return;
     if (newAllowlist.length === 0) {
-      this.coordinator.setPendingSystemMessage(
-        '[System: The command allowlist was updated — it is now empty. You can still use run-command for any command; the user will be prompted to approve or deny each attempt.]',
-      );
+      this.coordinator.queueSystemNote({
+        kind: 'allowlist',
+        text: '[System: The command allowlist was updated — it is now empty. You can still use run-command for any command; the user will be prompted to approve or deny each attempt.]',
+      });
     } else {
       const rows = newAllowlist
         .map(id => {
@@ -1586,9 +1589,10 @@ export class ClaudeView extends ItemView {
           return `| "${name}" | ${id} |`;
         })
         .join('\n');
-      this.coordinator.setPendingSystemMessage(
-        `[System: The command allowlist was updated mid-session. These commands now execute immediately via run-command:\n${rows}\nAny other command will prompt the user for approval — do not assume unlisted commands are blocked.]`,
-      );
+      this.coordinator.queueSystemNote({
+        kind: 'allowlist',
+        text: `[System: The command allowlist was updated mid-session. These commands now execute immediately via run-command:\n${rows}\nAny other command will prompt the user for approval — do not assume unlisted commands are blocked.]`,
+      });
     }
   }
 
@@ -1616,7 +1620,8 @@ export class ClaudeView extends ItemView {
       this.thanksHookEnabled(),
     );
     const context = await ctx.buildSessionContext();
-    this.coordinator.setPendingSystemMessage(`[System: Session context refreshed at user request.]\n\n${context}`);
+    // Replaces every note queued so far: the full context covers them (#459)
+    this.coordinator.queueSystemNote({ kind: 'refresh', text: `[System: Session context refreshed at user request.]\n\n${context}` });
     this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
   }
 
@@ -1917,6 +1922,11 @@ export class ClaudeView extends ItemView {
       );
       this._customSuppressVaultContext = false;
       this._customInitialInstructions = '';
+      // The full context describes the current mode and allowlist, so notes
+      // queued before the first message would only repeat it, out of date (#459).
+      // Cleared before the build: a change made while it runs isn't in the
+      // context, so its note waits for the next turn.
+      this.coordinator.clearSystemNotes();
       const context = await ctx.buildSessionContext();
       if (ctx.needsCompaction) statusEl.textContent = 'Compacting memory…';
       const promptTokens = estimateTokens(finalPrompt);
@@ -1929,10 +1939,9 @@ export class ClaudeView extends ItemView {
         log(`[NEW SESSION] No context injected, Prompt: ~${promptTokens} tokens`);
       }
     } else {
-      const pending = this.coordinator.getPendingSystemMessage();
+      const pending = this.coordinator.takeSystemNotes();
       if (pending) {
         finalPrompt = `<bojubot-context type="system-message">${pending}</bojubot-context>\n\n${finalPrompt}`;
-        this.coordinator.clearPendingSystemMessage();
       }
       log(`[CONTINUE SESSION ${this.coordinator.sessionId?.substring(0, 8)}] Prompt: ~${estimateTokens(finalPrompt)} tokens`);
     }

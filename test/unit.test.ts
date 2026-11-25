@@ -23,6 +23,8 @@ import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, C
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
+import { queueSystemNote, joinSystemNotes } from '../src/utils/systemNotes';
+import type { QueuedSystemNote, SystemNoteInput } from '../src/utils/systemNotes';
 import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, NO_COMMANDS_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
@@ -3000,13 +3002,27 @@ describe('SessionCoordinator session-owned permission mode', () => {
     const { host } = twoBackendHost(dir);
     const coordinator = new SessionCoordinator(host);
     await coordinator.loadSession(storedSession('a', { permissionMode: 'standard' }));
-    coordinator.setPendingSystemMessage('[System: Session context refreshed at user request.] vault tree…');
+    coordinator.queueSystemNote({ kind: 'refresh', text: '[System: Session context refreshed at user request.] vault tree…' });
+    coordinator.queueSystemNote({ kind: 'allowlist', text: '[System: The command allowlist was updated.]' });
     await coordinator.loadSession(storedSession('b', { permissionMode: 'standard' }));
-    assert.equal(coordinator.getPendingSystemMessage(), null);
+    assert.equal(coordinator.takeSystemNotes(), null);
 
-    coordinator.setPendingSystemMessage('[System: Permission mode changed to Full access.]');
+    coordinator.queueSystemNote({ kind: 'mode', from: 'standard', to: 'full', describe: () => '[System: Permission mode changed to Full access.]' });
     coordinator.startNewSession();
-    assert.equal(coordinator.getPendingSystemMessage(), null);
+    assert.equal(coordinator.takeSystemNotes(), null);
+  }));
+
+  test('queued system notes are taken together, once', withSessionsDir(async (dir) => {
+    const { host } = twoBackendHost(dir);
+    const coordinator = new SessionCoordinator(host);
+    await coordinator.loadSession(storedSession('a', { permissionMode: 'standard' }));
+    coordinator.queueSystemNote({ kind: 'mode', from: 'standard', to: 'readonly', describe: f => `[mode ${f}→readonly]` });
+    coordinator.queueSystemNote({ kind: 'allowlist', text: '[allowlist]' });
+    assert.equal(coordinator.takeSystemNotes(), '[mode standard→readonly]\n\n[allowlist]');
+    assert.equal(coordinator.takeSystemNotes(), null);
+    coordinator.queueSystemNote({ kind: 'allowlist', text: '[allowlist]' });
+    coordinator.clearSystemNotes();
+    assert.equal(coordinator.takeSystemNotes(), null);
   }));
 
   test('a Full access session reopens in Standard when Full access may not be kept, and that is saved', withSessionsDir(async (dir) => {
@@ -5710,6 +5726,85 @@ describe('modeChangeNote', () => {
     const note = modeChangeNote(perm, 'standard', 'readonly', cmds);
     assert.match(note, /run-command is unavailable in this permission mode/);
     assert.ok(!note.includes('switcher:open'));
+  });
+});
+
+describe('queueSystemNote / joinSystemNotes', () => {
+  const mode = (from: PermissionMode, to: PermissionMode): SystemNoteInput =>
+    ({ kind: 'mode', from, to, describe: f => `[mode ${f}→${to}]` });
+  const allow = (text: string): SystemNoteInput => ({ kind: 'allowlist', text });
+  const queue = (...notes: SystemNoteInput[]) => notes.reduce(queueSystemNote, [] as QueuedSystemNote[]);
+
+  test('an empty queue joins to null', () => {
+    assert.equal(joinSystemNotes([]), null);
+  });
+
+  test('notes of different kinds accumulate, in the order queued', () => {
+    assert.equal(joinSystemNotes(queue(mode('standard', 'readonly'), allow('[allow]'))), '[mode standard→readonly]\n\n[allow]');
+    assert.equal(joinSystemNotes(queue(allow('[allow]'), mode('standard', 'readonly'))), '[allow]\n\n[mode standard→readonly]');
+  });
+
+  test('a second note of the same kind replaces the first and moves to the end', () => {
+    const q = queue(allow('[allow 1]'), mode('standard', 'full'), allow('[allow 2]'));
+    assert.deepEqual(q.map(n => n.text), ['[mode standard→full]', '[allow 2]']);
+  });
+
+  test('mode A→B then B→C is one note A→C', () => {
+    const q = queue(mode('standard', 'readonly'), mode('readonly', 'full'));
+    assert.deepEqual(q, [{ kind: 'mode', text: '[mode standard→full]', from: 'standard' }]);
+  });
+
+  test('mode A→B then B→A drops the mode note, keeping the others', () => {
+    assert.deepEqual(queue(mode('standard', 'readonly'), mode('readonly', 'standard')), []);
+    assert.equal(joinSystemNotes(queue(mode('standard', 'readonly'), allow('[allow]'), mode('readonly', 'standard'))), '[allow]');
+  });
+
+  test('a mode change after a dropped one starts from its own before', () => {
+    const q = queue(mode('standard', 'readonly'), mode('readonly', 'standard'), mode('standard', 'full'));
+    assert.equal(joinSystemNotes(q), '[mode standard→full]');
+  });
+
+  test('refresh replaces everything queued before it; later notes append', () => {
+    const q = queue(mode('standard', 'readonly'), allow('[allow 1]'), { kind: 'refresh', text: '[refresh]' });
+    assert.equal(joinSystemNotes(q), '[refresh]');
+    const later = queue(mode('standard', 'readonly'), { kind: 'refresh', text: '[refresh]' }, mode('readonly', 'full'), allow('[allow 2]'));
+    assert.equal(joinSystemNotes(later), '[refresh]\n\n[mode readonly→full]\n\n[allow 2]');
+  });
+
+  test('a second refresh replaces the first', () => {
+    assert.equal(joinSystemNotes(queue({ kind: 'refresh', text: '[r1]' }, allow('[a]'), { kind: 'refresh', text: '[r2]' })), '[r2]');
+  });
+
+  test('never changes the queue it was given', () => {
+    const q = queue(allow('[allow]'));
+    queueSystemNote(q, mode('standard', 'full'));
+    queueSystemNote(q, { kind: 'refresh', text: '[refresh]' });
+    assert.deepEqual(q, [{ kind: 'allowlist', text: '[allow]' }]);
+  });
+
+  test('event notes are all kept, and refresh keeps them', () => {
+    const q = queue(
+      { kind: 'event', text: 'E1' },
+      { kind: 'allowlist', text: 'A' },
+      { kind: 'event', text: 'E2' },
+      { kind: 'refresh', text: 'R' },
+    );
+    assert.equal(joinSystemNotes(q), 'E1\n\nE2\n\nR');
+  });
+
+  test('combined with modeChangeNote, a single change reads as modeChangeNote alone', () => {
+    const perm = { summary: 'Read only', can: 'read', cannot: 'write' };
+    const toReadonly = (from: PermissionMode) => modeChangeNote(perm, from, 'readonly', []);
+    const q = queueSystemNote([], { kind: 'mode', from: 'standard', to: 'readonly', describe: toReadonly });
+    assert.equal(joinSystemNotes(q), modeChangeNote(perm, 'standard', 'readonly', []));
+    // Read only → Standard → Full: "commands are available now" only appears
+    // because the first change's "before" (Read only) was kept
+    const combined = joinSystemNotes(queue(
+      { kind: 'mode', from: 'readonly', to: 'standard', describe: f => modeChangeNote(perm, f, 'standard', []) },
+      { kind: 'mode', from: 'standard', to: 'full', describe: f => modeChangeNote(perm, f, 'full', []) },
+    ));
+    assert.equal(combined, modeChangeNote(perm, 'readonly', 'full', []));
+    assert.match(combined ?? '', /works again/);
   });
 });
 
