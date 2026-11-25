@@ -245,6 +245,28 @@ export function searchNotes(
   return result;
 }
 
+/** Most follow-up turns that answer inject queries, per user message: enough for a
+ *  query that leads to another, and a stop for an agent that keeps asking. */
+export const MAX_QUERY_ROUNDS = 3;
+
+/**
+ * What to do with the queries a turn ended with. `round` is how many query
+ * follow-ups came before this turn (0 for the turn the user's message started).
+ * Show queries always get their card; inject queries get a follow-up turn until
+ * MAX_QUERY_ROUNDS, then `limitHit`, and the agent is told they weren't run.
+ */
+export function queryFollowUp(round: number, queries: readonly VaultQuery[]): { show: VaultQuery[]; inject: VaultQuery[]; limitHit: boolean } {
+  const show = queries.filter(q => q.mode === 'show');
+  const asked = queries.filter(q => q.mode === 'inject');
+  if (round >= MAX_QUERY_ROUNDS) return { show, inject: [], limitHit: asked.length > 0 };
+  return { show, inject: asked, limitHit: false };
+}
+
+/** The note for the agent when its queries weren't run because of MAX_QUERY_ROUNDS. */
+export function queryLimitNote(brand: string): string {
+  return `[System: ${brand} didn't run the vault queries in your last reply: one message allows ${MAX_QUERY_ROUNDS} rounds of query follow-ups. Answer with what you already have, or ask the user whether to continue.]`;
+}
+
 /** "12 matches in 3 notes" for a search card, or null for results saved before counts existed. */
 export function searchSummary(r: Partial<Pick<SearchResult, 'totalMatches' | 'totalNotes'>>): string | null {
   if (typeof r.totalMatches !== 'number' || typeof r.totalNotes !== 'number') return null;

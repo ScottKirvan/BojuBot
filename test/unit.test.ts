@@ -49,7 +49,7 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
-import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES, searchSummary, canvasText, withModified, wantsModified, fileListError } from '../src/utils/vaultQuery';
+import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES, searchSummary, canvasText, withModified, wantsModified, fileListError, queryFollowUp, queryLimitNote, MAX_QUERY_ROUNDS } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
 import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, parentFolder, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
@@ -5463,6 +5463,30 @@ describe('search counts, whole word and match case', () => {
     assert.equal(searchSummary({ totalMatches: 12, totalNotes: 3 }), '12 matches in 3 notes');
     assert.equal(searchSummary({ totalMatches: 1, totalNotes: 1 }), '1 match in 1 note');
     assert.equal(searchSummary({}), null);
+  });
+});
+
+describe('queryFollowUp (query rounds per message)', () => {
+  const inject = { query: 'search' as const, text: 'x', mode: 'inject' as const };
+  const show = { query: 'file-list' as const, mode: 'show' as const };
+
+  test('a follow-up turn can ask again, up to the limit', () => {
+    for (let round = 0; round < MAX_QUERY_ROUNDS; round++) {
+      assert.deepEqual(queryFollowUp(round, [inject, show]), { show: [show], inject: [inject], limitHit: false }, String(round));
+    }
+  });
+
+  test('at the limit: no more follow-ups, show cards still drawn, limit reported', () => {
+    assert.deepEqual(queryFollowUp(MAX_QUERY_ROUNDS, [inject, show]), { show: [show], inject: [], limitHit: true });
+  });
+
+  test('no inject queries: nothing to report at any round', () => {
+    assert.deepEqual(queryFollowUp(MAX_QUERY_ROUNDS, [show]), { show: [show], inject: [], limitHit: false });
+    assert.deepEqual(queryFollowUp(0, []), { show: [], inject: [], limitHit: false });
+  });
+
+  test('the agent is told the queries were not run and why', () => {
+    assert.equal(queryLimitNote('BojuBot'), `[System: BojuBot didn't run the vault queries in your last reply: one message allows ${MAX_QUERY_ROUNDS} rounds of query follow-ups. Answer with what you already have, or ask the user whether to continue.]`);
   });
 });
 

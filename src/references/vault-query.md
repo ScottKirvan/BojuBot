@@ -4,7 +4,7 @@
 
 mode:
 - show: result displayed to user as a collapsible card
-- inject: result fed silently back to you so you can continue reasoning without a visible break
+- inject: result fed silently back to you so you can continue reasoning without a visible break. You can emit more queries after a result, up to 3 rounds for one user message; past that they aren't run and you're told
 
 Not available in Chat only: every query except help is refused there (the result is an error saying so).
 
