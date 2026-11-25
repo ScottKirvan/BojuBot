@@ -75,12 +75,12 @@ Non-Markdown files show their extension in the dropdown. By default all vault fi
 
 ### Paste from clipboard
 
-Paste images directly with **Ctrl+V** / **Cmd+V**:
+Paste with **Ctrl+V** / **Cmd+V**:
 
-- **Screenshots** — take a screenshot, paste into BojuBot
-- **Files from Explorer/Finder** — copy a `.png`, `.jpg`, `.gif`, `.webp`, or `.pdf` and paste
+- **Screenshots** — take a screenshot, paste into BojuBot. Screenshots are saved to `.obsidian/plugins/bojubot/tmp/` and are not automatically cleaned up.
+- **Files from Explorer/Finder** — copy one or more files of any type and paste. Each file is read where it is, not copied. Text files (`.md`, `.txt`, `.json`, code and so on) up to 512 KB are attached inline; images, PDFs, larger text files and other types are passed by their location for the agent to open.
 
-Pasted images appear in the context bar. They're saved to `.obsidian/plugins/bojubot/tmp/` and are not automatically cleaned up.
+Pasted items appear in the context bar.
 
 ### Drag and drop
 
@@ -188,7 +188,9 @@ While the agent is working, tool calls appear above the response bubble in real 
 The agent can ask BojuBot about your vault instead of using its own tools or shell commands:
 
 - **Search your notes** <Badge type="warning" text="Beta" /> for a word or phrase. BojuBot looks through every note (or one folder), ignoring capitals, and returns the notes that contain it with up to three matching lines from each. A search returns at most 30 notes; when more match, the agent is told how many more so it can search more precisely.
+  It counts every match, per note and in total, so "how many times does X appear?" is answered from the search alone. It can match whole words only (so "move" doesn't find "removed") and match capitals exactly, and it also looks in the text cards of your canvases.
 - **Find files by name** <Badge type="warning" text="Beta" />: every file, of any type, whose name contains what it's looking for, in the whole vault or one folder.
+- **Find recently changed notes** <Badge type="warning" text="Beta" />: newest first, or everything changed since a date, with when each note last changed.
 - **List files** in the vault or a folder, or the folder tree a few levels deep.
 - **Backlinks, outgoing links and tags** of a note, and the notes with a given tag.
 
@@ -213,6 +215,14 @@ The agent can execute Obsidian commands directly. Three are pre-approved by defa
 You can manage the full list in **Settings → BojuBot → UI Bridge & Commands**.
 
 Commands only run in **Standard** and **Full access**. In Chat only and Read only, BojuBot blocks them (with a notice), because commands can create or change notes.
+
+### When BojuBot doesn't run an action <Badge type="warning" text="Beta" />
+
+Sometimes BojuBot won't carry out something the agent asked for: the note it names doesn't exist, a rename or move points somewhere it isn't allowed (outside the vault, or into Obsidian's config folder), the permission mode doesn't allow changes, or the command isn't available. BojuBot then says so in the chat, under the agent's reply, with what it didn't do and why (and in a notice), and tells the agent with your next message, so it can correct itself. The agent's reply may still say the job is done: it's written before BojuBot runs anything. When you decline a command yourself, nothing is shown, but the agent is still told. In Chat only the agent isn't told, because the reason could reveal what's in your vault.
+
+::: warning Not released yet
+These notices are only in [beta builds](./beta-builds.md) so far.
+:::
 
 ### How permission works
 

@@ -9,6 +9,8 @@ import { BrandConfig, brandName, DEFAULT_BRAND, isWhiteLabeled } from './brand';
 import { formatCliVersion } from './utils/cliCapabilities';
 import { GITHUB_SPONSORS_URL, KOFI_URL, SUPPORT_PAGE_URL } from './constants';
 import { renderSettingDefinitions } from './settingsFallback';
+import { defaultStoragePaths, STORAGE_LAYOUT_VERSION } from './utils/storageLayout';
+import { ensureParentFolder } from './utils/vaultFolders';
 import {
   asText,
   BrandField,
@@ -57,6 +59,8 @@ export interface BojuBotSettings {
   autonomousMemory: boolean;
   /** Vault tree depth injected at session start. 0=off, 1=root only, N=N levels, -1=unlimited. */
   vaultTreeDepth: number;
+  /** Folders and files left out of the vault tree and vault query results, one pattern per line (#125). */
+  vaultExclusions: string;
   /** User dismissed the context file setup modal and doesn't want to see it again. */
   skipContextFilePrompt: boolean;
   /** Allow Claude to trigger Obsidian UI actions (open files, show notices, etc.) */
@@ -91,10 +95,13 @@ export interface BojuBotSettings {
   sessionStoragePath: string;
   /**
    * Folder containing skill files (.md files).
-   * Empty = default (plugin dir/commands — gitignored).
+   * Empty = default (_BojuBot/Skills).
    * Vault-relative path or absolute path.
    */
   commandsFolder: string;
+  /** Storage layout check done (src/utils/storageLayout.ts): vaults from before
+   *  the _BojuBot folder had their old locations written into the settings. */
+  storageLayout: number;
   /**
    * Register skills as Obsidian Ctrl+P commands.
    * Use "Reload skills" from the palette after adding or removing skill files.
@@ -133,11 +140,12 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   agyBinaryPath: '',
   agyDefaultModel: '',
   agyDefaultEffort: '',
-  contextFilePath: '_claude-context.md',
+  contextFilePath: defaultStoragePaths(DEFAULT_BRAND.name).contextFile,
   sendOnEnter: true,
   resumeLastSession: true,
   autonomousMemory: true,
   vaultTreeDepth: 0,
+  vaultExclusions: '',
   skipContextFilePrompt: false,
   uiBridgeEnabled: true,
   commandAllowlist: ['switcher:open', 'editor:open-search'],
@@ -153,6 +161,7 @@ export const DEFAULT_SETTINGS: BojuBotSettings = {
   exportFolder: '',
   sessionStoragePath: '',
   commandsFolder: '',
+  storageLayout: STORAGE_LAYOUT_VERSION,
   registerSkillsAsCommands: true,
   persistFullAccess: false,
   canvasMaxChars: 50000,
@@ -294,6 +303,9 @@ export class BojuBotSettingsTab extends PluginSettingTab {
       case 'logVerbosity':
         this.plugin.reconfigureLogger();
         break;
+      case 'vaultExclusions':
+        this.plugin.applyVaultExclusions();
+        break;
     }
   }
 
@@ -419,7 +431,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           setting
             .addText((text) =>
               text
-                .setPlaceholder('_claude-context.md')
+                .setPlaceholder(defaultStoragePaths(brandName()).contextFile)
                 .setValue(settings().contextFilePath)
                 .onChange(async (value) => {
                   await this.setControlValue('contextFilePath', value);
@@ -432,6 +444,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
                 .onClick(async () => {
                   let file = this.app.vault.getFileByPath(settings().contextFilePath);
                   if (!file) {
+                    await ensureParentFolder(this.app, settings().contextFilePath);
                     file = await this.app.vault.create(settings().contextFilePath, '');
                   }
                   await this.app.workspace.getLeaf(false).openFile(file);
@@ -468,6 +481,14 @@ export class BojuBotSettingsTab extends PluginSettingTab {
           },
           disabled: muted,
         },
+      },
+      {
+        name: 'Leave out of the vault tree and searches',
+        desc:
+          'Folders or files the agent is not shown in the vault tree, and that vault queries (file lists, searches, tags) leave out. ' +
+          'One per line: a folder or file path (Archive, Private/diary.md), or a pattern (*.png, Media/**, **/drafts). ' +
+          'Lines starting with # are ignored. The agent can still open these files with its own tools when it knows their names.',
+        control: { type: 'textarea', key: 'vaultExclusions', placeholder: 'Attachments\n*.png', rows: 4, disabled: muted },
       },
       {
         name: 'Autonomous memory',
@@ -689,7 +710,7 @@ export class BojuBotSettingsTab extends PluginSettingTab {
         control: {
           type: 'folder',
           key: 'exportFolder',
-          get placeholder() { return `${brandName()} exports`; },
+          get placeholder() { return `Default (${defaultStoragePaths(brandName()).exports})`; },
         },
       },
     ];
@@ -701,12 +722,16 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     return [
       {
         name: 'Skills folder',
-        desc:
-          'Folder containing your skill files (.md files). ' +
-          'Leave empty for the default location (plugin dir/commands). ' +
-          'Use a vault-relative path (e.g. _skills) to keep skills in your vault, ' +
-          'or an absolute path. Skills reload each time you open the / menu.',
-        control: { type: 'folder', key: 'commandsFolder', placeholder: 'Default (plugin dir/commands)' },
+        get desc() {
+          return 'Folder containing your skill files (.md files). ' +
+            `Leave empty for the default location (${defaultStoragePaths(brandName()).skills}). ` +
+            'Use another vault-relative path, or an absolute path. Skills reload each time you open the / menu.';
+        },
+        control: {
+          type: 'folder',
+          key: 'commandsFolder',
+          get placeholder() { return `Default (${defaultStoragePaths(brandName()).skills})`; },
+        },
       },
       {
         name: 'Register skills as Ctrl+P commands',

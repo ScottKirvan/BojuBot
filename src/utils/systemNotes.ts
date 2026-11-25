@@ -11,9 +11,11 @@ import type { PermissionMode } from '../backends/types';
  * - Two mode changes become one note from the first change's "before" mode to
  *   the latest mode; back where it started, the mode note is dropped.
  * - `refresh` re-sends the full current state, so it replaces everything
- *   queued before it. Notes queued after it append as usual.
+ *   queued before it except `event` notes. Notes queued after it append as usual.
+ * - `event` notes report something that happened (an action BojuBot didn't
+ *   run, the query-round limit): each one is kept, never replaced.
  */
-export type SystemNoteKind = 'mode' | 'allowlist' | 'refresh';
+export type SystemNoteKind = 'mode' | 'allowlist' | 'refresh' | 'event';
 
 export type SystemNoteInput =
   | {
@@ -24,7 +26,7 @@ export type SystemNoteInput =
      *  with the first queued change's `from` when two mode changes combine. */
     describe: (from: PermissionMode) => string;
   }
-  | { kind: 'allowlist' | 'refresh'; text: string };
+  | { kind: 'allowlist' | 'refresh' | 'event'; text: string };
 
 export interface QueuedSystemNote {
   kind: SystemNoteKind;
@@ -36,7 +38,8 @@ export interface QueuedSystemNote {
 /** The queue with `note` added. Never changes `queue`. */
 export function queueSystemNote(queue: readonly QueuedSystemNote[], note: SystemNoteInput): QueuedSystemNote[] {
   if (note.kind !== 'mode') {
-    if (note.kind === 'refresh') return [{ kind: 'refresh', text: note.text }];
+    if (note.kind === 'event') return [...queue, { kind: 'event', text: note.text }];
+    if (note.kind === 'refresh') return [...queue.filter(n => n.kind === 'event'), { kind: 'refresh', text: note.text }];
     return [...queue.filter(n => n.kind !== note.kind), { kind: note.kind, text: note.text }];
   }
   const previous = queue.find(n => n.kind === 'mode');

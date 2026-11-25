@@ -109,7 +109,7 @@ This matters most for free-text fields (`input`, `textarea`) where the user migh
 
 ## Skills folder
 
-**Default:** `_BojuBot Skills/` — at your vault root. This keeps skills in your vault, making them easy to edit and sync with Obsidian Git.
+**Default:** `_BojuBot/Skills/` — in the `_BojuBot/` folder at your vault root. This keeps skills in your vault, making them easy to edit and sync with Obsidian Git. Vaults that used BojuBot before the `_BojuBot/` folder keep `_BojuBot Skills/`.
 
 **Custom:** set **Settings → BojuBot → Skills folder** to:
 - A vault-relative path (e.g. `_skills`) — keeps skills in your vault, synced with Obsidian Git

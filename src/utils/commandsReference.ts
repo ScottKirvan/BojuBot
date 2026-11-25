@@ -63,7 +63,7 @@ export function buildCommandsReference(commands: CommandInfo[], generatedAt: str
   const lines: string[] = [
     '# Obsidian Command Reference',
     `_Generated: ${generatedAt}_`,
-    '_Grep by plugin name or display name to find the right command ID for run-command._',
+    '_Find the command by plugin or display name; use its ID with run-command._',
     '',
   ];
   for (const [prefix, cmds] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {

@@ -1,5 +1,6 @@
 import { formatTokenCount } from './logger';
-import type { StoredSession } from './sessionStorage';
+import type { ChatMessage, StoredSession } from './sessionStorage';
+import { clipLine } from './vaultQuery';
 
 /**
  * Pure helpers for the Sessions panel (#399): grouping, relative times,
@@ -150,4 +151,84 @@ export function preserveUserFields(next: StoredSession, existing: StoredSession 
     }
   }
   return merged;
+}
+
+// ---------------------------------------------------------------------------
+// Searching inside sessions (#133)
+// ---------------------------------------------------------------------------
+
+/** Shortest query that also searches inside conversations (titles match from one character). */
+export const CONTENT_SEARCH_MIN_CHARS = 2;
+
+/** A message as the content search sees it. `compacted`: it's from before the
+ *  conversation's last compaction, so the agent no longer has it in context. */
+export interface SearchableMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  compacted: boolean;
+}
+
+/** The messages to search, with each one before the last compaction marked. */
+export function searchableMessages(messages: readonly ChatMessage[]): SearchableMessage[] {
+  let lastSeparator = -1;
+  messages.forEach((m, i) => { if (m.role === 'separator') lastSeparator = i; });
+  const out: SearchableMessage[] = [];
+  messages.forEach((m, i) => {
+    if (m.role === 'separator' || !m.content.trim()) return;
+    out.push({ role: m.role, text: m.content, compacted: i < lastSeparator });
+  });
+  return out;
+}
+
+export interface SessionContentMatch {
+  /** The matching line, clipped around the match. */
+  snippet: string;
+  /** Who wrote the message the snippet is from. */
+  role: 'user' | 'assistant';
+  /** How many messages contain the query. */
+  messages: number;
+  /** Every match is from before the last compaction: the agent no longer has it in context. */
+  compacted: boolean;
+}
+
+/**
+ * Where `query` appears in a session's messages (case-insensitive, literal), or
+ * null. The snippet comes from the latest match the agent still has in context,
+ * else the latest compacted one.
+ */
+export function matchSessionContent(messages: readonly SearchableMessage[], query: string): SessionContentMatch | null {
+  const q = query.trim();
+  if (q.length < CONTENT_SEARCH_MIN_CHARS) return null;
+  const lower = q.toLowerCase();
+  const hits = messages.filter(m => m.text.toLowerCase().includes(lower));
+  if (hits.length === 0) return null;
+  const live = hits.filter(m => !m.compacted);
+  const shown = (live.length ? live : hits)[(live.length ? live : hits).length - 1];
+  const line = shown.text.split(/\r?\n/).find(l => l.toLowerCase().includes(lower)) ?? shown.text;
+  return { snippet: clipLine(line, q, 120), role: shown.role, messages: hits.length, compacted: live.length === 0 };
+}
+
+export interface SessionSearchResult<T> {
+  /** Sessions whose title matches, in their order. */
+  byTitle: T[];
+  /** Other sessions whose messages match, in their order. */
+  byContent: { session: T; match: SessionContentMatch }[];
+}
+
+/** Split a search into title matches first, then sessions that only match inside their messages. */
+export function searchSessions<T extends Pick<StoredSession, 'title'>>(
+  sessions: T[],
+  query: string,
+  contentMatch: (session: T) => SessionContentMatch | null,
+): SessionSearchResult<T> {
+  const byTitle = filterSessions(sessions, query);
+  if (query.trim().length < CONTENT_SEARCH_MIN_CHARS) return { byTitle, byContent: [] };
+  const titled = new Set(byTitle);
+  const byContent: { session: T; match: SessionContentMatch }[] = [];
+  for (const session of sessions) {
+    if (titled.has(session)) continue;
+    const match = contentMatch(session);
+    if (match) byContent.push({ session, match });
+  }
+  return { byTitle, byContent };
 }

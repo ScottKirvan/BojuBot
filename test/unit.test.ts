@@ -25,7 +25,7 @@ import { splitBojuLines } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
 import { queueSystemNote, joinSystemNotes } from '../src/utils/systemNotes';
 import type { QueuedSystemNote, SystemNoteInput } from '../src/utils/systemNotes';
-import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
+import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, NO_COMMANDS_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
 import type { AgentBackend, BackendId, ModelOption, PermissionMode, StreamCallbacks, TurnOptions } from '../src/backends/types';
 import { loadCustomModels } from '../src/utils/customModels';
@@ -51,9 +51,14 @@ import { resolveShellEnv } from '../src/utils/shellEnv';
 import { SessionCoordinator, SessionCoordinatorHost, SessionLoadedPayload } from '../src/SessionCoordinator';
 import { resolveBrand, isWhiteLabeled, resolveIdentityName, applyIdentityName, resolveExportFolder, DEFAULT_BRAND, BrandConfig } from '../src/brand';
 import { neutralizeTriggers, BOJU_PREFIX } from '../src/constants';
-import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES } from '../src/utils/vaultQuery';
+import { matchNote, clipLine, searchNotes, searchError, filterFileList, folderPrefix, inFolder, queryLabel, buildInjectMessage, SEARCH_LINE_CHARS, SEARCH_MAX_NOTES, searchSummary, canvasText, withModified, wantsModified, fileListError, queryFollowUp, queryLimitNote, MAX_QUERY_ROUNDS } from '../src/utils/vaultQuery';
 import { historyKeyAction, HistoryKeyState } from '../src/utils/inputHistory';
 import { DEFAULT_PLUGIN_STATE, migratePluginState, PLUGIN_STATE_KEYS, readPluginState, stripPluginState } from '../src/utils/pluginState';
+import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload, NOTICE_MAX_CHARS, parentFolder, refusalNote, refusalNotice } from '../src/utils/bridgeValidation';
+import { attachmentKind, fileExtension, fileNameOf, IMAGE_EXTS, PASTE_TEXT_MAX_BYTES, TEXT_EXTS } from '../src/utils/attachmentKind';
+import { CONTENT_SEARCH_MIN_CHARS, matchSessionContent, searchableMessages, searchSessions } from '../src/utils/sessionList';
+import { defaultStoragePaths, isExistingVault, legacyStoragePaths, pinnedLegacyPaths, STORAGE_LAYOUT_VERSION } from '../src/utils/storageLayout';
+import { exclusionMatcher, isExcluded, isExcludedPath, parseExclusions, setVaultExclusions, summarizeFileNames, TREE_COLLAPSE_THRESHOLD, vaultExclusions } from '../src/utils/vaultExclusions';
 import { sponsorMilestoneToShow, nextSponsorMilestone, reachedSponsorMilestone, seedSponsorProgress, SponsorGateInput, SPONSOR_MIN_GAP_MS, SPONSOR_ACTIVITY_WINDOW_MS } from '../src/utils/sponsorGate';
 import { sessionDateGroup, groupSessions, sessionGroupKey, relativeTime, filterSessions, moveSession, agentModelLabel, sessionTooltip, preserveUserFields } from '../src/utils/sessionList';
 import { pickTargetPanel, panelForSession, planOpenSession, planNewSession, parseChatPanelState } from '../src/utils/chatPanels';
@@ -1536,6 +1541,16 @@ describe('compact confirm panel', () => {
 // ---------------------------------------------------------------------------
 
 describe('extractActions', () => {
+  test('drops a bare "{}" line (Gemini noise) but keeps one inside a code block', () => {
+    const reply = '{}\n@@BOJU {"action":"rename-file","path":"a.md","newName":"b.md"}\n\nRenamed [[b]].';
+    const { clean, actions } = extractActions(reply);
+    assert.equal(clean, '\nRenamed [[b]].');
+    assert.equal(actions.length, 1);
+    assert.equal(extractActions('Empty object:\n```json\n{}\n```').clean, 'Empty object:\n```json\n{}\n```');
+    assert.equal(extractActions('  {}  \nok').clean, 'ok');
+    assert.equal(extractActions('{"a":1}').clean, '{"a":1}');
+  });
+
   test('returns empty actions and original text when no action lines present', () => {
     const { clean, actions } = extractActions('Hello\nworld\n');
     assert.equal(clean, 'Hello\nworld\n');
@@ -2180,16 +2195,16 @@ describe('applyIdentityName', () => {
 
 describe('resolveExportFolder', () => {
   test('empty setting → brand-aware default', () => {
-    assert.equal(resolveExportFolder('', resolveBrand(undefined)), 'BojuBot Exports');
+    assert.equal(resolveExportFolder('', resolveBrand(undefined)), '_BojuBot/Exports');
   });
 
   test('whitespace-only setting → brand-aware default', () => {
-    assert.equal(resolveExportFolder('   ', resolveBrand(undefined)), 'BojuBot Exports');
+    assert.equal(resolveExportFolder('   ', resolveBrand(undefined)), '_BojuBot/Exports');
   });
 
   test('custom brand name flows into the default', () => {
     const brand = resolveBrand({ name: 'AXI25' });
-    assert.equal(resolveExportFolder('', brand), 'AXI25 Exports');
+    assert.equal(resolveExportFolder('', brand), '_AXI25/Exports');
   });
 
   test('custom folder setting is used verbatim, trimmed', () => {
@@ -3335,7 +3350,7 @@ describe('agyAgentDefinition', () => {
     assert.equal(frontmatter(agyAgentDefinition(AGY_CHAT_AGENT)), [
       '---',
       'name: bojubot-chat',
-      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v2), which rewrites this file when it changes."',
+      'description: "BojuBot Chat only mode: web only, no file access. Written by the BojuBot Obsidian plugin (definition v5), which rewrites this file when it changes."',
       'tools:',
       '  - search_web',
       '  - read_url_content',
@@ -3367,7 +3382,7 @@ describe('agyAgentDefinition', () => {
   test('bojubot ruleset is mode-neutral: file tools over shell, UI Bridge file ops, request-permission after a denial', () => {
     const b = body(agyAgentDefinition(AGY_MAIN_AGENT));
     assert.match(b, /Follow the latest permission note you were given\. When a tool call is denied, don't retry it/);
-    assert.match(b, /Use the UI Bridge actions rename-file, move-file and delete-file/);
+    assert.match(b, /Emit a UI Bridge action on its own line[\s\S]*"action":"rename-file"[\s\S]*"action":"move-file"[\s\S]*"action":"delete-file"/);
     assert.match(b, /If a shell command is denied, say which command you need and why/);
     assert.ok(b.includes('\n@@BOJU {"action":"request-permission","tool":"run_command","reason":"<why>"}\n'));
     for (const word of ['Standard mode', 'Read only mode', 'Full access mode']) assert.ok(!b.includes(word), word);
@@ -3430,11 +3445,13 @@ describe('agyAgentDefinition file tools (agy 1.5, #443)', () => {
     assert.match(t, /- Read a file: read_file, not cat, type or Get-Content\./);
     assert.match(t, /- Create a file: write_file, not echo, Set-Content or redirection\./);
     assert.match(t, /- Change a file: edit_file\./);
+    assert.match(t, /- Don't create folders with shell commands \(mkdir, New-Item\)\./);
     for (const name of OLD_TOOL_NAMES) assert.ok(!t.includes(name), name);
     assert.ok(t.includes('You have no tool that lists folders, finds files or searches inside them.'));
     assert.ok(t.includes('\n- List a folder: @@BOJU {"query":"file-list","folder":"<folder>","mode":"inject"}\n'));
     assert.ok(t.includes('\n- Find files by name: @@BOJU {"query":"file-list","name":"<part of the file name>","folder":"<optional folder>","mode":"inject"}\n'));
-    assert.ok(t.includes('\n- Search inside notes: @@BOJU {"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}\n'));
+    assert.ok(t.includes('\n- Search inside notes: @@BOJU {"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}. It counts every match'));
+    assert.ok(t.includes('\n- Recently changed files: @@BOJU {"query":"file-list","sort":"modified","mode":"inject"}'));
     assert.match(t, /Don't use shell commands \(dir, ls, Get-ChildItem, find, grep, findstr, Select-String\) for this, even when they're allowed\./);
     assert.match(t, /If the conversation doesn't describe vault queries, you can't list or search the vault: read the files you already know about, or ask the user/);
   });
@@ -3448,8 +3465,9 @@ describe('ANTIGRAVITY_ORIENTATION file tools (agy 1.5, #443)', () => {
     assert.equal(o.editToolHint, 'your file tools (write_file or edit_file)');
     assert.equal(o.permissions.readonly.can, 'read vault files (read_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web');
     assert.equal(o.permissions.standard.can, 'read and write vault files (read_file, write_file, edit_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web');
-    assert.match(o.permissions.standard.cannot, /^run shell commands \(run_command\)\. Use your file tools and the vault queries instead/);
-    const all = [o.editToolHint, ...Object.values(o.permissions).flatMap(p => [p.summary, p.can, p.cannot])].join('\n');
+    assert.match(o.permissions.standard.cannot, /^run shell commands \(run_command\)\. Use your file tools, the vault queries and the UI Bridge file actions instead/);
+    assert.equal(o.readToolHint, 'read_file');
+    const all = [o.editToolHint, o.readToolHint, ...Object.values(o.permissions).flatMap(p => [p.summary, p.can, p.cannot])].join('\n');
     for (const name of OLD_TOOL_NAMES) assert.ok(!all.includes(name), name);
   });
 
@@ -5244,6 +5262,22 @@ describe('canRunCommands', () => {
 describe('queryAllowed / refuseQuery', () => {
   const vaultTypes = ['file-list', 'backlinks', 'outlinks', 'tags', 'search'];
 
+  test('help topic commands: only where run-command works', () => {
+    assert.equal(queryAllowed('help', 'standard', 'commands'), true);
+    assert.equal(queryAllowed('help', 'full', 'commands'), true);
+    assert.equal(queryAllowed('help', 'readonly', 'commands'), false);
+    assert.equal(queryAllowed('help', 'restricted', 'commands'), false);
+    // other help topics stay allowed everywhere
+    assert.equal(queryAllowed('help', 'restricted', 'ui-bridge'), true);
+    assert.equal(queryAllowed('help', 'readonly'), true);
+  });
+
+  test('refusing the commands topic says run-command is unavailable', () => {
+    const q = { query: 'help' as const, topic: 'commands' as const, mode: 'inject' as const };
+    assert.deepEqual(refuseQuery(q, 'readonly'), { query: q, result: null, error: NO_COMMANDS_REFUSAL });
+    assert.equal(refuseQuery(q, 'standard'), null);
+  });
+
   test('Chat only refuses every vault query type', () => {
     for (const t of vaultTypes) assert.equal(queryAllowed(t, 'restricted'), false, t);
   });
@@ -5291,8 +5325,9 @@ describe('queryAllowed / refuseQuery', () => {
 describe('matchNote (vault search, #443)', () => {
   test('matches case-insensitively and gives 1-based line numbers', () => {
     assert.deepEqual(matchNote('first\nA Snail here\nnothing\nsnail again', 'SNAIL'), {
-      lines: [{ line: 2, text: 'A Snail here' }, { line: 4, text: 'snail again' }],
+      matches: 2,
       matchingLines: 2,
+      lines: [{ line: 2, text: 'A Snail here' }, { line: 4, text: 'snail again' }],
     });
   });
 
@@ -5364,10 +5399,12 @@ describe('searchNotes', () => {
   test('returns matching notes in path order with their lines', () => {
     assert.deepEqual(searchNotes(notes, 'snail'), {
       text: 'snail',
+      totalMatches: 3,
+      totalNotes: 3,
       notes: [
-        { path: 'Inbox.md', lines: [{ line: 1, text: 'Snail mail' }], matchingLines: 1 },
-        { path: 'Projects/b.md', lines: [{ line: 1, text: 'a snail' }], matchingLines: 1 },
-        { path: 'ProjectsArchive/d.md', lines: [{ line: 1, text: 'snail' }], matchingLines: 1 },
+        { path: 'Inbox.md', matches: 1, matchingLines: 1, lines: [{ line: 1, text: 'Snail mail' }] },
+        { path: 'Projects/b.md', matches: 1, matchingLines: 1, lines: [{ line: 1, text: 'a snail' }] },
+        { path: 'ProjectsArchive/d.md', matches: 1, matchingLines: 1, lines: [{ line: 1, text: 'snail' }] },
       ],
     });
   });
@@ -5386,7 +5423,7 @@ describe('searchNotes', () => {
   });
 
   test('no matches gives an empty list and no more line', () => {
-    assert.deepEqual(searchNotes(notes, 'zebra'), { text: 'zebra', notes: [] });
+    assert.deepEqual(searchNotes(notes, 'zebra'), { text: 'zebra', totalMatches: 0, totalNotes: 0, notes: [] });
   });
 
   test('caps the notes and says how many more matched', () => {
@@ -5403,6 +5440,119 @@ describe('searchNotes', () => {
 
   test('exactly the cap gives no more line', () => {
     assert.equal(searchNotes(notes, 'snail', undefined, 3).more, undefined);
+  });
+});
+
+describe('search counts, whole word and match case', () => {
+  test('counts every occurrence, not just matching lines', () => {
+    const m = matchNote('move move\nremoved\nno', 'move');
+    assert.equal(m?.matches, 3);
+    assert.equal(m?.matchingLines, 2);
+  });
+
+  test('wholeWord skips the text inside longer words, but a hyphen still separates', () => {
+    const m = matchNote('move here\nremoved\nmove-file\nMoves', 'move', { wholeWord: true });
+    assert.equal(m?.matches, 2);
+    assert.deepEqual(m?.lines.map(l => l.line), [1, 3]);
+    assert.equal(matchNote('café crème', 'café', { wholeWord: true })?.matches, 1);
+    assert.equal(matchNote('cafés', 'café', { wholeWord: true }), null);
+  });
+
+  test('matchCase matches capitals exactly', () => {
+    assert.equal(matchNote('Move move MOVE', 'move', { matchCase: true })?.matches, 1);
+    assert.equal(matchNote('Move move MOVE', 'move')?.matches, 3);
+  });
+
+  test('totals cover notes past the cap, and options are echoed only when on', () => {
+    const many = Array.from({ length: SEARCH_MAX_NOTES + 2 }, (_, i) => ({ path: `n${String(i).padStart(3, '0')}.md`, content: 'hit hit' }));
+    const r = searchNotes(many, 'hit');
+    assert.equal(r.notes.length, SEARCH_MAX_NOTES);
+    assert.equal(r.totalNotes, SEARCH_MAX_NOTES + 2);
+    assert.equal(r.totalMatches, (SEARCH_MAX_NOTES + 2) * 2);
+    assert.equal('wholeWord' in r, false);
+    const w = searchNotes([{ path: 'a.md', content: 'hit' }], 'hit', undefined, undefined, { wholeWord: true, matchCase: true });
+    assert.equal(w.wholeWord, true);
+    assert.equal(w.matchCase, true);
+  });
+
+  test('searchSummary: totals in words, null for old results', () => {
+    assert.equal(searchSummary({ totalMatches: 12, totalNotes: 3 }), '12 matches in 3 notes');
+    assert.equal(searchSummary({ totalMatches: 1, totalNotes: 1 }), '1 match in 1 note');
+    assert.equal(searchSummary({}), null);
+  });
+});
+
+describe('queryFollowUp (query rounds per message)', () => {
+  const inject = { query: 'search' as const, text: 'x', mode: 'inject' as const };
+  const show = { query: 'file-list' as const, mode: 'show' as const };
+
+  test('a follow-up turn can ask again, up to the limit', () => {
+    for (let round = 0; round < MAX_QUERY_ROUNDS; round++) {
+      assert.deepEqual(queryFollowUp(round, [inject, show]), { show: [show], inject: [inject], limitHit: false }, String(round));
+    }
+  });
+
+  test('at the limit: no more follow-ups, show cards still drawn, limit reported', () => {
+    assert.deepEqual(queryFollowUp(MAX_QUERY_ROUNDS, [inject, show]), { show: [show], inject: [], limitHit: true });
+  });
+
+  test('no inject queries: nothing to report at any round', () => {
+    assert.deepEqual(queryFollowUp(MAX_QUERY_ROUNDS, [show]), { show: [show], inject: [], limitHit: false });
+    assert.deepEqual(queryFollowUp(0, []), { show: [], inject: [], limitHit: false });
+  });
+
+  test('the agent is told the queries were not run and why', () => {
+    assert.equal(queryLimitNote('BojuBot'), `[System: BojuBot didn't run the vault queries in your last reply: one message allows ${MAX_QUERY_ROUNDS} rounds of query follow-ups. Answer with what you already have, or ask the user whether to continue.]`);
+  });
+});
+
+describe('canvasText', () => {
+  test("a canvas's text cards, one after another", () => {
+    const canvas = JSON.stringify({ nodes: [
+      { id: '1', type: 'text', text: 'First card\nline two' },
+      { id: '2', type: 'file', file: 'note.md' },
+      { id: '3', type: 'text', text: 'Second card' },
+    ], edges: [] });
+    assert.equal(canvasText(canvas), 'First card\nline two\nSecond card');
+  });
+
+  test('empty for anything that is not canvas JSON', () => {
+    assert.equal(canvasText('not json'), '');
+    assert.equal(canvasText('{}'), '');
+  });
+});
+
+describe('file-list by modified time', () => {
+  const files = [
+    { path: 'b.md', mtime: Date.parse('2026-11-20T10:00:00Z') },
+    { path: 'a.md', mtime: Date.parse('2026-11-25T09:00:00Z') },
+    { path: 'c.md', mtime: Date.parse('2026-11-25T12:00:00Z') },
+  ];
+
+  test('sort modified: newest first, with ISO times', () => {
+    assert.deepEqual(withModified(files, { sort: 'modified' }), {
+      files: ['c.md', 'a.md', 'b.md'],
+      modified: { 'c.md': '2026-11-25T12:00:00.000Z', 'a.md': '2026-11-25T09:00:00.000Z', 'b.md': '2026-11-20T10:00:00.000Z' },
+    });
+  });
+
+  test('modifiedSince keeps files changed on or after it, by path unless sorted', () => {
+    assert.deepEqual(withModified(files, { modifiedSince: '2026-11-25' }).files, ['a.md', 'c.md']);
+    assert.deepEqual(withModified(files, { modifiedSince: '2026-11-25T12:00:00Z', sort: 'modified' }).files, ['c.md']);
+  });
+
+  test('wantsModified and fileListError', () => {
+    assert.equal(wantsModified({ query: 'file-list', mode: 'inject' }), false);
+    assert.equal(wantsModified({ query: 'file-list', mode: 'inject', sort: 'modified' }), true);
+    assert.equal(wantsModified({ query: 'file-list', mode: 'inject', modifiedSince: '2026-11-25' }), true);
+    assert.equal(fileListError({ query: 'file-list', mode: 'inject', modifiedSince: '2026-11-25' }), undefined);
+    assert.match(fileListError({ query: 'file-list', mode: 'inject', modifiedSince: 'yesterday' }) ?? '', /modifiedSince must be a date/);
+  });
+
+  test('labels say what was asked', () => {
+    assert.equal(queryLabel({ query: 'file-list', mode: 'show', sort: 'modified' }), 'Files in vault, newest first');
+    assert.equal(queryLabel({ query: 'file-list', mode: 'show', folder: 'P', modifiedSince: '2026-11-25' }), 'Files in "P", changed since 2026-11-25');
+    assert.equal(queryLabel({ query: 'search', mode: 'show', text: 'move', wholeWord: true, matchCase: true }), 'Search for "move" (whole word, match case)');
   });
 });
 
@@ -5556,25 +5706,24 @@ describe('allowedCommandsSection', () => {
 
 describe('modeChangeNote', () => {
   const perm = { summary: 'Standard', can: 'write', cannot: 'shell' };
-  const F = 'cfg/plugins/bojubot/obsidian-commands.md';
   const cmds = [{ name: 'Quick switcher', id: 'switcher:open' }];
   test('the new mode\'s can and cannot', () => {
-    assert.equal(modeChangeNote(perm, 'standard', 'full', cmds, F), '[System: Permission mode changed to Standard. You can now: write. You cannot: shell.]');
+    assert.equal(modeChangeNote(perm, 'standard', 'full', cmds), '[System: Permission mode changed to Standard. You can now: write. You cannot: shell.]');
   });
   test('Read only → Standard: commands come back, with the allowlist (#406)', () => {
-    const note = modeChangeNote(perm, 'readonly', 'standard', cmds, F);
+    const note = modeChangeNote(perm, 'readonly', 'standard', cmds);
     assert.match(note, /run-command\(commandId\) works again/);
-    assert.ok(note.includes('read `cfg/plugins/bojubot/obsidian-commands.md` before run-command'));
+    assert.ok(note.includes('get the command IDs before run-command (never guess them): @@BOJU {"query":"help","topic":"commands","mode":"inject"}'));
     assert.ok(note.includes('| `Quick switcher` | `switcher:open` |'));
     assert.ok(note.endsWith(']'));
   });
   test('commands come back with an empty allowlist: no table', () => {
-    const note = modeChangeNote(perm, 'restricted', 'full', [], F);
+    const note = modeChangeNote(perm, 'restricted', 'full', []);
     assert.match(note, /works again/);
     assert.ok(!note.includes('## Allowed Obsidian commands'));
   });
   test('Standard → Read only: commands go away', () => {
-    const note = modeChangeNote(perm, 'standard', 'readonly', cmds, F);
+    const note = modeChangeNote(perm, 'standard', 'readonly', cmds);
     assert.match(note, /run-command is unavailable in this permission mode/);
     assert.ok(!note.includes('switcher:open'));
   });
@@ -5633,18 +5782,28 @@ describe('queueSystemNote / joinSystemNotes', () => {
     assert.deepEqual(q, [{ kind: 'allowlist', text: '[allow]' }]);
   });
 
+  test('event notes are all kept, and refresh keeps them', () => {
+    const q = queue(
+      { kind: 'event', text: 'E1' },
+      { kind: 'allowlist', text: 'A' },
+      { kind: 'event', text: 'E2' },
+      { kind: 'refresh', text: 'R' },
+    );
+    assert.equal(joinSystemNotes(q), 'E1\n\nE2\n\nR');
+  });
+
   test('combined with modeChangeNote, a single change reads as modeChangeNote alone', () => {
     const perm = { summary: 'Read only', can: 'read', cannot: 'write' };
-    const toReadonly = (from: PermissionMode) => modeChangeNote(perm, from, 'readonly', [], 'f.md');
+    const toReadonly = (from: PermissionMode) => modeChangeNote(perm, from, 'readonly', []);
     const q = queueSystemNote([], { kind: 'mode', from: 'standard', to: 'readonly', describe: toReadonly });
-    assert.equal(joinSystemNotes(q), modeChangeNote(perm, 'standard', 'readonly', [], 'f.md'));
+    assert.equal(joinSystemNotes(q), modeChangeNote(perm, 'standard', 'readonly', []));
     // Read only → Standard → Full: "commands are available now" only appears
     // because the first change's "before" (Read only) was kept
     const combined = joinSystemNotes(queue(
-      { kind: 'mode', from: 'readonly', to: 'standard', describe: f => modeChangeNote(perm, f, 'standard', [], 'f.md') },
-      { kind: 'mode', from: 'standard', to: 'full', describe: f => modeChangeNote(perm, f, 'full', [], 'f.md') },
+      { kind: 'mode', from: 'readonly', to: 'standard', describe: f => modeChangeNote(perm, f, 'standard', []) },
+      { kind: 'mode', from: 'standard', to: 'full', describe: f => modeChangeNote(perm, f, 'full', []) },
     ));
-    assert.equal(combined, modeChangeNote(perm, 'readonly', 'full', [], 'f.md'));
+    assert.equal(combined, modeChangeNote(perm, 'readonly', 'full', []));
     assert.match(combined ?? '', /works again/);
   });
 });
@@ -5818,6 +5977,133 @@ describe('applyModeTags', () => {
   });
 });
 
+describe('applyModeTags tool-order tags (#462)', () => {
+  const t = [
+    'always',
+    '{{IF_WRITE}}write',
+    '{{IF_LIMITED_SHELL}}limited-shell',
+    '{{IF_FULL}}full',
+    '',
+  ].join('\n');
+
+  test('Chat only keeps none of them', () => {
+    assert.equal(applyModeTags(t, 'restricted'), 'always\n');
+  });
+  test('Read only: limited shell, no write lines', () => {
+    assert.equal(applyModeTags(t, 'readonly'), 'always\nlimited-shell\n');
+  });
+  test('Standard: write lines and limited shell', () => {
+    assert.equal(applyModeTags(t, 'standard'), 'always\nwrite\nlimited-shell\n');
+  });
+  test('Full: write lines and the full-shell line', () => {
+    assert.equal(applyModeTags(t, 'full'), 'always\nwrite\nfull\n');
+  });
+});
+
+describe('renderOrientation tool order (#462)', () => {
+  const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
+  const base = { identityName: 'BojuBot', supportLine: 'https://example.com', cwdDisplay: 'vault root', customCwd: false };
+  type Mode = 'restricted' | 'readonly' | 'standard' | 'full';
+  const section = (backend: typeof CLAUDE_CODE_ORIENTATION, permissionMode: Mode) => {
+    const out = renderOrientation(template, { ...base, backend, permissionMode });
+    const start = out.indexOf('## Tool order\n');
+    return start < 0 ? null : out.slice(start, out.indexOf('\n\n', start));
+  };
+  // Rename/move/delete with a worked example, then run-command as a last resort before the shell
+  const RENAME = [
+    '- Rename/move/delete: UI Bridge rename-file / move-file / delete-file (updates links, uses trash), never mv/rm/del, copy+delete or run-command. No file read needed first, e.g.',
+    '  @@BOJU {"action":"rename-file","path":"Untitled.md","newName":"Meeting notes.md"}',
+    '- Obsidian commands (run-command): only for what nothing above does',
+  ].join('\n');
+  const LIMITED_SHELL = '- Shell: only when nothing above fits; if denied, emit request-permission(tool,reason) with the reason';
+  const FULL_SHELL = '- Shell: allowed, but only when nothing above fits';
+
+  test('Claude Code, Standard: the whole order, exactly', () => {
+    assert.equal(section(CLAUDE_CODE_ORIENTATION, 'standard'), [
+      '## Tool order',
+      'Vault work: use the first that fits, shell last.',
+      '- Read: the Read tool, not cat/type',
+      '- List/find/search: vault queries file-list / search (or Glob/Grep), not ls/dir/find/grep',
+      '- Create/edit: the Write or Edit tool (Write creates missing parent folders), not mkdir/echo/redirection',
+      RENAME,
+      LIMITED_SHELL,
+    ].join('\n'));
+  });
+
+  test('Antigravity, Standard: its own tool names, no Glob/Grep, no folder claim', () => {
+    assert.equal(section(ANTIGRAVITY_ORIENTATION, 'standard'), [
+      '## Tool order',
+      'Vault work: use the first that fits, shell last.',
+      '- Read: read_file, not cat/type',
+      '- List/find/search: vault queries file-list / search, not ls/dir/find/grep',
+      '- Create/edit: your file tools (write_file or edit_file), not mkdir/echo/redirection',
+      RENAME,
+      LIMITED_SHELL,
+    ].join('\n'));
+  });
+
+  test('Read only: read and list/search only, no create/edit or rename lines', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      const s = section(backend, 'readonly') ?? '';
+      assert.ok(s.includes('- Read: '), backend.agentLabel);
+      assert.ok(s.includes('- List/find/search: '), backend.agentLabel);
+      assert.ok(!s.includes('Create/edit'), backend.agentLabel);
+      assert.ok(!s.includes('Rename/move/delete'), backend.agentLabel);
+      assert.ok(!s.includes('Obsidian commands'), backend.agentLabel);
+      assert.ok(s.endsWith(LIMITED_SHELL), backend.agentLabel);
+    }
+  });
+
+  test('Full: every line, and the shell is allowed but still last', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      const s = section(backend, 'full') ?? '';
+      assert.ok(s.includes('- Create/edit: '), backend.agentLabel);
+      assert.ok(s.includes(RENAME), backend.agentLabel);
+      assert.ok(s.endsWith(FULL_SHELL), backend.agentLabel);
+      assert.ok(!s.includes('request-permission'), backend.agentLabel);
+    }
+  });
+
+  test('Chat only: no tool order at all', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      assert.equal(section(backend, 'restricted'), null, backend.agentLabel);
+      const out = renderOrientation(template, { ...base, backend, permissionMode: 'restricted' });
+      assert.ok(!out.includes('Rename/move/delete:'), backend.agentLabel);
+      assert.ok(!out.includes('Write creates missing parent folders'), backend.agentLabel);
+    }
+  });
+
+  test('no placeholder is left in any mode on either backend', () => {
+    for (const backend of [CLAUDE_CODE_ORIENTATION, ANTIGRAVITY_ORIENTATION]) {
+      for (const m of ALL_MODES) assert.ok(!renderOrientation(template, { ...base, backend, permissionMode: m }).includes('{{'), `${backend.agentLabel} ${m}`);
+    }
+  });
+});
+
+describe('CLAUDE_CODE_ORIENTATION Standard wording (#462)', () => {
+  const p = CLAUDE_CODE_ORIENTATION.permissions.standard;
+
+  test("doesn't offer Bash for vault work", () => {
+    assert.equal(p.can, 'read and write vault files (Read, Write, Edit, Glob, Grep), rename/move/delete notes with the UI Bridge file actions, and fetch the web');
+    assert.ok(!p.can.includes('Bash'));
+    assert.ok(!/\bls\b/.test(p.can));
+  });
+
+  test('read-only commands stay an exception, not the route', () => {
+    assert.match(p.cannot, /^run shell commands that change anything \(mv, rm, mkdir, writing files, installs, downloads\) — they are denied\./);
+    assert.ok(p.cannot.includes('Read-only commands such as git status may run, but never use the shell for vault work.'));
+    assert.ok(p.cannot.endsWith('Request permission if a task genuinely needs a shell command'));
+  });
+
+  test('tool hints for the shared tool order', () => {
+    assert.equal(CLAUDE_CODE_ORIENTATION.readToolHint, 'the Read tool');
+    assert.equal(CLAUDE_CODE_ORIENTATION.searchToolHint, 'Glob/Grep');
+    assert.equal(CLAUDE_CODE_ORIENTATION.writeFoldersNote, 'Write creates missing parent folders');
+    assert.equal(ANTIGRAVITY_ORIENTATION.searchToolHint, null);
+    assert.equal(ANTIGRAVITY_ORIENTATION.writeFoldersNote, null);
+  });
+});
+
 describe('renderOrientation per permission mode (#406)', () => {
   const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
   const vars = {
@@ -5840,7 +6126,7 @@ describe('renderOrientation per permission mode (#406)', () => {
     assert.ok(!out.includes('file-list('));
     assert.ok(!out.includes('## Canvas'));
     assert.ok(!out.includes('run-command(commandId)'));
-    assert.ok(!out.includes('obsidian-commands.md'));
+    assert.ok(!out.includes('"topic":"commands"'));
     assert.ok(out.includes("Not available in Chat only: this session has no vault access. Don't emit vault queries; they're refused."));
     assert.ok(out.includes('run-command is unavailable in this permission mode'));
   });
@@ -5850,15 +6136,15 @@ describe('renderOrientation per permission mode (#406)', () => {
     assert.ok(out.includes('file-list('));
     assert.ok(out.includes('## Canvas'));
     assert.ok(!out.includes('run-command(commandId)'));
-    assert.ok(!out.includes('obsidian-commands.md'));
+    assert.ok(!out.includes('"topic":"commands"'));
   });
 
   test('Standard and Full keep every section', () => {
     for (const m of ['standard', 'full'] as const) {
       const out = render(m);
       assert.ok(out.includes('focus-search · run-command(commandId)'), m);
-      assert.ok(out.includes('Read `.obsidian/plugins/bojubot/obsidian-commands.md` before run-command'), m);
-      assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth,name]) · search(text[,folder])'), m);
+      assert.ok(out.includes('Before run-command, get the command IDs (never guess them): @@BOJU {"query":"help","topic":"commands","mode":"inject"}'), m);
+      assert.ok(out.includes('Types: backlinks(path) · outlinks(path) · tags(path|tag) · file-list([folder,depth,name,sort:"modified",modifiedSince]) · search(text[,folder,wholeWord,matchCase])'), m);
       assert.ok(out.includes('## Canvas'), m);
       assert.ok(!out.includes('Not available in Chat only'), m);
       assert.ok(!out.includes('run-command is unavailable'), m);
@@ -6769,5 +7055,323 @@ describe('pluginState (#447)', () => {
     assert.equal(stripPluginState(s), true);
     assert.deepEqual(s, { backend: 'antigravity', backendChosen: true });
     assert.equal(stripPluginState(s), false);
+  });
+});
+
+describe('bridgeValidation (#172)', () => {
+  test('noticePayload caps the message and bounds the duration', () => {
+    assert.deepEqual(noticePayload('hi', undefined), { message: 'hi', duration: 4000 });
+    assert.deepEqual(noticePayload('hi', 0), { message: 'hi', duration: 1000 });
+    assert.deepEqual(noticePayload('hi', 999999), { message: 'hi', duration: 15000 });
+    assert.deepEqual(noticePayload('hi', 2500.4), { message: 'hi', duration: 2500 });
+    assert.deepEqual(noticePayload('hi', NaN), { message: 'hi', duration: 4000 });
+    assert.deepEqual(noticePayload('hi', '9000'), { message: 'hi', duration: 4000 });
+    assert.equal(noticePayload(42, 1).message, '');
+    const long = noticePayload('x'.repeat(NOTICE_MAX_CHARS + 50), 4000).message;
+    assert.equal(long.length, NOTICE_MAX_CHARS);
+    assert.ok(long.endsWith('…'));
+    assert.equal(noticePayload('x'.repeat(NOTICE_MAX_CHARS), 4000).message.length, NOTICE_MAX_CHARS);
+  });
+
+  test('destinationProblem accepts vault-relative paths', () => {
+    for (const p of ['note.md', 'Notes/a b.md', 'deep/er/x.png', '_BojuBot/Exports/s.md', '.hidden-note.md']) assert.equal(destinationProblem(p, '.obsidian'), null, p);
+  });
+
+  test('destinationProblem refuses absolute, traversal, backslash, empty segments and the config folder', () => {
+    const cases: [unknown, string][] = [
+      ['', 'missing path'], [undefined, 'missing path'], [5, 'missing path'],
+      ['/etc/x.md', 'absolute path'], ['C:/x.md', 'absolute path'], ['c:x.md', 'absolute path'],
+      ['a\\b.md', 'backslash in path'],
+      ['../x.md', 'empty, "." or ".." segment'], ['a/../../x.md', 'empty, "." or ".." segment'], ['a//b.md', 'empty, "." or ".." segment'], ['./a.md', 'empty, "." or ".." segment'], ['a/', 'empty, "." or ".." segment'],
+      ['.obsidian/plugins/x/main.js', 'inside the config folder'], ['.Obsidian/a.md', 'inside the config folder'],
+      ['x'.repeat(1001), 'path too long'],
+    ];
+    for (const [p, why] of cases) assert.equal(destinationProblem(p, '.obsidian'), why, String(p));
+    assert.equal(destinationProblem('.config/a.md', '.config'), 'inside the config folder');
+    assert.equal(destinationProblem('.obsidian/a.md', '.config'), null);
+  });
+
+  test('newNameProblem allows a name only', () => {
+    assert.equal(newNameProblem('New name.md'), null);
+    assert.equal(newNameProblem('a/b.md'), 'newName contains a folder separator (use move-file)');
+    assert.equal(newNameProblem('a\\b.md'),'newName contains a folder separator (use move-file)');
+    assert.equal(newNameProblem('..'), 'invalid name');
+    assert.equal(newNameProblem(''), 'missing newName');
+    assert.equal(newNameProblem(undefined), 'missing newName');
+    assert.equal(newNameProblem('x'.repeat(256)), 'name too long');
+  });
+
+  test('knownSettingsTab only passes IDs that exist', () => {
+    const ids = ['editor', 'bojubot', 'community-plugins'];
+    assert.equal(knownSettingsTab('bojubot', ids), 'bojubot');
+    assert.equal(knownSettingsTab('nope', ids), null);
+    assert.equal(knownSettingsTab(undefined, ids), null);
+    assert.equal(knownSettingsTab(3, ids), null);
+  });
+});
+
+describe('parentFolder (move-file destination folder)', () => {
+  test('the folder part of a nested path', () => {
+    assert.equal(parentFolder('Sub/x.md'), 'Sub');
+    assert.equal(parentFolder('A/B/C/x.md'), 'A/B/C');
+  });
+
+  test('null at the vault root', () => {
+    assert.equal(parentFolder('x.md'), null);
+    assert.equal(parentFolder('/x.md'), null);
+  });
+});
+
+describe('refusalNotice / refusalNote (refused UI Bridge actions)', () => {
+  const refusal = { action: 'rename-file', reason: 'newName contains a folder separator (use move-file) ("Sub/x.md")', byUser: false };
+
+  test('the notice names the action and the reason', () => {
+    assert.equal(
+      refusalNotice('BojuBot', refusal),
+      `BojuBot didn't run the agent's rename-file: newName contains a folder separator (use move-file) ("Sub/x.md").`,
+    );
+  });
+
+  test('the note tells the agent nothing changed and to correct a claim it was done', () => {
+    assert.equal(
+      refusalNote('BojuBot', refusal),
+      `[System: BojuBot didn't run your rename-file action: newName contains a folder separator (use move-file) ("Sub/x.md"). Nothing was changed. If you told the user it was done, correct that; then fix the action, or explain why it can't be done.]`,
+    );
+  });
+
+  test('both use the brand name given', () => {
+    assert.ok(refusalNotice('Acme', refusal).startsWith('Acme '));
+    assert.ok(refusalNote('Acme', refusal).startsWith('[System: Acme '));
+  });
+});
+
+describe('attachmentKind (#262)', () => {
+  test('images and PDFs are read by the agent; text inline; anything else by name or path', () => {
+    assert.equal(attachmentKind('shot.PNG'), 'image');
+    assert.equal(attachmentKind('C:\\Users\\me\\doc.pdf'), 'pdf');
+    assert.equal(attachmentKind('/home/me/notes.md'), 'text');
+    assert.equal(attachmentKind('data.JSON'), 'text');
+    assert.equal(attachmentKind('board.canvas'), 'text');
+    assert.equal(attachmentKind('archive.zip'), 'file');
+    assert.equal(attachmentKind('Makefile'), 'file');
+    assert.equal(attachmentKind('.gitignore'), 'file');
+  });
+
+  test('fileExtension looks at the file name only, lower-cased', () => {
+    assert.equal(fileExtension('C:\\a.b\\file.TXT'), 'txt');
+    assert.equal(fileExtension('/a.b/file'), '');
+    assert.equal(fileExtension('archive.tar.gz'), 'gz');
+    assert.equal(fileExtension('.env'), '');
+    assert.equal(fileExtension(''), '');
+  });
+
+  test('fileNameOf takes the last part of either kind of path', () => {
+    assert.equal(fileNameOf('C:\\Users\\me\\notes.md'), 'notes.md');
+    assert.equal(fileNameOf('/home/me/notes.md'), 'notes.md');
+    assert.equal(fileNameOf('notes.md'), 'notes.md');
+  });
+
+  test('text and image sets keep their members', () => {
+    for (const ext of ['md', 'txt', 'json', 'ts', 'ps1', 'canvas']) assert.ok(TEXT_EXTS.has(ext), ext);
+    for (const ext of ['png', 'jpg', 'webp', 'avif']) assert.ok(IMAGE_EXTS.has(ext), ext);
+    assert.equal(PASTE_TEXT_MAX_BYTES, 524288);
+  });
+});
+
+describe('searching inside sessions (#133)', () => {
+  const ts = '2026-11-23T00:00:00Z';
+  const msg = (role: 'user' | 'assistant' | 'separator', content: string) => ({ role, content, timestamp: ts });
+
+  test('searchableMessages drops separators and blanks, marking what came before the last compaction', () => {
+    const out = searchableMessages([
+      msg('user', 'old question'), msg('assistant', 'old answer'), msg('separator', '─── conversation compacted ───'),
+      msg('user', 'middle'), msg('separator', '───'), msg('assistant', '  '), msg('user', 'newest'),
+    ]);
+    assert.deepEqual(out, [
+      { role: 'user', text: 'old question', compacted: true },
+      { role: 'assistant', text: 'old answer', compacted: true },
+      { role: 'user', text: 'middle', compacted: true },
+      { role: 'user', text: 'newest', compacted: false },
+    ]);
+    assert.deepEqual(searchableMessages([msg('user', 'a')]), [{ role: 'user', text: 'a', compacted: false }]);
+  });
+
+  test('matchSessionContent: case-insensitive, literal, counts messages, snippet from the matching line', () => {
+    const m = searchableMessages([msg('user', 'first line\nWhere is the SNAIL note?'), msg('assistant', 'The snail is in Animals/snail.md'), msg('user', 'thanks')]);
+    assert.deepEqual(matchSessionContent(m, 'snail'), { snippet: 'The snail is in Animals/snail.md', role: 'assistant', messages: 2, compacted: false });
+    assert.equal(matchSessionContent(m, 'sn.il'), null);
+    assert.equal(matchSessionContent(m, 'missing'), null);
+  });
+
+  test('queries shorter than two characters never search content', () => {
+    assert.equal(CONTENT_SEARCH_MIN_CHARS, 2);
+    assert.equal(matchSessionContent(searchableMessages([msg('user', 'a b c')]), 'a'), null);
+    assert.equal(matchSessionContent(searchableMessages([msg('user', 'a b c')]), '  '), null);
+  });
+
+  test('the snippet prefers a match the agent still has; all-compacted matches are flagged', () => {
+    const mixed = searchableMessages([msg('user', 'snail one'), msg('separator', '─'), msg('assistant', 'snail two')]);
+    assert.deepEqual(matchSessionContent(mixed, 'snail'), { snippet: 'snail two', role: 'assistant', messages: 2, compacted: false });
+    const old = searchableMessages([msg('user', 'snail one'), msg('assistant', 'snail again'), msg('separator', '─'), msg('user', 'later')]);
+    assert.deepEqual(matchSessionContent(old, 'snail'), { snippet: 'snail again', role: 'assistant', messages: 2, compacted: true });
+  });
+
+  test('long lines are clipped around the match', () => {
+    const long = `${'x'.repeat(300)} snail ${'y'.repeat(300)}`;
+    const snippet = matchSessionContent(searchableMessages([msg('user', long)]), 'snail')?.snippet ?? '';
+    assert.ok(snippet.includes('snail'));
+    assert.ok(snippet.startsWith('…') && snippet.endsWith('…'));
+    assert.ok(snippet.length <= 122);
+  });
+
+  test('searchSessions: title matches first, content-only matches after, never both', () => {
+    const sessions = [{ id: 'a', title: 'Snail research' }, { id: 'b', title: 'Groceries' }, { id: 'c', title: 'Garden' }];
+    const content: Record<string, string> = { a: 'snail facts', b: 'buy milk', c: 'a snail ate the lettuce' };
+    const calls: string[] = [];
+    const r = searchSessions(sessions, 'snail', (s) => {
+      calls.push(s.id);
+      return matchSessionContent(searchableMessages([msg('user', content[s.id])]), 'snail');
+    });
+    assert.deepEqual(r.byTitle.map(s => s.id), ['a']);
+    assert.deepEqual(r.byContent.map(c => c.session.id), ['c']);
+    assert.deepEqual(calls, ['b', 'c']);
+  });
+
+  test('searchSessions: an empty or one-character query only filters titles', () => {
+    const sessions = [{ title: 'Alpha' }, { title: 'Beta' }];
+    const never = () => { throw new Error('content searched'); };
+    assert.deepEqual(searchSessions(sessions, '', never), { byTitle: sessions, byContent: [] });
+    assert.deepEqual(searchSessions(sessions, 'b', never), { byTitle: [sessions[1]], byContent: [] });
+  });
+});
+
+describe('storageLayout (_BojuBot folder)', () => {
+  test('new-vault defaults all live in _BojuBot/', () => {
+    assert.deepEqual(defaultStoragePaths('BojuBot'), {
+      folder: '_BojuBot',
+      contextFile: '_BojuBot/_bojubot-context.md',
+      skills: '_BojuBot/Skills',
+      exports: '_BojuBot/Exports',
+    });
+  });
+
+  test('white-label builds get a folder named after the brand, made safe', () => {
+    assert.deepEqual(defaultStoragePaths('Acme Bot'), {
+      folder: '_Acme Bot',
+      contextFile: '_Acme Bot/_acme-bot-context.md',
+      skills: '_Acme Bot/Skills',
+      exports: '_Acme Bot/Exports',
+    });
+    assert.equal(defaultStoragePaths('A/B:C?').folder, '_ABC');
+    assert.equal(defaultStoragePaths('  ').folder, '_BojuBot');
+  });
+
+  test('the old defaults', () => {
+    assert.deepEqual(legacyStoragePaths('BojuBot'), {
+      contextFile: '_claude-context.md',
+      skills: '_BojuBot Skills',
+      exports: 'BojuBot Exports',
+    });
+  });
+
+  const legacy = legacyStoragePaths('BojuBot');
+  const empty = { contextFilePath: '_BojuBot/_bojubot-context.md', commandsFolder: '', exportFolder: '' };
+
+  test('an existing vault on defaults keeps every old location', () => {
+    assert.deepEqual(pinnedLegacyPaths(empty, undefined, legacy), {
+      contextFilePath: '_claude-context.md',
+      commandsFolder: '_BojuBot Skills',
+      exportFolder: 'BojuBot Exports',
+    });
+  });
+
+  test('locations the user set are left alone', () => {
+    const set = { contextFilePath: 'Meta/memory.md', commandsFolder: 'Skills', exportFolder: 'Chats' };
+    assert.deepEqual(pinnedLegacyPaths(set, 'Meta/memory.md', legacy), {});
+    assert.deepEqual(pinnedLegacyPaths({ ...empty, commandsFolder: 'Skills' }, '_claude-context.md', legacy), {
+      exportFolder: 'BojuBot Exports',
+    });
+  });
+
+  test('a vault is existing when it has saved settings or old BojuBot files', () => {
+    const none = () => false;
+    assert.equal(isExistingVault(false, none, legacy), false);
+    assert.equal(isExistingVault(true, none, legacy), true);
+    for (const path of ['_claude-context.md', '_BojuBot Skills', 'BojuBot Exports']) {
+      assert.equal(isExistingVault(false, p => p === path, legacy), true, path);
+    }
+    assert.equal(isExistingVault(false, p => p === '_BojuBot', legacy), false);
+  });
+
+  test('the layout version marks the check as done', () => {
+    assert.equal(STORAGE_LAYOUT_VERSION, 2);
+  });
+});
+
+describe('vault exclusions (#125)', () => {
+  test('parseExclusions: one per line, trimmed, comments and blanks dropped, separators normalized', () => {
+    assert.deepEqual(parseExclusions('Archive\n\n  # a note\n*.png  \r\n./Private\\diary.md\n/Media/'), ['Archive', '*.png', 'Private/diary.md', 'Media/']);
+    assert.deepEqual(parseExclusions(''), []);
+  });
+
+  test('a plain path matches that file, or that folder and everything in it', () => {
+    const m = exclusionMatcher('Archive');
+    for (const p of ['Archive', 'Archive/old.md', 'Archive/2020/x.png']) assert.equal(m(p), true, p);
+    for (const p of ['Archives/x.md', 'Notes/Archive.md']) assert.equal(m(p), false, p);
+    assert.equal(exclusionMatcher('Archive/')('Archive/a.md'), true);
+    assert.equal(exclusionMatcher('Private/diary.md')('Private/diary.md'), true);
+    assert.equal(exclusionMatcher('Private/diary.md')('Private/other.md'), false);
+  });
+
+  test('a pattern without a slash matches at any depth', () => {
+    const png = exclusionMatcher('*.png');
+    for (const p of ['a.png', 'Media/b.PNG', 'x/y/z.png']) assert.equal(png(p), true, p);
+    assert.equal(png('a.png.md'), false);
+    assert.equal(exclusionMatcher('drafts')('Projects/drafts/one.md'), true);
+  });
+
+  test('* stays inside one name, ** crosses folders, ? is one character', () => {
+    assert.equal(exclusionMatcher('Media/*.png')('Media/a.png'), true);
+    assert.equal(exclusionMatcher('Media/*.png')('Media/sub/a.png'), false);
+    assert.equal(exclusionMatcher('Media/**/*.png')('Media/sub/deep/a.png'), true);
+    assert.equal(exclusionMatcher('Media/**')('Media/sub/a.md'), true);
+    assert.equal(exclusionMatcher('**/drafts')('a/b/drafts/c.md'), true);
+    assert.equal(exclusionMatcher('Day-??.md')('Day-01.md'), true);
+    assert.equal(exclusionMatcher('Day-??.md')('Day-1.md'), false);
+  });
+
+  test('regex characters in names are literal; matching ignores case', () => {
+    assert.equal(exclusionMatcher('a+b (1).md')('a+b (1).md'), true);
+    assert.equal(exclusionMatcher('a+b (1).md')('aab (1).md'), false);
+    assert.equal(exclusionMatcher('ARCHIVE')('archive/x.md'), true);
+  });
+
+  test('isExcludedPath and the active list', () => {
+    assert.equal(isExcludedPath('Media/a.png', ['Archive', '*.png']), true);
+    assert.equal(isExcludedPath('Notes/a.md', ['Archive', '*.png']), false);
+    assert.equal(isExcludedPath('a.md', []), false);
+    setVaultExclusions(['Archive']);
+    try {
+      assert.deepEqual([...vaultExclusions()], ['Archive']);
+      assert.equal(isExcluded('Archive/x.md'), true);
+      assert.equal(isExcluded('Notes/x.md'), false);
+    } finally {
+      setVaultExclusions([]);
+    }
+    assert.equal(isExcluded('Archive/x.md'), false);
+  });
+
+  test('summarizeFileNames collapses many files of one type into one line', () => {
+    const imgs = Array.from({ length: 31 }, (_, i) => `IMG_${String(i + 1).padStart(4, '0')}.png`);
+    assert.deepEqual(summarizeFileNames(['readme.md', ...imgs.reverse(), 'notes.md']), ['readme.md', '[31 .png files: IMG_0001.png … IMG_0031.png]', 'notes.md']);
+  });
+
+  test('summarizeFileNames keeps folders at or under the threshold, and files without an extension', () => {
+    const thirty = Array.from({ length: 30 }, (_, i) => `n${i}.md`);
+    assert.deepEqual(summarizeFileNames(thirty), thirty);
+    assert.deepEqual(summarizeFileNames(['a.md', 'b.md', 'c.md'], 2), ['[3 .md files: a.md … c.md]']);
+    const bare = ['LICENSE', 'Makefile', 'README'];
+    assert.deepEqual(summarizeFileNames(bare, 2), bare);
+    assert.equal(TREE_COLLAPSE_THRESHOLD, 30);
   });
 });

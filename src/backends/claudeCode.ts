@@ -417,6 +417,9 @@ export const CLAUDE_CODE_ORIENTATION: BackendOrientation = {
   agentLabel: 'Claude Code',
   environmentNote: `Your environment may list "Additional working directories" beyond your CWD — these come from Claude Code CLI's own global config and are not something {{BRAND}} set up; they are frequently leftover from unrelated projects. Ignore them: do not read, write, or explore any additional working directory unless the user explicitly directs you there.`,
   editToolHint: 'the Write or Edit tool',
+  readToolHint: 'the Read tool',
+  searchToolHint: 'Glob/Grep',
+  writeFoldersNote: 'Write creates missing parent folders',
   permissions: {
     restricted: {
       summary: 'Chat only',
@@ -430,8 +433,8 @@ export const CLAUDE_CODE_ORIENTATION: BackendOrientation = {
     },
     standard: {
       summary: 'Standard',
-      can: 'read and write vault files, fetch the web, and run read-only shell commands (Bash) such as ls, echo, or git status',
-      cannot: 'run shell commands that change anything (write files, install, delete, download) — those are denied. Request permission if a task genuinely requires one',
+      can: 'read and write vault files (Read, Write, Edit, Glob, Grep), rename/move/delete notes with the UI Bridge file actions, and fetch the web',
+      cannot: 'run shell commands that change anything (mv, rm, mkdir, writing files, installs, downloads) — they are denied. Read-only commands such as git status may run, but never use the shell for vault work. Request permission if a task genuinely needs a shell command',
     },
     full: {
       summary: 'Full access',

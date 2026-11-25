@@ -10,8 +10,13 @@ export function extractActions(text: string): { clean: string; actions: BojuBotA
   const actions: BojuBotAction[] = [];
   const lines = text.split('\n');
   const kept: string[] = [];
+  let inFence = false;
 
   for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+    // Gemini sometimes starts a reply with a bare "{}" line before its
+    // protocol lines: noise, never content (code blocks keep theirs)
+    if (!inFence && line.trim() === '{}') continue;
     if (line.startsWith(BOJU_PREFIX)) {
       try {
         const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;

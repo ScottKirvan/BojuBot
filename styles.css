@@ -2542,3 +2542,27 @@
 .bojubot-generated-image-link {
   overflow-wrap: anywhere;
 }
+
+/* Rename session dialog (/ menu, #323) */
+.bojubot-rename-session-input {
+  width: 100%;
+}
+
+/* Sessions panel: a session that matches inside its conversation (#133) */
+.bojubot-sessions-row-snippet {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bojubot-sessions-row-snippet-who {
+  color: var(--text-faint);
+}
+
+.bojubot-sessions-row-compacted {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  font-style: italic;
+}

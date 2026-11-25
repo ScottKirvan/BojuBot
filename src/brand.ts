@@ -26,6 +26,7 @@
  * in data.json (e.g. only `{ name }`) must still resolve every other field.
  */
 import welcomeData from './welcome.json';
+import { defaultStoragePaths } from './utils/storageLayout';
 
 export interface Greeting {
   withName: string;
@@ -169,7 +170,7 @@ export function applyIdentityName(text: string, brand: ResolvedBrand): string {
 
 /** Vault-relative export folder, falling back to a brand-aware default when unset. */
 export function resolveExportFolder(custom: string, brand: ResolvedBrand): string {
-  return custom.trim() || `${brand.name} Exports`;
+  return custom.trim() || defaultStoragePaths(brand.name).exports;
 }
 
 // ---------------------------------------------------------------------------

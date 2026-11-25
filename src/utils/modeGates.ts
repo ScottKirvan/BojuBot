@@ -45,18 +45,19 @@ export function allowedCommandsSection(commands: readonly AllowedCommand[], mode
  * orientation the session started with either left run-command out or listed
  * it, and stays as it was (#406).
  */
+/** The query that returns the Obsidian command reference (help topic `commands`). */
+export const COMMANDS_HELP_QUERY = '@@BOJU {"query":"help","topic":"commands","mode":"inject"}';
+
 export function modeChangeNote(
   perm: PermissionDescription,
   before: PermissionMode,
   after: PermissionMode,
   commands: readonly AllowedCommand[],
-  /** Vault-relative path of the command reference file (`<configDir>/plugins/bojubot/obsidian-commands.md`). */
-  commandsFile: string,
 ): string {
   let note = `[System: Permission mode changed to ${perm.summary}. You can now: ${perm.can}. You cannot: ${perm.cannot}.`;
   if (!canRunCommands(before) && canRunCommands(after)) {
     note += '\n\nObsidian commands are available now: run-command(commandId) works again. ' +
-      `Confirm first (ask in text, wait for the user's yes, emit next turn), and read \`${commandsFile}\` before run-command — never guess IDs.`;
+      `Confirm first (ask in text, wait for the user's yes, emit next turn), and get the command IDs before run-command (never guess them): ${COMMANDS_HELP_QUERY}`;
     const section = allowedCommandsSection(commands, after);
     if (section) note += `\n\n${section}`;
   } else if (canRunCommands(before) && !canRunCommands(after)) {
@@ -67,19 +68,26 @@ export function modeChangeNote(
 
 /**
  * Whether BojuBot answers a vault query in this mode. `help` returns BojuBot's
- * own bundled reference text, never anything from the vault, so it's always allowed.
+ * own bundled reference text, never anything from the vault, so it's always
+ * allowed, except the `commands` topic: the command list only matters, and is
+ * only given, where run-command works.
  */
-export function queryAllowed(queryType: string, mode: PermissionMode): boolean {
-  return queryType === 'help' || sharesVaultInfo(mode);
+export function queryAllowed(queryType: string, mode: PermissionMode, topic?: string): boolean {
+  if (queryType === 'help') return topic !== 'commands' || canRunCommands(mode);
+  return sharesVaultInfo(mode);
 }
 
 export const CHAT_ONLY_QUERY_REFUSAL =
   "Vault queries aren't available in Chat only: this session has no vault access. " +
   'Answer without vault information, or ask the user to switch to Read only or Standard.';
 
+export const NO_COMMANDS_REFUSAL =
+  "run-command isn't available in this permission mode (Obsidian commands can create or change notes), so there's no command list. Don't emit run-command.";
+
 /** A refusal result for a query this mode doesn't allow, or null to resolve it normally. */
 export function refuseQuery(query: VaultQuery, mode: PermissionMode): VaultQueryResult | null {
-  return queryAllowed(query.query, mode) ? null : { query, result: null, error: CHAT_ONLY_QUERY_REFUSAL };
+  if (queryAllowed(query.query, mode, query.topic)) return null;
+  return { query, result: null, error: query.query === 'help' ? NO_COMMANDS_REFUSAL : CHAT_ONLY_QUERY_REFUSAL };
 }
 
 /**

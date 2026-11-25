@@ -528,6 +528,9 @@ export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
   // how to drive Obsidian (test/agy-bridge-check.ts), burning quota and turns.
   environmentNote: 'This orientation is all you need to work with {{BRAND}}. Do not read {{BRAND}} plugin files (main.js, manifest.json) or fetch its source code online. If unsure of an action or query, emit the help query for its reference instead.',
   editToolHint: 'your file tools (write_file or edit_file)',
+  readToolHint: 'read_file',
+  searchToolHint: null,
+  writeFoldersNote: null,
   permissions: {
     restricted: {
       summary: 'Chat only',
@@ -542,7 +545,7 @@ export const ANTIGRAVITY_ORIENTATION: BackendOrientation = {
     standard: {
       summary: 'Standard',
       can: 'read and write vault files (read_file, write_file, edit_file; list folders, find files and search notes with the vault queries, not shell commands), read web pages, and search the web',
-      cannot: 'run shell commands (run_command). Use your file tools and the vault queries instead, and request permission if a task genuinely requires a shell',
+      cannot: 'run shell commands (run_command). Use your file tools, the vault queries and the UI Bridge file actions instead, and request permission if a task genuinely requires a shell',
     },
     full: {
       summary: 'Full access',
