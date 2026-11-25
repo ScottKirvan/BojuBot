@@ -3,7 +3,7 @@ import { log, warn } from './utils/logger';
 import { brandName } from './brand';
 import { canWrite } from './backends/modes';
 import { bridgeActionAllowed } from './utils/modeGates';
-import { destinationProblem, knownSettingsTab, newNameProblem, noticePayload } from './utils/bridgeValidation';
+import { BridgeRefusal, destinationProblem, knownSettingsTab, newNameProblem, noticePayload } from './utils/bridgeValidation';
 import type { PermissionMode } from './backends/types';
 import { ReportPrefill, reportPrefill } from './utils/report';
 export { BOJU_PREFIX } from './constants';
@@ -138,13 +138,21 @@ export function promptPermissionRequest(app: App, tool: string, reason: string):
   return new Promise<boolean>(resolve => new RequestPermissionModal(app, tool, reason, resolve).open());
 }
 
+/** A payload value as text for a refusal reason. */
+function shown(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value) ?? 'nothing';
+}
+
 /**
  * Execute a single BojuBot UI action via the Obsidian API.
  * The 6 built-in actions execute immediately (transparency via show-notice).
  * run-command requires a mode that can write (Obsidian commands can create or change
  * notes), then the commandId in the allowlist, or a prompt if confirmUnlistedCommands is true.
+ *
+ * Returns why the action wasn't run, or null when it ran. The caller tells the
+ * user and the agent: a refused action must never look like a done one.
  */
-export async function executeAction(app: App, action: BojuBotAction, options: UIBridgeOptions = {}): Promise<void> {
+export async function executeAction(app: App, action: BojuBotAction, options: UIBridgeOptions = {}): Promise<BridgeRefusal | null> {
   const {
     permissionMode,
     commandAllowlist = [],
@@ -156,122 +164,85 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
 
   log('UIBridge: executing action:', action.action);
 
+  const refuse = (reason: string, byUser = false): BridgeRefusal => {
+    warn(`UIBridge: ${action.action} — not run: ${reason}`);
+    return { action: action.action, reason, byUser };
+  };
+  const noNote = (path: unknown) => refuse(`no note at "${shown(path)}"`);
+  const noWrites = () => refuse("this session's permission mode doesn't allow vault changes");
+
   switch (action.action) {
 
     case 'open-file': {
       const file = app.vault.getFileByPath(action.path as string);
-      if (file) {
-        await app.workspace.getLeaf(false).openFile(file);
-      } else {
-        warn('UIBridge: open-file — file not found:', action.path);
-      }
+      if (!file) return noNote(action.path);
+      await app.workspace.getLeaf(false).openFile(file);
       break;
     }
 
     case 'open-file-split': {
       const file = app.vault.getFileByPath(action.path as string);
-      if (file) {
-        const leaf = app.workspace.getLeaf('split');
-        await leaf.openFile(file);
-      } else {
-        warn('UIBridge: open-file-split — file not found:', action.path);
-      }
+      if (!file) return noNote(action.path);
+      await app.workspace.getLeaf('split').openFile(file);
       break;
     }
 
     case 'open-file-new-tab': {
       const file = app.vault.getFileByPath(action.path as string);
-      if (file) {
-        const leaf = app.workspace.getLeaf('tab');
-        await leaf.openFile(file);
-      } else {
-        warn('UIBridge: open-file-new-tab — file not found:', action.path);
-      }
+      if (!file) return noNote(action.path);
+      await app.workspace.getLeaf('tab').openFile(file);
       break;
     }
 
     case 'rename-file': {
-      if (!canWrite(permissionMode)) {
-        warn('UIBridge: rename-file — blocked, permission mode has no write access:', permissionMode);
-        new Notice(`${brandName()}: the agent tried to rename a file, but the current permission mode doesn't allow vault writes.`, 6000);
-        break;
-      }
+      if (!canWrite(permissionMode)) return noWrites();
       const file = app.vault.getFileByPath(action.path as string);
-      if (!file) {
-        warn('UIBridge: rename-file — file not found:', action.path);
-        break;
-      }
+      if (!file) return noNote(action.path);
       const nameProblem = newNameProblem(action.newName);
-      if (nameProblem) {
-        warn('UIBridge: rename-file — refused,', nameProblem + ':', action.newName);
-        break;
-      }
+      if (nameProblem) return refuse(`${nameProblem} ("${shown(action.newName)}")`);
       const newName = action.newName as string;
       const newPath = file.parent && file.parent.path !== '/' ? `${file.parent.path}/${newName}` : newName;
       const renameProblem = destinationProblem(newPath, app.vault.configDir);
-      if (renameProblem) {
-        warn('UIBridge: rename-file — refused,', renameProblem + ':', newPath);
-        break;
-      }
+      if (renameProblem) return refuse(`${renameProblem} ("${newPath}")`);
       await app.fileManager.renameFile(file, newPath);
       break;
     }
 
     case 'move-file': {
-      if (!canWrite(permissionMode)) {
-        warn('UIBridge: move-file — blocked, permission mode has no write access:', permissionMode);
-        new Notice(`${brandName()}: the agent tried to move a file, but the current permission mode doesn't allow vault writes.`, 6000);
-        break;
-      }
+      if (!canWrite(permissionMode)) return noWrites();
       const file = app.vault.getFileByPath(action.path as string);
-      if (!file) {
-        warn('UIBridge: move-file — file not found:', action.path);
-        break;
-      }
+      if (!file) return noNote(action.path);
       const moveProblem = destinationProblem(action.newPath, app.vault.configDir);
-      if (moveProblem) {
-        warn('UIBridge: move-file — refused,', moveProblem + ':', action.newPath);
-        break;
-      }
+      if (moveProblem) return refuse(`${moveProblem} ("${shown(action.newPath)}")`);
       await app.fileManager.renameFile(file, action.newPath as string);
       break;
     }
 
     case 'delete-file': {
-      if (!canWrite(permissionMode)) {
-        warn('UIBridge: delete-file — blocked, permission mode has no write access:', permissionMode);
-        new Notice(`${brandName()}: the agent tried to delete a file, but the current permission mode doesn't allow vault writes.`, 6000);
-        break;
-      }
+      if (!canWrite(permissionMode)) return noWrites();
       const file = app.vault.getFileByPath(action.path as string);
-      if (!file) {
-        warn('UIBridge: delete-file — file not found:', action.path);
-        break;
-      }
+      if (!file) return noNote(action.path);
       await app.fileManager.trashFile(file);
       break;
     }
 
     case 'navigate-heading': {
       const file = app.vault.getFileByPath(action.path as string);
-      if (file) {
-        const leaf = app.workspace.getLeaf(false);
-        await leaf.openFile(file);
-        window.requestAnimationFrame(() => {
-          const view = leaf.view as unknown as { editor?: { getValue(): string; setCursor(pos: { line: number; ch: number }): void } };
-          const editor = view?.editor;
-          if (editor && action.heading) {
-            const content = editor.getValue();
-            const lines = content.split('\n');
-            const idx = lines.findIndex((l: string) =>
-              l.replace(/^#+\s*/, '').toLowerCase() === (action.heading as string).toLowerCase()
-            );
-            if (idx !== -1) editor.setCursor({ line: idx, ch: 0 });
-          }
-        });
-      } else {
-        warn('UIBridge: navigate-heading — file not found:', action.path);
-      }
+      if (!file) return noNote(action.path);
+      const leaf = app.workspace.getLeaf(false);
+      await leaf.openFile(file);
+      window.requestAnimationFrame(() => {
+        const view = leaf.view as unknown as { editor?: { getValue(): string; setCursor(pos: { line: number; ch: number }): void } };
+        const editor = view?.editor;
+        if (editor && action.heading) {
+          const content = editor.getValue();
+          const lines = content.split('\n');
+          const idx = lines.findIndex((l: string) =>
+            l.replace(/^#+\s*/, '').toLowerCase() === (action.heading as string).toLowerCase()
+          );
+          if (idx !== -1) editor.setCursor({ line: idx, ch: 0 });
+        }
+      });
       break;
     }
 
@@ -300,27 +271,22 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
 
     case 'run-command': {
       const commandId = action.commandId as string;
-      if (!commandId) { warn('UIBridge: run-command — missing commandId'); break; }
+      if (!commandId) return refuse('no commandId given');
       if (!bridgeActionAllowed('run-command', permissionMode)) {
-        warn('UIBridge: run-command — blocked, permission mode has no write access:', permissionMode, commandId);
-        new Notice(`${brandName()}: An Obsidian command was blocked. Chat only and Read only don't run commands, because commands can create or change notes.`, 6000);
-        break;
+        return refuse("Chat only and Read only don't run Obsidian commands, because commands can create or change notes");
       }
 
       const appInternal = app as unknown as UIBridgeInternal;
       const displayName = appInternal.commands.commands[commandId]?.name ?? commandId;
+      const notFound = () => refuse(`the command "${displayName}" wasn't found; it may belong to a plugin that isn't enabled`);
 
       if (commandAllowlist.includes(commandId)) {
         // Allowlist takes precedence over everything — execute immediately
-        const executed = appInternal.commands.executeCommandById(commandId);
-        if (executed) log('UIBridge: run-command executed:', commandId);
-        else {
-          warn('UIBridge: run-command — command not found or failed:', commandId);
-          new Notice(`${brandName()}: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
-        }
+        if (!appInternal.commands.executeCommandById(commandId)) return notFound();
+        log('UIBridge: run-command executed:', commandId);
       } else if (commandDenylist.includes(commandId)) {
-        // Permanently denied (and not in allowlist) — hard block silently
-        log('UIBridge: run-command hard-blocked by denylist:', commandId);
+        // Permanently denied (and not in allowlist): no prompt, no notice
+        return refuse(`the user has blocked the command "${displayName}"`, true);
       } else if (confirmUnlistedCommands) {
         // Neither list — prompt
         options.onAwaitUser?.(true);
@@ -328,23 +294,16 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
           new ConfirmCommandModal(app, displayName, resolve).open();
         });
         options.onAwaitUser?.(false);
-        if (allow) {
-          if (remember && onAddToAllowlist) await onAddToAllowlist(commandId);
-          const executed = appInternal.commands.executeCommandById(commandId);
-          if (executed) log('UIBridge: run-command executed:', commandId);
-          else {
-            warn('UIBridge: run-command — command not found or failed:', commandId);
-            new Notice(`${brandName()}: Could not run "${displayName}" — the command wasn't found. It may belong to a plugin that isn't enabled.`, 6000);
-          }
-        } else {
+        if (!allow) {
           if (remember && onAddToDenylist) await onAddToDenylist(commandId);
-          log('UIBridge: run-command denied by user:', commandId);
-          new Notice(`${brandName()}: Command "${displayName}" denied.`, 3000);
+          return refuse(`the user denied the command "${displayName}"`, true);
         }
+        if (remember && onAddToAllowlist) await onAddToAllowlist(commandId);
+        if (!appInternal.commands.executeCommandById(commandId)) return notFound();
+        log('UIBridge: run-command executed:', commandId);
       } else {
-        // Prompting disabled — hard block with notice
-        warn('UIBridge: run-command blocked — not in allowlist:', commandId);
-        new Notice(`${brandName()}: the agent wanted to run "${displayName}" but it isn't in the Command Allowlist. Add it in Settings → ${brandName()} to enable it.`, 8000);
+        // Prompting disabled — hard block
+        return refuse(`"${displayName}" isn't in the command allowlist (Settings → ${brandName()})`);
       }
       break;
     }
@@ -368,6 +327,7 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
     }
 
     default:
-      warn('UIBridge: unknown action:', action.action);
+      return refuse('unknown action');
   }
+  return null;
 }
