@@ -440,6 +440,8 @@ export function createAgyStreamHandler(cb: StreamCallbacks) {
         previewing = false;
         cb.onTextPreview?.('');
       }
+      // The whole step's text at once, so a code block's fence state runs across
+      // every delta of it: @@BOJU lines inside a code block stay text.
       const { clean: shown, lines } = splitBojuLines(text);
       for (const l of lines) {
         if (l.kind === 'action') cb.onAction(l.line);

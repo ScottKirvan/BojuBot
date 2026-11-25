@@ -18,13 +18,14 @@ import { SkillDef, resolveSkillsFolder, loadSkills, parseSkillFile, nameFromPath
 import type BojuBotPlugin from '../main';
 import type { ModelOption, PermissionDenial, PermissionMode } from './backends/types';
 import { extractActions, executeAction, promptPermissionRequest } from './UIBridge';
-import { BridgeRefusal, refusalNote, refusalNotice } from './utils/bridgeValidation';
+import { BridgeRefusal, placeholderProblem, refusalNote, refusalNotice } from './utils/bridgeValidation';
+import { liveBojuObjects } from './utils/bojuLines';
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
 import { MAX_QUERY_ROUNDS, queryFollowUp, queryLimitNote, searchSummary, type SearchResult } from './utils/vaultQuery';
 import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE, modeChangeNote } from './utils/modeGates';
-import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
+import { neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
 import { log, warn, estimateTokens, formatTokenCount } from './utils/logger';
 import { BACKEND_IDS, sentenceStart } from './backends';
@@ -1683,16 +1684,13 @@ export class ClaudeView extends ItemView {
             this.wireInternalLinks(el);
             // Re-render vault query result cards and store queries for export
             const replayQueries: VaultQuery[] = [];
-            for (const line of msg.content.split('\n')) {
-              if (!line.startsWith(BOJU_PREFIX)) continue;
-              try {
-                const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
-                if (!('query' in parsed)) continue;
-                const q = parsed as unknown as VaultQuery;
-                if (q.query === 'help') continue; // reference injections have no replay card
-                replayQueries.push(q);
-                void this.showQueryCard(this.messagesEl, q);
-              } catch { /* skip malformed query lines */ }
+            // Query lines inside code blocks were shown, not run: they get no card
+            for (const parsed of liveBojuObjects(msg.content)) {
+              if (!('query' in parsed)) continue;
+              const q = parsed as unknown as VaultQuery;
+              if (q.query === 'help') continue; // reference injections have no replay card
+              replayQueries.push(q);
+              void this.showQueryCard(this.messagesEl, q);
             }
             if (replayQueries.length > 0) {
               el.dataset.queries = JSON.stringify(replayQueries);
@@ -2601,7 +2599,12 @@ export class ClaudeView extends ItemView {
 
   /** Resolve a vault query, or refuse it when the mode (by default the session's) shares no vault information (#406). */
   private async resolveQueryForSession(q: VaultQuery, mode = this.coordinator.getEffectivePermissionMode()): Promise<VaultQueryResult> {
-    return refuseQuery(q, mode) ?? await resolveQuery(this.app, q);
+    const refused = refuseQuery(q, mode);
+    if (refused) return refused;
+    // A template's placeholder ("<folder>") is never a real value: say so instead of running it
+    const placeholder = placeholderProblem(q as unknown as Record<string, unknown>, 'query');
+    if (placeholder) return { query: q, result: null, error: placeholder };
+    return await resolveQuery(this.app, q);
   }
 
   /** Auto-fire a --resume turn injecting vault query results, then call unlock when done. */
@@ -2746,15 +2749,8 @@ export class ClaudeView extends ItemView {
 
   /** Parse @@BOJU_QUERY lines from raw content and resolve them to markdown. */
   private queryResultsAsMarkdown(content: string, mode: PermissionMode): Promise<string> {
-    const queries: VaultQuery[] = [];
-    for (const line of content.split('\n')) {
-      if (!line.startsWith(BOJU_PREFIX)) continue;
-      try {
-        const parsed = JSON.parse(line.slice(BOJU_PREFIX.length)) as Record<string, unknown>;
-        if (!('query' in parsed)) continue;
-        queries.push(parsed as unknown as VaultQuery);
-      } catch { /* skip malformed */ }
-    }
+    const queries = liveBojuObjects(content)
+      .filter(parsed => 'query' in parsed) as unknown as VaultQuery[];
     return this.resolveQueriesToMarkdown(queries, mode);
   }
 

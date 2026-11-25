@@ -10,18 +10,27 @@
  */
 
 import { BOJU_PREFIX } from '../constants';
+import { FenceState, nextFenceState } from './bojuLines';
 
 /**
  * The displayable part of an in-progress text block: complete lines starting
  * with the protocol prefix are dropped, and a trailing partial line that is (or
  * could still become) a protocol line is held back until it's complete.
+ * Inside a fenced code block nothing is dropped or held back: protocol lines
+ * there are text the agent is showing (see bojuLines.ts).
  */
 export function previewForDisplay(blockText: string, prefix: string = BOJU_PREFIX): string {
   if (!blockText) return '';
   const lines = blockText.split('\n');
   const tail = lines.pop() ?? '';
-  const kept = lines.filter(line => !line.startsWith(prefix));
-  const tailIsProtocol = tail.startsWith(prefix) || prefix.startsWith(tail);
+  let fence: FenceState = null;
+  const kept: string[] = [];
+  for (const line of lines) {
+    const before = fence;
+    fence = nextFenceState(before, line);
+    if (before !== null || fence !== null || !line.startsWith(prefix)) kept.push(line);
+  }
+  const tailIsProtocol = fence === null && (tail.startsWith(prefix) || prefix.startsWith(tail));
   const shownTail = tailIsProtocol ? '' : tail;
   return kept.length ? `${kept.join('\n')}\n${shownTail}` : shownTail;
 }

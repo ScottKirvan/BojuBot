@@ -6,7 +6,7 @@ import { log as LOG, warn as WARN, logv as LOGV } from '../utils/logger';
 import { claudeAuthFailure, CLAUDE_AUTH } from '../utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, parseCliCapabilities, has } from '../utils/cliCapabilities';
 import { extractResultText } from '../utils/planUsage';
-import { splitBojuLines } from '../utils/bojuLines';
+import { FenceTracker, splitBojuLines } from '../utils/bojuLines';
 import { launchCli, runCli } from './process';
 import type {
   AgentBackend,
@@ -332,6 +332,9 @@ function handleMessage(
       }
       const content = message?.content as Array<Record<string, unknown>> | undefined;
       if (content) {
+        // One fence state for the whole message: a code block opened in one
+        // text block is still open in the next, and its @@BOJU lines stay text.
+        const fence: FenceTracker = { open: null };
         for (const block of content) {
           if (block.type === 'text') {
             const raw = (block.text as string) ?? '';
@@ -343,7 +346,7 @@ function handleMessage(
               cb.onApiError?.(apiError);
               continue;
             }
-            const { clean, lines } = splitBojuLines(raw);
+            const { clean, lines } = splitBojuLines(raw, fence);
             for (const l of lines) {
               if (l.kind === 'action') cb.onAction(l.line);
               else cb.onQuery?.(l.line);

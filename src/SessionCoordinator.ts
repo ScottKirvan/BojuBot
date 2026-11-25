@@ -680,11 +680,11 @@ export class SessionCoordinator {
         // The complete block replaces its live preview.
         transcriptReply += delta;
         accumulated += delta;
-        if (this.host.isUiBridgeEnabled()) {
-          const { clean, actions } = extractActions(accumulated);
-          accumulated = clean;
-          for (const a of actions) handleAction(a);
-        }
+        // Display cleaning only (malformed protocol lines, stray "{}" lines).
+        // Never run actions from here: the backend already sent every live
+        // @@BOJU line to onAction, so any action still in the text is one it
+        // kept as text, inside a code block.
+        if (this.host.isUiBridgeEnabled()) accumulated = extractActions(accumulated).clean;
         this.emit('turn:text', accumulated, accumulated);
       },
       // Display only — never parsed for actions or queries. @@BOJU lines (and
