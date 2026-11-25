@@ -188,7 +188,9 @@ While the agent is working, tool calls appear above the response bubble in real 
 The agent can ask BojuBot about your vault instead of using its own tools or shell commands:
 
 - **Search your notes** <Badge type="warning" text="Beta" /> for a word or phrase. BojuBot looks through every note (or one folder), ignoring capitals, and returns the notes that contain it with up to three matching lines from each. A search returns at most 30 notes; when more match, the agent is told how many more so it can search more precisely.
+  It counts every match, per note and in total, so "how many times does X appear?" is answered from the search alone. It can match whole words only (so "move" doesn't find "removed") and match capitals exactly, and it also looks in the text cards of your canvases.
 - **Find files by name** <Badge type="warning" text="Beta" />: every file, of any type, whose name contains what it's looking for, in the whole vault or one folder.
+- **Find recently changed notes** <Badge type="warning" text="Beta" />: newest first, or everything changed since a date, with when each note last changed.
 - **List files** in the vault or a folder, or the folder tree a few levels deep.
 - **Backlinks, outgoing links and tags** of a note, and the notes with a given tag.
 

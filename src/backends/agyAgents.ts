@@ -26,7 +26,7 @@ import * as os from 'os';
 import { BOJU_PREFIX } from '../constants';
 
 /** Bump when the generated text changes, so the file says which version wrote it. */
-export const AGY_AGENT_VERSION = 2;
+export const AGY_AGENT_VERSION = 5;
 
 export const AGY_MAIN_AGENT = 'bojubot';
 export const AGY_CHAT_AGENT = 'bojubot-chat';
@@ -83,15 +83,25 @@ Use your built-in tools, not shell commands, for files:
 - Read a file: read_file, not cat, type or Get-Content.
 - Create a file: write_file, not echo, Set-Content or redirection.
 - Change a file: edit_file.
+- Don't create folders with shell commands (mkdir, New-Item).
 You have no tool that lists folders, finds files or searches inside them.
 For listing folders, finding files by name and searching inside notes, use BojuBot's vault queries when the session orientation describes them. Emit each on its own line:
 - List a folder: ${BOJU_PREFIX}{"query":"file-list","folder":"<folder>","mode":"inject"}
 - Find files by name: ${BOJU_PREFIX}{"query":"file-list","name":"<part of the file name>","folder":"<optional folder>","mode":"inject"}
-- Search inside notes: ${BOJU_PREFIX}{"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}
+- Search inside notes: ${BOJU_PREFIX}{"query":"search","text":"<words to find>","folder":"<optional folder>","mode":"inject"}. It counts every match (totalMatches, and matches per note), so use the counts; don't read the notes to count. Add "wholeWord":true to skip matches inside longer words, "matchCase":true for exact capitals.
+- Recently changed files: ${BOJU_PREFIX}{"query":"file-list","sort":"modified","mode":"inject"}, or "modifiedSince":"<date>" for files changed since then.
 Don't use shell commands (dir, ls, Get-ChildItem, find, grep, findstr, Select-String) for this, even when they're allowed. If the conversation doesn't describe vault queries, you can't list or search the vault: read the files you already know about, or ask the user which notes to look at.
 
 ## Renaming, moving and deleting notes
-Use the UI Bridge actions rename-file, move-file and delete-file, as the session orientation describes. Obsidian then updates every link to the note. Never rename, move or delete notes with shell commands, or by writing a copy and deleting the original. If the conversation doesn't describe the UI Bridge, ask the user to do it in Obsidian.
+Emit a UI Bridge action on its own line. Obsidian then updates every link to the note. Don't read any file first; the action is all it takes:
+- Rename: ${BOJU_PREFIX}{"action":"rename-file","path":"Untitled.md","newName":"Meeting notes.md"}
+- Move: ${BOJU_PREFIX}{"action":"move-file","path":"Untitled.md","newPath":"Archive/Untitled.md"}
+- Delete (to the trash): ${BOJU_PREFIX}{"action":"delete-file","path":"Untitled.md"}
+Never rename, move or delete notes with shell commands, with an Obsidian command (run-command), or by writing a copy and deleting the original. If the conversation doesn't describe the UI Bridge, ask the user to do it in Obsidian.
+
+## Obsidian commands
+Use run-command only for something no UI Bridge action or file tool does. Get the command IDs from BojuBot, never from a file and never by guessing:
+${BOJU_PREFIX}{"query":"help","topic":"commands","mode":"inject"}
 
 ## Shell commands
 Use run_command only when no built-in tool can do the job. If a shell command is denied, say which command you need and why, then ask for it on its own line with the UI Bridge:

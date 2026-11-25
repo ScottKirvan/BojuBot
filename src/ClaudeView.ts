@@ -22,7 +22,7 @@ import { BridgeRefusal, refusalNote, refusalNotice } from './utils/bridgeValidat
 import type { ReportPrefill } from './utils/report';
 import { SessionCoordinator } from './SessionCoordinator';
 import { VaultQuery, VaultQueryResult, resolveQuery, queryLabel, buildInjectMessage } from './QueryHandler';
-import type { SearchResult } from './utils/vaultQuery';
+import { MAX_QUERY_ROUNDS, queryFollowUp, queryLimitNote, searchSummary, type SearchResult } from './utils/vaultQuery';
 import { refuseQuery, sharesVaultInfo, canRunCommands, blockedAttachments, CHAT_ONLY_ATTACHMENT_NOTICE, modeChangeNote } from './utils/modeGates';
 import { BOJU_PREFIX, neutralizeTriggers, KOFI_URL, GITHUB_SPONSORS_URL, SUPPORT_PAGE_URL, TROUBLESHOOTING_URL } from './constants';
 import { ContextManager } from './ContextManager';
@@ -169,6 +169,8 @@ interface ActiveTurnElements {
   thanked: boolean;
   unlock: () => void;
   isInjectTurn: boolean;
+  /** Query follow-ups before this turn: 0 for the user's message, 1+ for follow-ups. */
+  queryRound: number;
 }
 
 export class ClaudeView extends ItemView {
@@ -430,7 +432,7 @@ export class ClaudeView extends ItemView {
       }
       const {
         assistantEl, statusEl, toolEventsEl, responseGroupEl,
-        toolCallCount, uiBridgeActionCount, accumulated, unlock, isInjectTurn, apiError, thanked,
+        toolCallCount, uiBridgeActionCount, accumulated, unlock, queryRound, apiError, thanked,
       } = this._activeTurnEls;
       this.cancelTextFrame(this._activeTurnEls);
       this._activeTurnEls = null;
@@ -488,7 +490,9 @@ export class ClaudeView extends ItemView {
 
       // Live status (#399): a vault-query follow-up keeps the session replying;
       // a permission request waits for the user before the turn counts as ended.
-      const continues = !this._stoppingForSwitch && !isInjectTurn && result.pendingQueries.some(q => q.mode === 'inject');
+      // Queries in a follow-up turn are answered too, up to MAX_QUERY_ROUNDS per message
+      const followUp = queryFollowUp(queryRound, result.pendingQueries);
+      const continues = !this._stoppingForSwitch && followUp.inject.length > 0;
       // Granting a request means full access, which some conversations can't
       // take (Antigravity Chat only, #403): no request card for those.
       const permissionRequest = this.coordinator.modeNeedsNewSession('full') ? null : result.pendingPermissionRequest;
@@ -503,16 +507,20 @@ export class ClaudeView extends ItemView {
         return;
       }
 
-      if (!isInjectTurn) {
-        const showQueries = result.pendingQueries.filter(q => q.mode === 'show');
-        const injectQueries = result.pendingQueries.filter(q => q.mode === 'inject');
-        for (const q of showQueries) {
-          void this.showQueryCard(responseGroupEl, q);
-        }
-        if (injectQueries.length > 0) {
-          this.handleVaultInject(injectQueries, responseGroupEl, unlock);
-          return;
-        }
+      for (const q of followUp.show) {
+        void this.showQueryCard(responseGroupEl, q);
+      }
+      if (followUp.inject.length > 0) {
+        this.handleVaultInject(followUp.inject, responseGroupEl, unlock, queryRound + 1);
+        return;
+      }
+      if (followUp.limitHit) {
+        // Shown where the user is looking, and told to the agent with the next message
+        const brand = this.plugin.brand.name;
+        this.appendMessage('system', `${brand} stopped answering the agent's vault queries: one message allows ${MAX_QUERY_ROUNDS} rounds.`);
+        const queued = this.coordinator.getPendingSystemMessage();
+        const note = queryLimitNote(brand);
+        this.coordinator.setPendingSystemMessage(queued ? `${queued}\n\n${note}` : note);
       }
 
       if (permissionRequest) {
@@ -1112,8 +1120,7 @@ export class ClaudeView extends ItemView {
       name: this.appInternal.commands.commands[id]?.name ?? id,
     }));
     this.coordinator.setPendingSystemMessage(
-      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands,
-        `${this.app.vault.configDir}/plugins/bojubot/obsidian-commands.md`),
+      modeChangeNote(this.coordinator.backend.orientation.permissions[after], before, after, commands),
     );
   }
 
@@ -1936,7 +1943,7 @@ export class ClaudeView extends ItemView {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
       toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '', pendingDisplay: '', textFrame: null,
       turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null, thanked: false,
-      unlock, isInjectTurn: false,
+      unlock, isInjectTurn: false, queryRound: 0,
     };
     this.coordinator.send(finalPrompt, prompt);
   }
@@ -2564,6 +2571,8 @@ export class ClaudeView extends ItemView {
     if (r.notes.length === 0) {
       body.createSpan({ cls: 'bojubot-vault-query-empty', text: 'No results.' });
     } else {
+      const summary = searchSummary(r);
+      if (summary) body.createDiv({ cls: 'bojubot-vault-query-empty', text: summary });
       const list = body.createEl('ul', { cls: 'bojubot-vault-query-list' });
       for (const note of r.notes) {
         const li = list.createEl('li');
@@ -2572,6 +2581,7 @@ export class ClaudeView extends ItemView {
           e.preventDefault();
           void this.app.workspace.openLinkText(note.path, '/', false);
         });
+        if (note.matches !== undefined) li.appendText(` (${note.matches})`);
         const lines = li.createEl('ul', { cls: 'bojubot-vault-query-lines' });
         for (const line of note.lines) lines.createEl('li', { text: `${line.line}: ${line.text}` });
       }
@@ -2586,7 +2596,7 @@ export class ClaudeView extends ItemView {
   }
 
   /** Auto-fire a --resume turn injecting vault query results, then call unlock when done. */
-  private handleVaultInject(queries: VaultQuery[], prevGroupEl: HTMLElement, unlock: () => void) {
+  private handleVaultInject(queries: VaultQuery[], prevGroupEl: HTMLElement, unlock: () => void, queryRound: number) {
     // Render a compact card for each inject query so the user can see what was queried
     const pending = Promise.all(queries.map(q => this.showQueryCard(prevGroupEl, q)));
 
@@ -2606,7 +2616,7 @@ export class ClaudeView extends ItemView {
       assistantEl, statusEl, streamingTextEl, toolEventsEl, tokenStatsEl, responseGroupEl,
       toolRowMap: new Map(), toolCallCount: 0, uiBridgeActionCount: 0, accumulated: '', pendingDisplay: '', textFrame: null,
       turnInputTokens: 0, turnCacheTokens: 0, turnOutputTokens: 0, apiError: null, thanked: false,
-      unlock, isInjectTurn: true,
+      unlock, isInjectTurn: true, queryRound,
     };
     // A search reads notes, so the results can take a moment: send them only to
     // the session that asked, in a panel that's still open.
@@ -2699,8 +2709,10 @@ export class ClaudeView extends ItemView {
       if (Array.isArray(r.notes)) {
         const search = r as unknown as SearchResult;
         const rows = search.notes.map(n =>
-          [`> - [[${n.path.replace(/\.md$/, '')}]]`, ...n.lines.map(l => `>   - ${l.line}: ${l.text}`)].join('\n')
+          [`> - [[${n.path.replace(/\.md$/, '')}]]${n.matches !== undefined ? ` (${n.matches})` : ''}`, ...n.lines.map(l => `>   - ${l.line}: ${l.text}`)].join('\n')
         );
+        const summary = searchSummary(search);
+        if (summary && rows.length) rows.unshift(`> ${summary}`);
         if (search.more) rows.push(`> ${search.more}`);
         blocks.push(rows.length ? `> **${label}:**\n${rows.join('\n')}` : `> **${label}:** No results.`);
         continue;

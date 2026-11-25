@@ -6,10 +6,16 @@ import { activeBrand, applyIdentityName } from './brand';
 import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
 import canvasRef from './references/canvas.md';
-import { VaultQuery, VaultQueryResult, filterFileList, inFolder, searchError, searchNotes } from './utils/vaultQuery';
+import { FileTime, VaultQuery, VaultQueryResult, canvasText, fileListError, filterFileList, inFolder, searchError, searchNotes, wantsModified, withModified } from './utils/vaultQuery';
+import { buildCommandsReference, CommandInfo } from './utils/commandsReference';
 
 export type { VaultQueryType, VaultQueryMode, VaultQuery, VaultQueryResult } from './utils/vaultQuery';
 export { queryLabel, buildInjectMessage } from './utils/vaultQuery';
+
+/** A vault file's path and last change time (0 when Obsidian has no stat for it). */
+function fileTime(app: App, path: string): FileTime {
+  return { path, mtime: app.vault.getFileByPath(path)?.stat.mtime ?? 0 };
+}
 
 /**
  * Resolve a vault query against the live vault. Async because search reads note
@@ -76,11 +82,20 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
       }
 
       case 'file-list': {
+        const listError = fileListError(query);
+        if (listError) return { query, result: null, error: listError };
         if (query.name) {
           // Find files by name: every file type (attachments, canvases), not just notes
           const files = filterFileList(app.vault.getFiles().map(f => f.path).filter(p => !isExcluded(p)), query);
           log('QueryHandler: file-list (name) —', files.length, 'files');
-          return { query, result: { files } };
+          return { query, result: wantsModified(query) ? withModified(files.map(p => fileTime(app, p)), query) : { files } };
+        }
+        if (wantsModified(query)) {
+          // Recently changed notes: a flat list with times, whatever the depth
+          const files = filterFileList(app.vault.getMarkdownFiles().map(f => f.path).filter(p => !isExcluded(p)), query);
+          const result = withModified(files.map(p => fileTime(app, p)), query);
+          log('QueryHandler: file-list (modified) —', result.files.length, 'files');
+          return { query, result };
         }
         if (query.depth !== undefined && query.depth !== 0) {
           let startFolder: TFolder | undefined;
@@ -107,14 +122,29 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
       case 'search': {
         const error = searchError(query);
         if (error) return { query, result: null, error };
-        const files = app.vault.getMarkdownFiles().filter(f => inFolder(f.path, query.folder) && !isExcluded(f.path));
-        const notes = await Promise.all(files.map(async f => ({ path: f.path, content: await app.vault.cachedRead(f) })));
-        const result = searchNotes(notes, query.text ?? '', query.folder);
+        // Notes and canvases (their text cards), like Obsidian's own search
+        const files = app.vault.getFiles().filter(f =>
+          (f.extension === 'md' || f.extension === 'canvas') && inFolder(f.path, query.folder) && !isExcluded(f.path));
+        const notes = await Promise.all(files.map(async f => {
+          const raw = await app.vault.cachedRead(f);
+          return { path: f.path, content: f.extension === 'canvas' ? canvasText(raw) : raw };
+        }));
+        const result = searchNotes(notes, query.text ?? '', query.folder, undefined, {
+          wholeWord: query.wholeWord === true,
+          matchCase: query.matchCase === true,
+        });
         log('QueryHandler: search —', result.notes.length, 'notes shown of', files.length, 'searched');
         return { query, result };
       }
 
       case 'help': {
+        // The command reference, live: agents can't always read the
+        // generated file in the config folder (agy's headless mode denies it)
+        if (query.topic === 'commands') {
+          const commands = (app as unknown as { commands: { commands: Record<string, CommandInfo> } }).commands.commands;
+          log('QueryHandler: help — injecting the command reference');
+          return { query, result: buildCommandsReference(Object.values(commands), new Date().toISOString()) };
+        }
         const refs: Record<string, string> = {
           'ui-bridge': uiBridgeRef,
           'vault-query': vaultQueryRef,
