@@ -3,7 +3,7 @@ import { log, warn } from './utils/logger';
 import { brandName } from './brand';
 import { canWrite } from './backends/modes';
 import { bridgeActionAllowed } from './utils/modeGates';
-import { BridgeRefusal, destinationProblem, knownSettingsTab, newNameProblem, noticePayload } from './utils/bridgeValidation';
+import { BridgeRefusal, destinationProblem, knownSettingsTab, newNameProblem, noticePayload, parentFolder } from './utils/bridgeValidation';
 import type { PermissionMode } from './backends/types';
 import { ReportPrefill, reportPrefill } from './utils/report';
 export { BOJU_PREFIX } from './constants';
@@ -143,6 +143,16 @@ function shown(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value) ?? 'nothing';
 }
 
+/** Run an Obsidian file operation: its error message when it throws, else null. */
+async function obsidianFailure(op: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await op();
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
 /**
  * Execute a single BojuBot UI action via the Obsidian API.
  * The 6 built-in actions execute immediately (transparency via show-notice).
@@ -204,7 +214,8 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       const newPath = file.parent && file.parent.path !== '/' ? `${file.parent.path}/${newName}` : newName;
       const renameProblem = destinationProblem(newPath, app.vault.configDir);
       if (renameProblem) return refuse(`${renameProblem} ("${newPath}")`);
-      await app.fileManager.renameFile(file, newPath);
+      const renamed = await obsidianFailure(() => app.fileManager.renameFile(file, newPath));
+      if (renamed) return refuse(`Obsidian couldn't rename it: ${renamed}`);
       break;
     }
 
@@ -214,7 +225,16 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       if (!file) return noNote(action.path);
       const moveProblem = destinationProblem(action.newPath, app.vault.configDir);
       if (moveProblem) return refuse(`${moveProblem} ("${shown(action.newPath)}")`);
-      await app.fileManager.renameFile(file, action.newPath as string);
+      const newPath = action.newPath as string;
+      // Obsidian won't move a file into a folder that doesn't exist: create it
+      // first (the path was checked above, so it's inside the vault)
+      const folder = parentFolder(newPath);
+      if (folder && !app.vault.getAbstractFileByPath(folder)) {
+        const created = await obsidianFailure(() => app.vault.createFolder(folder));
+        if (created) return refuse(`Obsidian couldn't create the folder "${folder}": ${created}`);
+      }
+      const moved = await obsidianFailure(() => app.fileManager.renameFile(file, newPath));
+      if (moved) return refuse(`Obsidian couldn't move it: ${moved}`);
       break;
     }
 
@@ -222,7 +242,8 @@ export async function executeAction(app: App, action: BojuBotAction, options: UI
       if (!canWrite(permissionMode)) return noWrites();
       const file = app.vault.getFileByPath(action.path as string);
       if (!file) return noNote(action.path);
-      await app.fileManager.trashFile(file);
+      const trashed = await obsidianFailure(() => app.fileManager.trashFile(file));
+      if (trashed) return refuse(`Obsidian couldn't delete it: ${trashed}`);
       break;
     }
 
