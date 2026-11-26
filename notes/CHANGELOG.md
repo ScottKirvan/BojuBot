@@ -7,6 +7,47 @@
     (buried in refactor commit a6aec10 — PR #205)
 -->
 
+## [3.9.0](https://github.com/ScottKirvan/BojuBot/compare/3.8.1...3.9.0) (2026-11-26)
+
+
+### Features
+
+* add session, copy and skill commands to the / menu ([3925fdd](https://github.com/ScottKirvan/BojuBot/commit/3925fdd9dce1378b5f1687aa0e604933f2c5ccc5)), closes [#323](https://github.com/ScottKirvan/BojuBot/issues/323)
+* leave chosen folders and files out of the vault tree and searches ([50cd509](https://github.com/ScottKirvan/BojuBot/commit/50cd509f8d6a7e4509dd5e383486f109cd44e613)), closes [#125](https://github.com/ScottKirvan/BojuBot/issues/125)
+* search inside conversations from the Sessions panel ([7febe3e](https://github.com/ScottKirvan/BojuBot/commit/7febe3e7865918f7cb371519aace4718287fd082)), closes [#133](https://github.com/ScottKirvan/BojuBot/issues/133)
+
+
+### Bug Fixes
+
+* add a 7-day cooldown to Dependabot version updates ([2accff2](https://github.com/ScottKirvan/BojuBot/commit/2accff237b3138a00893cc42282ce8b9dd38df75))
+* add Dependabot config for monthly grouped dependency updates ([c8bae8c](https://github.com/ScottKirvan/BojuBot/commit/c8bae8c1b4d242020a99f73d7aa151b3d5e64a5d))
+* answer vault queries the agent asks after a query result ([fecadf1](https://github.com/ScottKirvan/BojuBot/commit/fecadf162f2c7b79e1fd7987e7de2d337e1fabc9))
+* clear queued notes before building a first turn's context ([9786bd5](https://github.com/ScottKirvan/BojuBot/commit/9786bd51d19f7e1a559484e426747ab5eed5b84a))
+* count every search match, and add whole word, match case, canvases and change dates ([4c2d03c](https://github.com/ScottKirvan/BojuBot/commit/4c2d03c9410a8fc6c8e123402a8672789164d84b))
+* hide the bare "{}" line Gemini sometimes starts a reply with ([84aa666](https://github.com/ScottKirvan/BojuBot/commit/84aa6663febe2e88b9506397d2df05e8457b233a))
+* keep BojuBot's files in a _BojuBot folder in new vaults ([e539d74](https://github.com/ScottKirvan/BojuBot/commit/e539d74740b6dcf2acf2eeb00186ebc936a62501))
+* keep every queued note for the next turn instead of only the last ([e761c10](https://github.com/ScottKirvan/BojuBot/commit/e761c10a0afe1c5d482036b103973d39f45905e8))
+* keep every queued note for the next turn instead of only the last ([1ccc9a4](https://github.com/ScottKirvan/BojuBot/commit/1ccc9a4ff9d3bcf84b0768315f5b49c6a55b2346)), closes [#459](https://github.com/ScottKirvan/BojuBot/issues/459)
+* keep runtime state out of data.json so synced settings don't conflict ([1ee8ba7](https://github.com/ScottKirvan/BojuBot/commit/1ee8ba7a6d55298eda46307a939583085a787922)), closes [#447](https://github.com/ScottKirvan/BojuBot/issues/447)
+* keep session files in the config folder in every vault ([089f6fd](https://github.com/ScottKirvan/BojuBot/commit/089f6fda0b563535aee5b27750e89a7fca1fa4f2))
+* let agents search notes and find files by name through vault queries ([da3a1d1](https://github.com/ScottKirvan/BojuBot/commit/da3a1d13c3fe5ca6da7027cc43cb8d46db2d65a4))
+* let move-file move a note into a folder that doesn't exist yet ([fc21d2a](https://github.com/ScottKirvan/BojuBot/commit/fc21d2a11e0489f17177f3c6e56b79aaa10de67a))
+* make release builds reproducible ([5aec458](https://github.com/ScottKirvan/BojuBot/commit/5aec458c25c724bc9562157f9d6a6af5503e6353))
+* name the file tools the installed Antigravity CLI has ([f6c5ccb](https://github.com/ScottKirvan/BojuBot/commit/f6c5ccb36fd36a17e515b2333c007803b23855fa))
+* never run @@BOJU lines an agent shows in a code block ([7e7ba49](https://github.com/ScottKirvan/BojuBot/commit/7e7ba49d58448fa76a087ed59bd1f3148fa14280))
+* paste files of any type copied in the file manager ([1357e72](https://github.com/ScottKirvan/BojuBot/commit/1357e72a39abb4dd2c2d6db24c14ae07b5ba0cd1)), closes [#262](https://github.com/ScottKirvan/BojuBot/issues/262)
+* replace Clear current session with a Stop reply command ([500da60](https://github.com/ScottKirvan/BojuBot/commit/500da60680d50a02807a0d56d9ea3bd56d97ed0a))
+* send rename/move/delete to the UI Bridge and serve the command list as a query ([7ece766](https://github.com/ScottKirvan/BojuBot/commit/7ece766b1225ec4541e225c7cf295d1d83b47cff))
+* sentence-case UI text flagged by eslint-plugin-obsidianmd 0.5 ([b9499ce](https://github.com/ScottKirvan/BojuBot/commit/b9499ce8a642f0d7a72d8b1459e23812c018ad4c))
+* show actions BojuBot didn't run in the chat, under the reply ([efc5382](https://github.com/ScottKirvan/BojuBot/commit/efc538217cfe0ebf72491389f3cfb6f77ad99468))
+* show Gemini's generated images and save them to the vault ([02a0786](https://github.com/ScottKirvan/BojuBot/commit/02a0786b6e24637dfb71a1851ce55b6ae08f49b8)), closes [#427](https://github.com/ScottKirvan/BojuBot/issues/427)
+* steer agents to BojuBot's tools before the shell ([7360132](https://github.com/ScottKirvan/BojuBot/commit/736013210ae63dd8842cb17f6d5af314691f457f))
+* steer agents to BojuBot's tools before the shell ([e41bb8a](https://github.com/ScottKirvan/BojuBot/commit/e41bb8a196160f97ecd7333c5e302290e4a6e311)), closes [#462](https://github.com/ScottKirvan/BojuBot/issues/462)
+* tell agents about BojuBot skills and about setting changes in open sessions ([8db57a3](https://github.com/ScottKirvan/BojuBot/commit/8db57a3be8613f15a570dde15254c10a5cfde5b0))
+* tell the user and the agent when the UI Bridge doesn't run an action ([824c04b](https://github.com/ScottKirvan/BojuBot/commit/824c04be5976c899ccdf7a5b1d45d437d4bffde9))
+* validate UI Bridge action payloads before running them ([7700b40](https://github.com/ScottKirvan/BojuBot/commit/7700b4019585af8f5ae8df9bdc50b6a9dc47b93b)), closes [#172](https://github.com/ScottKirvan/BojuBot/issues/172)
+* write Gemini's instructions for Antigravity CLI 1.5 only ([2bf66b6](https://github.com/ScottKirvan/BojuBot/commit/2bf66b696422a8fcad208a70debe25b5cef03884))
+
 ## [3.8.1](https://github.com/ScottKirvan/BojuBot/compare/3.8.0...3.8.1) (2026-10-28)
 
 
