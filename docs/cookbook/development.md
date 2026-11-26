@@ -320,3 +320,68 @@ Bridge software engineering, repository telemetry, documentation maintenance, an
   ```
 - **Discussion & Nuances:** Catches low-level standards violations before you spend human review time on architectural choices.
 - **See Also:** [Recipe 8.5: Autonomous Subagent Assignment Generator](#recipe-8-5-autonomous-subagent-assignment-generator)
+
+---
+
+## Recipe 8.11: BojuBot Skill to Claude Code Skill Exporter
+
+- **Difficulty:** 🟡 Intermediate
+- **Problem:** A BojuBot skill only runs when you pick it from the `/` menu or `Ctrl+P`. Claude Code has its own skills, which it loads by itself when a skill's description matches the task, but it can't read BojuBot's form fields or placeholders.
+- **Solution:** Converts a BojuBot skill into a Claude Code skill: a `SKILL.md` with `name` and `description` frontmatter, the form fields rewritten as an Inputs section, and the placeholders turned into references to those inputs. Writes it to the vault's project skills or to your personal skills.
+- **Prerequisites:** None.
+- **Permission Level:** `Standard` (project skills) or `Full Access` (personal skills).
+- **Context Workflow:** Modal input (note picker for the skill to export).
+- **Recipe / Skill:** Save as `export-claude-skill.md`:
+  ```markdown
+  ---
+  category: Skills
+  description: Export a BojuBot skill as a Claude Code skill that loads on its own
+  params:
+    - id: source_skill
+      type: obsidianmd_note
+      label: BojuBot skill to export
+      validations:
+        required: true
+    - id: target
+      type: dropdown
+      label: Export to
+      options: [Project skills (this vault), Personal skills (all projects)]
+      default: Project skills (this vault)
+    - id: fallback_description
+      type: textarea
+      label: Description (used if the skill has none)
+      placeholder: When should Claude use this skill?
+  ---
+  Convert the attached BojuBot skill into a Claude Code skill and write it to disk.
+
+  Export to: {{target}}
+  - Project skills: `.claude/skills/<name>/SKILL.md` at the vault root.
+  - Personal skills: `~/.claude/skills/<name>/SKILL.md` in my home folder.
+
+  <fallback_description>
+  {{fallback_description}}
+  </fallback_description>
+
+  Build the new file like this:
+
+  1. **Name.** Take the skill's file name without `.md`. If the file is named `SKILL`, use the name of the folder it sits in instead. Search the vault for `SKILL.md` files to find it, and ask me if more than one could be the one. Lowercase the name and replace spaces and underscores with hyphens. Use it for the `name` field and for the folder name.
+  2. **Description.** Use the skill's `description`. Claude Code decides when to load a skill from this text, so it can't be empty. If it is empty, use the fallback description above. If that is empty too, ask me for one and wait for my answer before you write anything.
+  3. **Frontmatter.** The new frontmatter has `name` and `description`. Leave out `params`, `autorun` and `category`: they only mean something to BojuBot. If the skill has single-line `input` fields, you may also list their ids under `arguments:`, and refer to them in the body as a dollar sign followed by the id, so values typed after the skill's name fill them in.
+  4. **Inputs.** If the skill has `params`, add an `## Inputs` section at the top of the body. List each field with its label, type, options and default, where it has them. For note-picker fields (`obsidianmd_note` or `note`), write: "Ask the user for the path of a vault note, then read that note." End the section with: "Ask the user for any input you don't have before you start."
+  5. **Placeholders.** The body refers to each field by its id wrapped in double curly braces. Replace each one with a plain reference to the matching input, such as "the Topic input". For note fields, refer to the note you read. Leave every token that starts with a dollar sign exactly as it is: Claude Code fills those in itself.
+  6. **Everything else.** Keep the rest of the body as it is.
+
+  Before you write, check whether the target file already exists. If it does, tell me what's there and ask before you overwrite it.
+
+  When you're done, tell me the full path of the file you wrote.
+  ```
+- **Discussion & Nuances:** The two formats are close already. A skill body is plain prompt text in both, and BojuBot understands the `<Name>/SKILL.md` folder layout and Claude Code's `$ARGUMENTS` / `$0` tokens. The export only has to move what the form did into words the model can act on. The skill runs on either agent: Gemini writes the same file Claude would.
+  > [!WARNING] Personal Skills Live Outside the Vault
+  > `~/.claude/skills/` is in your home folder, outside the vault. In `Standard` mode the write is denied, so switch the session to **Full access** first, or upgrade it from the card BojuBot shows when the write is denied. Project skills go in `.claude/skills/` at the vault root and stay inside the vault.
+
+  > [!TIP] Why the Skill Spells Out Its Own Syntax
+  > BojuBot fills in the skill before the agent sees it: every <code v-pre>{{id}}</code> placeholder and every `$ARGUMENTS`, `$0` or `$id` token is replaced or removed. That's why the body describes them in words ("an id wrapped in double curly braces", "a dollar sign followed by the id") instead of writing them out. Keep that in mind when you edit it.
+
+  > [!NOTE] Hidden Folder
+  > Obsidian hides folders whose names start with a dot, so `.claude/skills/` won't appear in the file explorer. The agent reports the path it wrote; open the file from your system's file manager or an editor.
+- **See Also:** [Skills guide](../guide/skills.md), [Recipe 8.5: Autonomous Subagent Assignment Generator](#recipe-8-5-autonomous-subagent-assignment-generator)

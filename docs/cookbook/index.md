@@ -86,6 +86,7 @@ Inspired by the classic O'Reilly Cookbook pattern, every entry in this collectio
 - 🔴 [Recipe 8.8: Work Session Flow Reconstructor](./development.md#recipe-8-8-work-session-flow-reconstructor)
 - 🔴 [Recipe 8.9: Bug Post-Mortem & Knowledge Base Extractor](./development.md#recipe-8-9-bug-post-mortem-knowledge-base-extractor)
 - 🔴 [Recipe 8.10: Autonomous PR Reviewer & Sanity Checker](./development.md#recipe-8-10-autonomous-pr-reviewer-sanity-checker)
+- 🟡 [Recipe 8.11: BojuBot Skill to Claude Code Skill Exporter](./development.md#recipe-8-11-bojubot-skill-to-claude-code-skill-exporter)
 
 ---
 
