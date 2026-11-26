@@ -1100,6 +1100,21 @@ export default class BojuBotPlugin extends Plugin {
     for (const view of this.chatViews()) view.injectAllowlistUpdate(newAllowlist);
   }
 
+  /** Tell every open session about agent-relevant setting changes (#461). */
+  private tellSessionsAboutSettings(): void {
+    for (const view of this.chatViews()) void view.onAgentSettingsChanged();
+  }
+
+  /** An agent-relevant setting changed: tell open sessions after a pause, so
+   *  typing a path doesn't queue a note per keystroke. */
+  notifyAgentSettingsChanged = debounce(() => this.tellSessionsAboutSettings(), 1000, true);
+
+  /** Settings closed: tell open sessions now about a change still waiting out the pause. */
+  flushAgentSettingsChanged(): void {
+    this.notifyAgentSettingsChanged.cancel();
+    this.tellSessionsAboutSettings();
+  }
+
   reconfigureLogger() {
     initLogger(this.getVaultRoot(), {
       enabled: this.settings.logEnabled,

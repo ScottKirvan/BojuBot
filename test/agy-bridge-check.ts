@@ -105,7 +105,7 @@ function runTurn(binary: string, cwd: string, prompt: string, model?: string): P
 async function checkModel(binary: string, vault: string, template: string, model?: string): Promise<void> {
   const orientation = renderOrientation(template, {
     identityName: 'BojuBot', supportLine: 'https://github.com/ScottKirvan/BojuBot', cwdDisplay: 'vault root',
-    customCwd: false, permissionMode: 'standard', backend: ANTIGRAVITY_ORIENTATION,
+    customCwd: false, permissionMode: 'standard', backend: ANTIGRAVITY_ORIENTATION, skillsFolder: '_BojuBot/Skills',
   });
   let lines = 0, invalid = 0, passed = 0;
   console.log(`\n=== ${model ?? 'Antigravity default model'}`);

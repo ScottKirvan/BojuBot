@@ -11,6 +11,8 @@ export interface OrientationVars {
   customCwd: boolean;
   permissionMode: PermissionMode;
   backend: BackendOrientation;
+  /** Where BojuBot skills go, as named to the agent (#460). */
+  skillsFolder: string;
 }
 
 /**
@@ -65,5 +67,6 @@ export function renderOrientation(template: string, v: OrientationVars): string 
     .replace('{{READ_TOOL}}', v.backend.readToolHint)
     .replace('{{SEARCH_TOOLS}}', v.backend.searchToolHint ? ` (or ${v.backend.searchToolHint})` : '')
     .replace('{{EDIT_TOOL}}', v.backend.editToolHint)
-    .replace('{{WRITE_FOLDERS}}', v.backend.writeFoldersNote ? ` (${v.backend.writeFoldersNote})` : '');
+    .replace('{{WRITE_FOLDERS}}', v.backend.writeFoldersNote ? ` (${v.backend.writeFoldersNote})` : '')
+    .replace('{{SKILLS_FOLDER}}', v.skillsFolder);
 }

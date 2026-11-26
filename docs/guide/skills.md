@@ -117,6 +117,12 @@ This matters most for free-text fields (`input`, `textarea`) where the user migh
 
 Skills reload each time you open the `/` menu, so changes take effect immediately with no restart.
 
+## Having the agent write one
+
+Ask in plain words: *"Make a skill that summarizes the open note."* The agent knows where your skills folder is and reads BojuBot's skill reference before writing the file, so the skill lands in the folder in the right format and shows up in the `/` menu. When you say "skill", the agent takes it to mean a BojuBot skill, not one of its own Claude Code or Antigravity skills; say so if you mean those. If you change the skills folder, open sessions are told the new location with your next message.
+
+Writing a skill needs Standard or Full access. In Read only the agent can explain skills and show you the file to create.
+
 ## Examples
 
 ### Simple autorun

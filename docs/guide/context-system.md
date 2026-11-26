@@ -2,6 +2,8 @@
 
 BojuBot injects context at the start of each new session so the agent understands your vault before you ask your first question. Nothing extra is injected on later turns: those resume the same conversation, which is far cheaper.
 
+When you change a setting that this context is built from — the context file, **Autonomous memory**, the memory size cap, the skills folder, the vault tree depth, vault exclusions or minimal mode — open sessions are told with your next message: a short note saying what changed, with the new vault tree or context file when that's what changed. Change a setting and change it back, and nothing is sent. Chat only sessions aren't told anything about the vault.
+
 ---
 
 ## 1. System Orientation
