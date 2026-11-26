@@ -6,6 +6,7 @@ import { activeBrand, applyIdentityName } from './brand';
 import uiBridgeRef from './references/ui-bridge.md';
 import vaultQueryRef from './references/vault-query.md';
 import canvasRef from './references/canvas.md';
+import skillsRef from './references/skills.md';
 import { FileTime, VaultQuery, VaultQueryResult, canvasText, fileListError, filterFileList, inFolder, searchError, searchNotes, wantsModified, withModified } from './utils/vaultQuery';
 import { buildCommandsReference, CommandInfo } from './utils/commandsReference';
 
@@ -149,6 +150,7 @@ export async function resolveQuery(app: App, query: VaultQuery): Promise<VaultQu
           'ui-bridge': uiBridgeRef,
           'vault-query': vaultQueryRef,
           'canvas': canvasRef,
+          'skills': skillsRef,
         };
         const ref = query.topic ? refs[query.topic] : null;
         if (!ref) return { query, result: null, error: `unknown help topic: ${query.topic ?? '(none)'}` };

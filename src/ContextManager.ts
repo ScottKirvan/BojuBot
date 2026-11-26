@@ -9,6 +9,8 @@ import orientationTemplate from './orientation.md';
 import { renderOrientation } from './utils/orientation';
 import { allowedCommandsSection } from './utils/modeGates';
 import { activeBrand, resolveIdentityName, DEFAULT_BRAND } from './brand';
+import { agentSkillsFolder, contextFileBlock, isOverCap, memoryInstruction, vaultTreeBlock } from './utils/settingsNotes';
+import { defaultStoragePaths } from './utils/storageLayout';
 
 export class ContextManager {
   needsCompaction = false;
@@ -31,6 +33,8 @@ export class ContextManager {
     /** Ask the agent to flag thank-yous (#385). Off when the card can't show:
      *  opted out of support messages, or a white-labeled build. */
     private thanksHook: boolean = false,
+    /** The skills folder as named to the agent (`agentSkillsFolder()`); '' = the default. */
+    private skillsFolder: string = '',
   ) { }
 
   async buildSessionContext(): Promise<string> {
@@ -69,6 +73,7 @@ export class ContextManager {
       customCwd: !!this.cwd && this.cwd !== this.vaultRoot,
       permissionMode: this.permissionMode,
       backend: this.orientation,
+      skillsFolder: this.skillsFolder || agentSkillsFolder('', defaultStoragePaths(brand.name).skills),
     });
 
     // Chat only and Read only refuse run-command, so don't list commands or invite it (#406)
@@ -102,7 +107,7 @@ export class ContextManager {
       // Layer 1: Vault tree (folder/file names only — no content)
       const tree = buildVaultTree(this.app.vault, this.vaultTreeDepth);
       if (tree) {
-        const treeBlock = `## Vault structure\n\`\`\`\n${tree}\n\`\`\``;
+        const treeBlock = vaultTreeBlock(tree);
         parts.push(treeBlock);
         layerBreakdown['vault-tree'] = {
           text: tree,
@@ -119,15 +124,11 @@ export class ContextManager {
         if (contextFileContent.trim()) {
           const cap = this.contextFileSizeCapTokens;
           const contentTokens = estimateTokens(contextFileContent);
-          if (cap > 0 && contentTokens > cap) {
+          if (isOverCap(contentTokens, cap)) {
             this.needsCompaction = true;
-            contextFileContent +=
-              `\n\n[Your memory file is ~${contentTokens} tokens, over your ${cap}-token cap. ` +
-              `Before this session ends, compact it: summarize redundant entries, drop outdated observations, ` +
-              `keep high-signal facts. Write the result back to \`${this.contextFilePath}\`.]`;
             log(`Context file exceeded cap (${cap} tokens, actual ~${contentTokens}) — compaction instruction injected.`);
           }
-          const ctxBlock = `## Vault context\n${contextFileContent.trim()}`;
+          const ctxBlock = contextFileBlock(contextFileContent, this.contextFilePath, contentTokens, cap);
           parts.push(ctxBlock);
           layerBreakdown['context-file'] = {
             text: contextFileContent,
@@ -141,14 +142,7 @@ export class ContextManager {
 
       // Layer 3: Memory instruction (only when autonomous memory is enabled)
       if (this.autonomousMemory) {
-        const memInstruction =
-          `## Your persistent memory\n` +
-          `The file \`${this.contextFilePath}\` is your persistent memory across sessions. ` +
-          `It is injected at the start of every session.\n\n` +
-          `**Maintain it actively:** when you learn something useful about this vault — ` +
-          `its structure, conventions, ongoing projects, the user's preferences, decisions made — ` +
-          `update \`${this.contextFilePath}\` using ${this.orientation.editToolHint}. ` +
-          `Keep it concise and high-signal. Do not ask permission; just do it.`;
+        const memInstruction = memoryInstruction(this.contextFilePath, this.orientation.editToolHint);
         parts.push(memInstruction);
         layerBreakdown['memory-instruction'] = {
           text: memInstruction,

@@ -11,6 +11,7 @@ import { GITHUB_SPONSORS_URL, KOFI_URL, SUPPORT_PAGE_URL } from './constants';
 import { renderSettingDefinitions } from './settingsFallback';
 import { defaultStoragePaths, STORAGE_LAYOUT_VERSION } from './utils/storageLayout';
 import { ensureParentFolder } from './utils/vaultFolders';
+import { AGENT_SETTING_KEYS } from './utils/settingsNotes';
 import {
   asText,
   BrandField,
@@ -200,6 +201,8 @@ export class BojuBotSettingsTab extends PluginSettingTab {
   plugin: BojuBotPlugin;
   /** Cleanups returned by render callbacks the fallback renderer drew. */
   private fallbackCleanups: (() => void)[] = [];
+  /** An agent-relevant setting changed while the tab was open (#461). */
+  private agentSettingsChanged = false;
   /** A binary path being typed: find and probe the agent once typing pauses. */
   private redetect: Record<BackendId, () => void> = {
     'claude-code': debounce(() => this.redetectBinary('claude-code'), 800, true),
@@ -278,6 +281,11 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     }
     await this.plugin.saveSettings();
 
+    if (AGENT_SETTING_KEYS.has(key)) {
+      this.agentSettingsChanged = true;
+      this.plugin.notifyAgentSettingsChanged();
+    }
+
     switch (key) {
       case 'permissionMode':
         this.plugin.notifyDefaultPermissionChanged();
@@ -318,6 +326,10 @@ export class BojuBotSettingsTab extends PluginSettingTab {
     this.runFallbackCleanups();
     super.hide();
     this.plugin.checkSessionsDirChanged();
+    if (this.agentSettingsChanged) {
+      this.agentSettingsChanged = false;
+      this.plugin.flushAgentSettingsChanged();
+    }
   }
 
   // ── Re-rendering ──────────────────────────────────────────────────────────

@@ -14,8 +14,11 @@ import type { PermissionMode } from '../backends/types';
  *   queued before it except `event` notes. Notes queued after it append as usual.
  * - `event` notes report something that happened (an action BojuBot didn't
  *   run, the query-round limit): each one is kept, never replaced.
+ * - `settings` notes (#461) say what changed since the agent was last told, so
+ *   each one replaces the last, and `dropSystemNote()` removes it when the
+ *   settings are back to what the agent knows.
  */
-export type SystemNoteKind = 'mode' | 'allowlist' | 'refresh' | 'event';
+export type SystemNoteKind = 'mode' | 'allowlist' | 'refresh' | 'event' | 'settings';
 
 export type SystemNoteInput =
   | {
@@ -26,7 +29,7 @@ export type SystemNoteInput =
      *  with the first queued change's `from` when two mode changes combine. */
     describe: (from: PermissionMode) => string;
   }
-  | { kind: 'allowlist' | 'refresh' | 'event'; text: string };
+  | { kind: 'allowlist' | 'refresh' | 'event' | 'settings'; text: string };
 
 export interface QueuedSystemNote {
   kind: SystemNoteKind;
@@ -47,6 +50,16 @@ export function queueSystemNote(queue: readonly QueuedSystemNote[], note: System
   const from = previous?.from ?? note.from;
   if (from === note.to) return rest;
   return [...rest, { kind: 'mode', text: note.describe(from), from }];
+}
+
+/** The queue without notes of `kind`. Never changes `queue`. */
+export function dropSystemNote(queue: readonly QueuedSystemNote[], kind: SystemNoteKind): QueuedSystemNote[] {
+  return queue.filter(n => n.kind !== kind);
+}
+
+/** Whether a note of `kind` is queued. */
+export function hasSystemNote(queue: readonly QueuedSystemNote[], kind: SystemNoteKind): boolean {
+  return queue.some(n => n.kind === kind);
 }
 
 /** The queued notes as one text, in order, or null when none are queued. */

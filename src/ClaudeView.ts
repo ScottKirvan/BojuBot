@@ -31,7 +31,11 @@ import { log, warn, estimateTokens, formatTokenCount } from './utils/logger';
 import { BACKEND_IDS, sentenceStart } from './backends';
 import { modeChangeNotice } from './backends/modes';
 import type { BackendId } from './backends/types';
-import { resolveExportFolder, isWhiteLabeled } from './brand';
+import { resolveExportFolder, isWhiteLabeled, activeBrand, resolveIdentityName } from './brand';
+import { AgentSettings, agentSkillsFolder, settingsNote } from './utils/settingsNotes';
+import { defaultStoragePaths } from './utils/storageLayout';
+import { buildVaultTree } from './utils/fileTree';
+import { parseExclusions } from './utils/vaultExclusions';
 import { extractToolDetail } from './utils/toolFormatting';
 import { formatApiError, ApiError, claudeAuthReply, parseUnrecognizedModel, unrecognizedModelNotice } from './utils/apiError';
 import { repairLinks } from './utils/linkRepair';
@@ -211,6 +215,11 @@ export class ClaudeView extends ItemView {
   /** A mode picked while a reply ran that this session's conversation can't
    *  continue in: the next send starts a new session in it. */
   private pendingNewSessionMode: PermissionMode | null = null;
+  /** The settings this session's agent was told (#461): at its first message,
+   *  a context refresh, or the last settings note sent. Null until a session opens. */
+  private _toldSettings: AgentSettings | null = null;
+  /** The settings the queued settings note describes; told once it's sent. */
+  private _queuedSettings: AgentSettings | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: BojuBotPlugin) {
     super(leaf);
@@ -1147,6 +1156,73 @@ export class ClaudeView extends ItemView {
     this._customSuppressVaultContext = false;
     this.pendingNewSessionMode = null;
     this.coordinator.clearSystemNotes();
+    // A reopened session started before this run: the best guess at what it
+    // was told is today's settings. A new one is told at its first message.
+    this._toldSettings = this.agentSettings();
+    this._queuedSettings = null;
+  }
+
+  /** The skills folder as named to the agent (#460). */
+  private agentSkillsFolder(): string {
+    return agentSkillsFolder(this.plugin.settings.commandsFolder ?? '', defaultStoragePaths(activeBrand().name).skills);
+  }
+
+  /** The agent-relevant settings as they are now (#461). */
+  private agentSettings(): AgentSettings {
+    const s = this.plugin.settings;
+    return {
+      minimalMode: s.minimalMode,
+      contextFilePath: s.contextFilePath,
+      autonomousMemory: s.autonomousMemory,
+      contextFileSizeCapTokens: s.contextFileSizeCapTokens,
+      skillsFolder: this.agentSkillsFolder(),
+      vaultTreeDepth: s.vaultTreeDepth,
+      vaultExclusions: parseExclusions(s.vaultExclusions ?? '').join('\n'),
+    };
+  }
+
+  /**
+   * Settings the agent's context was built from changed (#461; debounced by
+   * the plugin). Queues one note with what differs from what the agent was
+   * told, replacing the last one, or drops it when nothing differs any more.
+   */
+  async onAgentSettingsChanged(): Promise<void> {
+    // No conversation yet: the first message builds the context from today's settings
+    if (!this.coordinator.sessionId) return;
+    const now = this.agentSettings();
+    const told = this._toldSettings;
+    if (!told) { this._toldSettings = now; return; }
+    const file = this.app.vault.getFileByPath(now.contextFilePath);
+    let contextFile: { content: string; tokens: number } | null = null;
+    if (file) {
+      const content = neutralizeTriggers(await this.app.vault.read(file));
+      contextFile = { content, tokens: estimateTokens(content) };
+    }
+    const note = settingsNote(told, now, {
+      mode: this.coordinator.getEffectivePermissionMode(),
+      rawSession: this.coordinator.rawSession,
+      suppressVaultContext: this.coordinator.suppressVaultContext,
+    }, {
+      identityName: resolveIdentityName(activeBrand()),
+      tree: buildVaultTree(this.app.vault, now.vaultTreeDepth),
+      contextFile,
+      editToolHint: this.coordinator.backend.orientation.editToolHint,
+    });
+    if (note.kind === 'none') {
+      this.coordinator.dropSystemNote('settings');
+      this._queuedSettings = null;
+    } else if (note.kind === 'note') {
+      this.coordinator.queueSystemNote({ kind: 'settings', text: note.text });
+      this._queuedSettings = now;
+      log('Settings note queued for the next message');
+    } else {
+      // Minimal mode is off: the session never got BojuBot's context, so send all of it
+      const context = await this.buildCurrentContext();
+      this.coordinator.queueSystemNote({ kind: 'refresh', text: `[System: The user turned off minimal mode. Your session context follows.]\n\n${context}` });
+      this._toldSettings = now;
+      this._queuedSettings = null;
+      log('Minimal mode turned off: full context queued for the next message');
+    }
   }
 
   /**
@@ -1603,7 +1679,17 @@ export class ClaudeView extends ItemView {
       return;
     }
 
-    const effectiveMode = this.coordinator.getEffectivePermissionMode();
+    const told = this.agentSettings();
+    const context = await this.buildCurrentContext();
+    // Replaces every note queued so far: the full context covers them (#459)
+    this.coordinator.queueSystemNote({ kind: 'refresh', text: `[System: Session context refreshed at user request.]\n\n${context}` });
+    this._toldSettings = told;
+    this._queuedSettings = null;
+    this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
+  }
+
+  /** The open session's full context as of now, for a refresh. */
+  private async buildCurrentContext(): Promise<string> {
     const ctx = new ContextManager(
       this.app,
       this.coordinator.backend.orientation,
@@ -1611,7 +1697,7 @@ export class ClaudeView extends ItemView {
       this.plugin.settings.autonomousMemory,
       this.plugin.settings.vaultTreeDepth,
       this.plugin.settings.commandAllowlist,
-      effectiveMode,
+      this.coordinator.getEffectivePermissionMode(),
       this.plugin.settings.contextFileSizeCapTokens,
       this.plugin.settings.minimalMode || this.coordinator.rawSession,
       false,
@@ -1619,11 +1705,9 @@ export class ClaudeView extends ItemView {
       '',
       '',
       this.thanksHookEnabled(),
+      this.agentSkillsFolder(),
     );
-    const context = await ctx.buildSessionContext();
-    // Replaces every note queued so far: the full context covers them (#459)
-    this.coordinator.queueSystemNote({ kind: 'refresh', text: `[System: Session context refreshed at user request.]\n\n${context}` });
-    this.appendMessage('system', 'Context refresh queued — will be sent with your next message.');
+    return ctx.buildSessionContext();
   }
 
   /** The session file ID open in this panel, if any. */
@@ -1917,7 +2001,10 @@ export class ClaudeView extends ItemView {
         effectiveCwd,
         vaultRoot,
         this.thanksHookEnabled(),
+        this.agentSkillsFolder(),
       );
+      this._toldSettings = this.agentSettings();
+      this._queuedSettings = null;
       this._customSuppressVaultContext = false;
       this._customInitialInstructions = '';
       // The full context describes the current mode and allowlist, so notes
@@ -1938,6 +2025,10 @@ export class ClaudeView extends ItemView {
       }
     } else {
       const pending = this.coordinator.takeSystemNotes();
+      if (this._queuedSettings) {
+        this._toldSettings = this._queuedSettings;
+        this._queuedSettings = null;
+      }
       if (pending) {
         finalPrompt = `<bojubot-context type="system-message">${pending}</bojubot-context>\n\n${finalPrompt}`;
       }

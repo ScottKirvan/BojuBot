@@ -23,7 +23,9 @@ import { parseStreamOutput, permissionArgs, buildSpawnArgs, claudeCodeBackend, C
 import { canWrite, resolveSpawnCwd, modeChangeNotice } from '../src/backends/modes';
 import { splitBojuLines, nextFenceState, fencedLines, parseBojuLine, liveBojuObjects, FenceTracker } from '../src/utils/bojuLines';
 import { renderOrientation, applyModeTags } from '../src/utils/orientation';
-import { queueSystemNote, joinSystemNotes } from '../src/utils/systemNotes';
+import { queueSystemNote, joinSystemNotes, dropSystemNote, hasSystemNote } from '../src/utils/systemNotes';
+import { settingsNote, agentSkillsFolder, memoryInstruction, compactionInstruction, contextFileBlock, vaultTreeBlock } from '../src/utils/settingsNotes';
+import type { AgentSettings, SessionScope, SettingsNoteInputs, SettingsNote } from '../src/utils/settingsNotes';
 import type { QueuedSystemNote, SystemNoteInput } from '../src/utils/systemNotes';
 import { sharesVaultInfo, canRunCommands, queryAllowed, refuseQuery, bridgeActionAllowed, needsFreshSessionForChatOnly, blockedAttachments, CHAT_ONLY_QUERY_REFUSAL, NO_COMMANDS_REFUSAL, allowedCommandsSection, modeChangeNote } from '../src/utils/modeGates';
 import { getBackend, DEFAULT_BACKEND_ID, BACKEND_IDS, isBackendId } from '../src/backends';
@@ -2484,6 +2486,7 @@ describe('renderOrientation', () => {
     identityName: 'BojuBot',
     supportLine: 'https://example.com',
     cwdDisplay: 'vault root',
+    skillsFolder: '_BojuBot/Skills',
     customCwd: false,
     permissionMode: 'standard' as const,
     backend: CLAUDE_CODE_ORIENTATION,
@@ -6236,7 +6239,7 @@ describe('applyModeTags tool-order tags (#462)', () => {
 
 describe('renderOrientation tool order (#462)', () => {
   const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
-  const base = { identityName: 'BojuBot', supportLine: 'https://example.com', cwdDisplay: 'vault root', customCwd: false };
+  const base = { identityName: 'BojuBot', supportLine: 'https://example.com', cwdDisplay: 'vault root', customCwd: false, skillsFolder: '_BojuBot/Skills' };
   type Mode = 'restricted' | 'readonly' | 'standard' | 'full';
   const section = (backend: typeof CLAUDE_CODE_ORIENTATION, permissionMode: Mode) => {
     const out = renderOrientation(template, { ...base, backend, permissionMode });
@@ -6344,6 +6347,7 @@ describe('renderOrientation per permission mode (#406)', () => {
     identityName: 'BojuBot',
     supportLine: 'https://example.com',
     cwdDisplay: 'vault root',
+    skillsFolder: '_BojuBot/Skills',
     customCwd: false,
     backend: CLAUDE_CODE_ORIENTATION,
   };
@@ -7656,5 +7660,174 @@ describe('vault exclusions (#125)', () => {
     const bare = ['LICENSE', 'Makefile', 'README'];
     assert.deepEqual(summarizeFileNames(bare, 2), bare);
     assert.equal(TREE_COLLAPSE_THRESHOLD, 30);
+  });
+});
+
+describe('settingsNote (#461)', () => {
+  const told: AgentSettings = {
+    minimalMode: false,
+    contextFilePath: '_BojuBot/_bojubot-context.md',
+    autonomousMemory: true,
+    contextFileSizeCapTokens: 0,
+    skillsFolder: '_BojuBot/Skills',
+    vaultTreeDepth: 0,
+    vaultExclusions: '',
+  };
+  const scope: SessionScope = { mode: 'standard', rawSession: false, suppressVaultContext: false };
+  const inputs: SettingsNoteInputs = { identityName: 'BojuBot', tree: '', contextFile: { content: 'memory', tokens: 10 }, editToolHint: 'the Edit tool' };
+  const text = (note: SettingsNote) => (note.kind === 'note' ? note.text : null);
+
+  test('nothing changed: no note', () => {
+    assert.deepEqual(settingsNote(told, { ...told }, scope, inputs), { kind: 'none' });
+  });
+
+  test('skills folder: names the new and old folders', () => {
+    const t = text(settingsNote(told, { ...told, skillsFolder: 'Prompts' }, scope, inputs));
+    assert.equal(t, '[System: The user changed BojuBot settings.\n\nBojuBot skills now go in `Prompts` (was `_BojuBot/Skills`). Write new skills there.]');
+  });
+
+  test('context file: new path, where memory goes, and its content', () => {
+    const t = text(settingsNote(told, { ...told, contextFilePath: 'Memory.md' }, scope, inputs)) ?? '';
+    assert.ok(t.includes('The vault context file is now `Memory.md` (was `_BojuBot/_bojubot-context.md`).'));
+    assert.ok(t.includes("don't write to `_BojuBot/_bojubot-context.md`"));
+    assert.ok(t.includes('## Vault context\nmemory'));
+  });
+
+  test("context file that doesn't exist or is empty: said so, no content block", () => {
+    const missing = text(settingsNote(told, { ...told, contextFilePath: 'New.md' }, scope, { ...inputs, contextFile: null })) ?? '';
+    assert.ok(missing.includes("It doesn't exist yet."));
+    assert.ok(!missing.includes('## Vault context'));
+    const empty = text(settingsNote(told, { ...told, contextFilePath: 'New.md' }, scope, { ...inputs, contextFile: { content: '  \n', tokens: 0 } })) ?? '';
+    assert.ok(empty.includes("It's empty."));
+  });
+
+  test('autonomous memory off, then on: stop note, then the full memory instruction', () => {
+    const off = text(settingsNote(told, { ...told, autonomousMemory: false }, scope, inputs)) ?? '';
+    assert.ok(off.includes('Autonomous memory is off: stop updating `_BojuBot/_bojubot-context.md` on your own.'));
+    const on = text(settingsNote({ ...told, autonomousMemory: false }, told, scope, inputs)) ?? '';
+    assert.ok(on.includes(memoryInstruction('_BojuBot/_bojubot-context.md', 'the Edit tool')));
+  });
+
+  test('size cap: stated, with the compaction instruction when the file is over it', () => {
+    const under = text(settingsNote(told, { ...told, contextFileSizeCapTokens: 500 }, scope, inputs)) ?? '';
+    assert.ok(under.includes("The memory file's size cap is now 500 tokens."));
+    assert.ok(!under.includes('compact it'));
+    const over = text(settingsNote(told, { ...told, contextFileSizeCapTokens: 5 }, scope, inputs)) ?? '';
+    assert.ok(over.includes(compactionInstruction('_BojuBot/_bojubot-context.md', 10, 5)));
+    const removed = text(settingsNote({ ...told, contextFileSizeCapTokens: 5 }, told, scope, inputs)) ?? '';
+    assert.ok(removed.includes('The memory file no longer has a size cap.'));
+  });
+
+  test('size cap without autonomous memory: no note', () => {
+    const noMemory = { ...told, autonomousMemory: false };
+    assert.deepEqual(settingsNote(noMemory, { ...noMemory, contextFileSizeCapTokens: 5 }, scope, inputs), { kind: 'none' });
+  });
+
+  test('tree depth or exclusions: the fresh tree, or a note that none is sent', () => {
+    const withTree = { ...inputs, tree: 'Notes/\n  a.md' };
+    const deeper = text(settingsNote(told, { ...told, vaultTreeDepth: 2 }, scope, withTree)) ?? '';
+    assert.ok(deeper.includes(vaultTreeBlock('Notes/\n  a.md')));
+    const excluded = text(settingsNote({ ...told, vaultTreeDepth: 2 }, { ...told, vaultTreeDepth: 2, vaultExclusions: 'Private' }, scope, withTree)) ?? '';
+    assert.ok(excluded.includes(vaultTreeBlock('Notes/\n  a.md')));
+    const off = text(settingsNote({ ...told, vaultTreeDepth: 2 }, told, scope, inputs)) ?? '';
+    assert.ok(off.includes('no longer sends a vault tree'));
+  });
+
+  test('Chat only and raw sessions: never a note', () => {
+    const changed = { ...told, skillsFolder: 'Prompts', contextFilePath: 'Memory.md' };
+    assert.deepEqual(settingsNote(told, changed, { ...scope, mode: 'restricted' }, inputs), { kind: 'none' });
+    assert.deepEqual(settingsNote(told, changed, { ...scope, rawSession: true }, inputs), { kind: 'none' });
+  });
+
+  test('no vault context: only the skills folder is told', () => {
+    const changed = { ...told, skillsFolder: 'Prompts', contextFilePath: 'Memory.md', autonomousMemory: false, vaultTreeDepth: 2 };
+    const t = text(settingsNote(told, changed, { ...scope, suppressVaultContext: true }, { ...inputs, tree: 'x' })) ?? '';
+    assert.ok(t.includes('skills now go in `Prompts`'));
+    assert.ok(!t.includes('context file'));
+    assert.ok(!t.includes('Vault structure'));
+  });
+
+  test('minimal mode on: one note, other changes ignored; off: a full refresh', () => {
+    const on = text(settingsNote(told, { ...told, minimalMode: true, skillsFolder: 'Prompts' }, scope, inputs)) ?? '';
+    assert.ok(on.startsWith('[System: The user turned on minimal mode.'));
+    assert.ok(!on.includes('Prompts'));
+    const minimal = { ...told, minimalMode: true };
+    assert.deepEqual(settingsNote(minimal, { ...minimal, skillsFolder: 'Prompts' }, scope, inputs), { kind: 'none' });
+    assert.deepEqual(settingsNote(minimal, told, scope, inputs), { kind: 'refresh' });
+  });
+
+  test('several changes: one note, in a fixed order', () => {
+    const t = text(settingsNote(told, { ...told, skillsFolder: 'Prompts', autonomousMemory: false }, scope, inputs)) ?? '';
+    assert.ok(t.indexOf('skills now go in') < t.indexOf('Autonomous memory is off'));
+    assert.equal(t.match(/\[System:/g)?.length, 1);
+  });
+});
+
+describe('agentSkillsFolder (#460)', () => {
+  test('the setting as typed, or the default; forward slashes', () => {
+    assert.equal(agentSkillsFolder('', '_BojuBot/Skills'), '_BojuBot/Skills');
+    assert.equal(agentSkillsFolder('  My Skills ', '_BojuBot/Skills'), 'My Skills');
+    assert.equal(agentSkillsFolder('C:\\Shared\\Skills', '_BojuBot/Skills'), 'C:/Shared/Skills');
+  });
+});
+
+describe('contextFileBlock', () => {
+  test('the file alone under its cap, with the compaction instruction over it', () => {
+    assert.equal(contextFileBlock(' memory \n', 'ctx.md', 10, 0), '## Vault context\nmemory');
+    assert.equal(contextFileBlock('memory', 'ctx.md', 10, 20), '## Vault context\nmemory');
+    assert.equal(contextFileBlock('memory', 'ctx.md', 10, 5), `## Vault context\nmemory\n\n${compactionInstruction('ctx.md', 10, 5)}`);
+  });
+});
+
+describe('settings notes in the queue (#461)', () => {
+  test('a settings note replaces the last one and keeps its place among others', () => {
+    let q: QueuedSystemNote[] = [];
+    q = queueSystemNote(q, { kind: 'settings', text: 'a' });
+    q = queueSystemNote(q, { kind: 'event', text: 'e' });
+    q = queueSystemNote(q, { kind: 'settings', text: 'b' });
+    assert.equal(joinSystemNotes(q), 'e\n\nb');
+  });
+
+  test('dropSystemNote removes only that kind; hasSystemNote reports it', () => {
+    let q: QueuedSystemNote[] = [];
+    q = queueSystemNote(q, { kind: 'settings', text: 'a' });
+    q = queueSystemNote(q, { kind: 'event', text: 'e' });
+    assert.equal(hasSystemNote(q, 'settings'), true);
+    q = dropSystemNote(q, 'settings');
+    assert.equal(hasSystemNote(q, 'settings'), false);
+    assert.equal(joinSystemNotes(q), 'e');
+  });
+
+  test('a refresh replaces a queued settings note', () => {
+    let q: QueuedSystemNote[] = [];
+    q = queueSystemNote(q, { kind: 'settings', text: 'a' });
+    q = queueSystemNote(q, { kind: 'refresh', text: 'r' });
+    assert.equal(joinSystemNotes(q), 'r');
+  });
+});
+
+describe('orientation skills section (#460)', () => {
+  const template = readFileSync(join(process.cwd(), 'src', 'orientation.md'), 'utf8').split('\r').join('');
+  const vars = { identityName: 'BojuBot', supportLine: 'x', cwdDisplay: 'vault root', customCwd: false, skillsFolder: 'My Skills', backend: CLAUDE_CODE_ORIENTATION };
+
+  test('names the skills folder and the help topic, in every mode with vault access', () => {
+    for (const permissionMode of ['readonly', 'standard', 'full'] as const) {
+      const out = renderOrientation(template, { ...vars, permissionMode });
+      assert.ok(out.includes('a prompt file in `My Skills` that the user runs from the / menu'), permissionMode);
+      assert.ok(out.includes('@@BOJU {"query":"help","topic":"skills","mode":"inject"}'), permissionMode);
+    }
+  });
+
+  test('left out of Chat only', () => {
+    const out = renderOrientation(template, { ...vars, permissionMode: 'restricted' });
+    assert.ok(!out.includes('## Skills'));
+    assert.ok(!out.includes('My Skills'));
+  });
+
+  test('the skills reference exists and documents the fields BojuBot reads', () => {
+    const ref = readFileSync(join(process.cwd(), 'src', 'references', 'skills.md'), 'utf8');
+    for (const field of ['category', 'description', 'autorun', 'params', 'obsidianmd_note', 'SKILL.md', '$ARGUMENTS']) {
+      assert.ok(ref.includes(field), field);
+    }
   });
 });

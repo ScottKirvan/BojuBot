@@ -26,7 +26,7 @@ import type { ApiError } from './utils/apiError';
 import { CliCapabilities, UNKNOWN_CAPABILITIES, has } from './utils/cliCapabilities';
 import { migrateVariantModel, resolveTurnModel, TurnModel } from './utils/agentModels';
 import { needsFreshSessionForChatOnly } from './utils/modeGates';
-import { QueuedSystemNote, SystemNoteInput, queueSystemNote, joinSystemNotes } from './utils/systemNotes';
+import { QueuedSystemNote, SystemNoteInput, SystemNoteKind, queueSystemNote, joinSystemNotes, dropSystemNote, hasSystemNote } from './utils/systemNotes';
 import { composeStreamingText } from './utils/streamPreview';
 import { preserveUserFields } from './utils/sessionList';
 import type { TurnToolCall } from './utils/generatedImages';
@@ -323,6 +323,14 @@ export class SessionCoordinator {
 
   clearSystemNotes(): void {
     this._systemNotes = [];
+  }
+
+  dropSystemNote(kind: SystemNoteKind): void {
+    this._systemNotes = dropSystemNote(this._systemNotes, kind);
+  }
+
+  hasSystemNote(kind: SystemNoteKind): boolean {
+    return hasSystemNote(this._systemNotes, kind);
   }
 
   // ── Session lifecycle ──────────────────────────────────────────────────────
